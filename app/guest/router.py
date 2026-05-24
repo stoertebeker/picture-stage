@@ -13,10 +13,13 @@ from app.db.models import (
     GalleryStatus,
     Image,
     PreviewVariant,
+    SelectionEvent,
     ShareSession,
 )
 from app.db.session import get_db
 from app.security.signing import sign_url
+from app.selections.schemas import SelectionEventCreate, SelectionSummary
+from app.selections.service import get_current_selections
 
 router = APIRouter(prefix="/g", tags=["guest"])
 
@@ -182,3 +185,93 @@ async def list_shared_images(
         ))
 
     return guest_images
+
+
+@router.post("/{token}/selections", status_code=status.HTTP_201_CREATED)
+async def create_selection_event(
+    token: str,
+    body: SelectionEventCreate,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    gallery = await _resolve_gallery_by_token(token, db)
+    if gallery is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    _check_gallery_accessible(gallery)
+
+    image_result = await db.execute(
+        select(Image).where(Image.id == body.image_id, Image.gallery_id == gallery.id)
+    )
+    if image_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found in this gallery")
+
+    sessions_result = await db.execute(
+        select(ShareSession)
+        .where(ShareSession.gallery_id == gallery.id, ShareSession.completed_at.is_(None))
+        .order_by(ShareSession.started_at.desc())
+        .limit(1)
+    )
+    session = sessions_result.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
+
+    event = SelectionEvent(
+        image_id=body.image_id,
+        share_session_id=session.id,
+        action=body.action,
+        comment=body.comment,
+    )
+    db.add(event)
+    await db.commit()
+
+    return {"status": "ok"}
+
+
+@router.get("/{token}/selections", response_model=SelectionSummary)
+async def get_selections(
+    token: str,
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> SelectionSummary:
+    gallery = await _resolve_gallery_by_token(token, db)
+    if gallery is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    _check_gallery_accessible(gallery)
+
+    selections = await get_current_selections(gallery.id, session_id, db)
+
+    image_count_result = await db.execute(
+        select(Image).where(Image.gallery_id == gallery.id)
+    )
+    total = len(image_count_result.scalars().all())
+
+    return SelectionSummary(
+        total_images=total,
+        selected_count=sum(1 for s in selections if s.selected),
+        favorited_count=sum(1 for s in selections if s.favorited),
+        commented_count=sum(1 for s in selections if s.comment is not None),
+        selections=selections,
+    )
+
+
+@router.post("/{token}/complete")
+async def complete_review(
+    token: str,
+    session_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str]:
+    gallery = await _resolve_gallery_by_token(token, db)
+    if gallery is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    _check_gallery_accessible(gallery)
+
+    result = await db.execute(
+        select(ShareSession).where(ShareSession.id == session_id, ShareSession.gallery_id == gallery.id)
+    )
+    session = result.scalar_one_or_none()
+    if session is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
+
+    session.completed_at = datetime.now(timezone.utc)
+    await db.commit()
+
+    return {"message": "Review completed. Thank you!"}
