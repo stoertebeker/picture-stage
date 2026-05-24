@@ -2,7 +2,7 @@
 
 **Self-hosted photo proofing for photographers and models.**
 
-Picture-Stage is an open-source alternative to [Picdrop](https://www.picdrop.com/) that lets photographers share image galleries with models for review. Models can select images for editing, mark favorites, and leave comments — all without creating an account.
+Picture-Stage lets photographers share image galleries with models for review. Models can select images for editing, mark favorites, and leave comments — all without creating an account. Self-hosted, open-source, and fully under your control.
 
 > **Status:** Work in progress — v0.1 in development.
 
