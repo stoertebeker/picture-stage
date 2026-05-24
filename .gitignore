@@ -1,5 +1,54 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
 
-# Beads / Dolt files (added by bd init)
-.dolt/
+# Environment
+.env
+.env.*
+!.env.example
+
+# Database
 *.db
+*.sqlite3
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Linting / Testing
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Uploads / Data (Docker volumes)
+uploads/
+data/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# Node (Tailwind build)
+node_modules/
+
+# Claude Code
+.claude/settings.local.json
+.schrammns_workflow/
+
+# Beads / Dolt (added by bd init)
+.dolt/
 .beads-credential-key
