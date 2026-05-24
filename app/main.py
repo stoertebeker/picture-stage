@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.admin.router import router as admin_router
 from app.auth.router import router as auth_router
 from app.galleries.router import router as galleries_router
+from app.galleries.export import router as export_router
 from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
 from app.images.router import router as images_router
@@ -38,6 +39,7 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(galleries_router)
 app.include_router(sharing_router)
+app.include_router(export_router)
 app.include_router(images_router)
 app.include_router(guest_router)
 
