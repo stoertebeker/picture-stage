@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.admin.router import router as admin_router
 from app.auth.router import router as auth_router
 from app.galleries.router import router as galleries_router
+from app.images.router import router as images_router
 from app.auth.startup import create_initial_admin
 from app.config import settings
 
@@ -34,6 +35,7 @@ app = FastAPI(
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(galleries_router)
+app.include_router(images_router)
 
 
 @app.get("/health")
