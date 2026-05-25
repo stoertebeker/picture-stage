@@ -49,6 +49,9 @@ node_modules/
 .claude/settings.local.json
 .schrammns_workflow/
 
+# Serena
+.serena/
+
 # Beads / Dolt (added by bd init)
 .dolt/
 .beads-credential-key

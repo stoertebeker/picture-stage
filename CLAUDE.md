@@ -49,21 +49,96 @@ bd close <id>         # Complete work
 - If push fails, resolve and retry until it succeeds
 <!-- END BEADS INTEGRATION -->
 
-
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+# Install dependencies (Python 3.12+)
+pip install -e ".[dev]"
+
+# Lint
+ruff check .
+
+# Type check
+mypy app/
+
+# Tests (requires PostgreSQL via DATABASE_URL)
+pytest --cov=app
+
+# Tenant isolation tests
+pytest tests/security/ -v
+
+# Docker (full stack: App + Postgres + Alembic migrate)
+docker compose up -d
+
+# API docs after startup
+# http://localhost:8000/docs
 ```
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+Picture-Stage is a self-hosted photo proofing app. Photographers share galleries with models via magic links. Models select/favorite/comment images. Photographers export selections as CSV/JSON for Lightroom/Capture One.
+
+### Stack
+- **Backend:** Python 3.12 + FastAPI + Pydantic v2 + SQLAlchemy 2.x (async) + Alembic
+- **Database:** PostgreSQL 16 (separate container)
+- **Storage:** Pluggable — LocalStorage (Docker volume) or S3Storage (aioboto3, MinIO/AWS/Hetzner/R2/B2)
+- **Frontend:** HTMX + Alpine.js + Tailwind CSS (not yet implemented)
+- **Imaging:** Pillow — WebP thumbnails (320/640/1280px), RGBA watermark overlay
+
+### API Routers (5 isolated routers)
+| Router | Prefix | Auth | Purpose |
+|--------|--------|------|---------|
+| auth | `/api/v1/auth/` | None/JWT | Signup, login, email verify |
+| admin | `/api/v1/admin/` | JWT (admin) | Approve/reject signups |
+| galleries | `/api/v1/galleries/` | JWT (active) | CRUD, share links, export |
+| images | `/api/v1/galleries/{id}/images/` | JWT (active) | Upload, list, delete |
+| guest | `/g/` | Share token | Model-facing: view, select, complete |
+
+### Database (10 tables)
+users, galleries, images, image_previews, selection_events (append-only), share_sessions, audit_log, notification_configs, notification_deliveries, pending_signups
+
+### Key Design Decisions
+- **Event-sourced selections:** `selection_events` is append-only (INSERT only, no UPDATE/DELETE). Current state materialized by replaying events. Enables audit trail, undo, change detection.
+- **Isolated Guest API:** `/g/` router has zero overlap with admin API. No shared endpoints, no auth dependencies.
+- **Token hashing:** SHA-256 + random salt for share tokens (fast lookups). bcrypt only for user passwords.
+- **Signed URLs:** HMAC-SHA256 for image delivery. Thumbnails 1h TTL, previews 15min TTL.
+- **UUIDs as external IDs** on all endpoints to prevent IDOR enumeration.
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- Atomic commits: one feature/fix per commit, referenced by beads issue ID
+- Tenant isolation: every DB query on user-owned resources filters by `owner_id == current_user.id`
+- Path traversal protection: `LocalStorage._full_path()` rejects absolute paths and `..` components
+- Preview format: WebP at 3 sizes (thumb_sm=320px, thumb_md=640px, preview=1280px)
+- Watermark format: `PREVIEW · {gallery_id[:8].upper()}` in bottom-right corner
+- Rate limits: signup 5/min, login 10/min, token resolution 20/10min, password verify 5/min
+- Security headers: CSP, HSTS, X-Frame-Options, Referrer-Policy — applied via middleware on every response
+
+## Aktueller Stand
+
+**Datum:** 2026-05-25
+
+### Was ist fertig
+- v0.1 API komplett: alle 12 Issues geschlossen, 22 Endpoints implementiert
+- 10 DB-Tabellen definiert (SQLAlchemy async models)
+- Pluggable Storage (Local + S3)
+- Security: Header-Middleware, Rate-Limiting, Tenant-Isolation-Tests
+- CI/CD Workflows (GitHub Actions), Multi-Arch Dockerfile
+- Research-Dokument: `.schrammns_workflow/research/2026-05-24-picture-stage-alternatives-share-token-security.md`
+- Vollständiger Release-Plan: `PLAN.md`
+
+### Was fehlt fuer v0.1 Produktivnutzung
+- **Frontend** (HTML/JS/CSS): kein UI vorhanden, nur API
+- **Alembic initiale Migration** generieren (braucht laufende Postgres: `alembic revision --autogenerate -m "initial"`)
+- **Docker-Build testen** (lokal oder via CI)
+
+### Naechste Arbeit
+- v0.2 Epic (`picture-stage-9q3`): Lifecycle, Dashboard, Notifications — oder v0.1-Frontend zuerst
+- `bd ready` zeigt die Ready-Queue
+
+### Epics
+| Epic | Beads-ID | Status |
+|------|----------|--------|
+| v0.1 Minimal Viable Picdrop | `picture-stage-ebm` | 12/12 Issues closed |
+| v0.2 Lifecycle & Komfort | `picture-stage-9q3` | 0/7 Issues closed |
+| v0.3 Produktion & Compliance | `picture-stage-fbr` | 0/7 Issues closed |
