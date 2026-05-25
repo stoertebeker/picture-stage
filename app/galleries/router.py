@@ -5,9 +5,21 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
-from app.db.models import Gallery, GalleryStatus, Image, User
+from app.db.models import (
+    Gallery,
+    GalleryStatus,
+    Image,
+    PendingSignup,
+    SelectionAction,
+    SelectionEvent,
+    ShareSession,
+    User,
+    UserStatus,
+)
 from app.db.session import get_db
 from app.galleries.schemas import (
+    DashboardGalleryResponse,
+    DashboardResponse,
     GalleryCreate,
     GalleryListResponse,
     GalleryResponse,
@@ -52,6 +64,77 @@ async def _count_images(gallery_id: uuid.UUID, db: AsyncSession) -> int:
         select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
     )
     return result.scalar() or 0
+
+
+@router.get("/dashboard", response_model=DashboardResponse)
+async def get_dashboard(
+    user: User = Depends(require_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> DashboardResponse:
+    gallery_result = await db.execute(
+        select(Gallery).where(Gallery.owner_id == user.id).order_by(Gallery.created_at.desc())
+    )
+    galleries = gallery_result.scalars().all()
+
+    dashboard_galleries: list[DashboardGalleryResponse] = []
+    for gallery in galleries:
+        img_count_result = await db.execute(
+            select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
+        )
+        image_count = img_count_result.scalar() or 0
+
+        sel_counts = await db.execute(
+            select(
+                func.count(func.distinct(SelectionEvent.image_id)).filter(
+                    SelectionEvent.action == SelectionAction.select
+                ),
+                func.count(func.distinct(SelectionEvent.image_id)).filter(
+                    SelectionEvent.action == SelectionAction.favorite
+                ),
+                func.count(func.distinct(SelectionEvent.image_id)).filter(
+                    SelectionEvent.action == SelectionAction.comment
+                ),
+            )
+            .join(Image, SelectionEvent.image_id == Image.id)
+            .where(Image.gallery_id == gallery.id)
+        )
+        row = sel_counts.one()
+        selected_count, favorited_count, commented_count = row[0], row[1], row[2]
+
+        last_access_result = await db.execute(
+            select(func.max(ShareSession.started_at)).where(
+                ShareSession.gallery_id == gallery.id
+            )
+        )
+        last_activity = last_access_result.scalar()
+
+        dashboard_galleries.append(
+            DashboardGalleryResponse(
+                id=gallery.id,
+                name=gallery.name,
+                status=gallery.status,
+                image_count=image_count,
+                selected_count=selected_count,
+                favorited_count=favorited_count,
+                commented_count=commented_count,
+                has_share_token=gallery.share_token_hash is not None,
+                last_activity=last_activity,
+                created_at=gallery.created_at,
+            )
+        )
+
+    pending_signups_count = None
+    if user.status == UserStatus.admin:
+        pending_result = await db.execute(
+            select(func.count()).select_from(PendingSignup)
+        )
+        pending_signups_count = pending_result.scalar() or 0
+
+    return DashboardResponse(
+        galleries=dashboard_galleries,
+        total_galleries=len(dashboard_galleries),
+        pending_signups_count=pending_signups_count,
+    )
 
 
 @router.post("", response_model=GalleryResponse, status_code=http_status.HTTP_201_CREATED)

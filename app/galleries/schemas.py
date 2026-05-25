@@ -40,3 +40,22 @@ class GalleryListResponse(BaseModel):
     status: GalleryStatus
     image_count: int
     created_at: datetime
+
+
+class DashboardGalleryResponse(BaseModel):
+    id: uuid.UUID
+    name: str
+    status: GalleryStatus
+    image_count: int
+    selected_count: int
+    favorited_count: int
+    commented_count: int
+    has_share_token: bool
+    last_activity: datetime | None
+    created_at: datetime
+
+
+class DashboardResponse(BaseModel):
+    galleries: list[DashboardGalleryResponse]
+    total_galleries: int
+    pending_signups_count: int | None = None
