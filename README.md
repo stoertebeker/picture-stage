@@ -4,16 +4,17 @@
 
 Picture-Stage lets photographers share image galleries with models for review. Models can select images for editing, mark favorites, and leave comments — all without creating an account. Self-hosted, open-source, and fully under your control.
 
-> **Status:** Work in progress — v0.1 in development.
+> **Status:** v0.1 API complete — frontend in development.
 
-## Features (v0.1 planned)
+## Features
 
-- **Share galleries via magic link** — no model login required
+- **Share galleries via magic link** — no model login required, optional password protection
 - **Select, favorite, and comment** on individual images
-- **Auto-save** — selections persist immediately
+- **Auto-save** — selections persist immediately (event-sourced)
 - **Export selections** as CSV/JSON for Lightroom/Capture One
-- **Server-side watermarking** — originals are never exposed
+- **Server-side watermarking** — originals are never exposed to models
 - **Pluggable storage** — local Docker volume or S3-compatible (MinIO, AWS, Hetzner, R2, B2)
+- **Multi-tenant** — multiple photographers with admin approval registration
 - **Multi-arch Docker image** — runs on amd64 and arm64 (Raspberry Pi, Synology)
 
 ## Quick Start
@@ -32,7 +33,68 @@ docker compose up -d
 
 # 4. Open
 # http://localhost:8000
+# API docs: http://localhost:8000/docs
 ```
+
+## API Overview
+
+### Authentication (`/api/v1/auth/`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/auth/signup` | Register (pending admin approval) |
+| POST | `/api/v1/auth/verify-email/{token}` | Verify email address |
+| POST | `/api/v1/auth/login` | Login, receive JWT |
+| GET | `/api/v1/auth/me` | Current user profile |
+
+### Galleries (`/api/v1/galleries/`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/galleries` | Create gallery |
+| GET | `/api/v1/galleries` | List own galleries |
+| GET | `/api/v1/galleries/{id}` | Gallery details |
+| PATCH | `/api/v1/galleries/{id}` | Update gallery |
+| DELETE | `/api/v1/galleries/{id}` | Delete gallery + images |
+| POST | `/api/v1/galleries/{id}/share` | Generate share link |
+| DELETE | `/api/v1/galleries/{id}/share` | Revoke share link |
+| GET | `/api/v1/galleries/{id}/export` | Export selections (CSV/JSON) |
+
+### Images (`/api/v1/galleries/{id}/images/`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/galleries/{id}/images` | Upload images (multi-file) |
+| GET | `/api/v1/galleries/{id}/images` | List images with preview URLs |
+| DELETE | `/api/v1/galleries/{id}/images/{id}` | Delete image |
+
+### Guest API (`/g/`) — isolated router, no auth required
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/g/{token}` | Access shared gallery |
+| POST | `/g/{token}/verify-password` | Unlock password-protected gallery |
+| GET | `/g/{token}/images` | List images with signed preview URLs |
+| POST | `/g/{token}/selections` | Submit selection event |
+| GET | `/g/{token}/selections` | Current selection state |
+| POST | `/g/{token}/complete` | Mark review as done |
+
+### Admin (`/api/v1/admin/`)
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/admin/pending-signups` | List pending registrations |
+| POST | `/api/v1/admin/approve/{id}` | Approve registration |
+| DELETE | `/api/v1/admin/reject/{id}` | Reject registration |
+
+## Security
+
+- **Token hashing:** SHA-256 + random salt for share tokens, bcrypt for passwords
+- **Signed URLs:** HMAC-SHA256 with configurable TTL (thumbnails 1h, previews 15min)
+- **Rate limiting:** signup 5/min, login 10/min, token resolution 20/10min
+- **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy
+- **Tenant isolation:** all queries filtered by owner_id, verified by structural tests
+- **Non-root container:** app runs as unprivileged user
 
 ## Tech Stack
 
@@ -40,16 +102,26 @@ docker compose up -d
 |-------|-----------|
 | Backend | Python 3.12, FastAPI, Pydantic v2 |
 | Database | PostgreSQL 16 |
-| ORM | SQLAlchemy 2.x + Alembic |
+| ORM | SQLAlchemy 2.x + Alembic (async) |
 | Frontend | HTMX, Alpine.js, Tailwind CSS |
-| Image processing | Pillow (thumbnails, watermarks) |
+| Image processing | Pillow (WebP thumbnails at 320/640/1280px, watermarks) |
 | Storage | Local filesystem or S3-compatible (via aioboto3) |
 | Container | Multi-stage Docker, docker-compose |
-| CI/CD | GitHub Actions |
+| CI/CD | GitHub Actions (lint, test, multi-arch Docker Hub publish) |
 
 ## Configuration
 
 All configuration is done via environment variables. See [`.env.example`](.env.example) for the full list with descriptions.
+
+Key variables:
+
+| Variable | Description |
+|----------|-------------|
+| `SECRET_KEY` | JWT signing key (must change from default) |
+| `HMAC_SECRET_KEY` | Image URL signing key (must change from default) |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `STORAGE_BACKEND` | `local` or `s3` |
+| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin account (created on first start) |
 
 ## Development
 
@@ -69,6 +141,9 @@ mypy app/
 
 # Run tests (requires PostgreSQL)
 pytest --cov=app
+
+# Run tenant isolation tests
+pytest tests/security/ -v
 ```
 
 ## Docker Hub
@@ -77,10 +152,10 @@ pytest --cov=app
 docker pull stoertebeker/picture-stage:latest
 ```
 
-Multi-arch images are built automatically on each tagged release via GitHub Actions.
+Multi-arch images (amd64 + arm64) are built automatically on each tagged release via GitHub Actions.
 
 ## License
 
-[GNU Affero General Public License v3.0](LICENSE)
+[GNU Affero General Public License v3.0](LICENSE) — Copyright 2026 Norbert Schramm
 
-This means: if you modify Picture-Stage and offer it as a service, you must publish your changes under the same license.
+If you modify Picture-Stage and offer it as a service, you must publish your changes under the same license.
