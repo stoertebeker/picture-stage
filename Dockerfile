@@ -2,9 +2,16 @@ FROM python:3.12-slim AS builder
 
 WORKDIR /build
 COPY pyproject.toml ./
-RUN pip install --user --no-cache-dir .
+COPY app/ ./app/
+
+RUN pip install --user --no-cache-dir . && \
+    pip install --user --no-cache-dir alembic
 
 FROM python:3.12-slim
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends fonts-dejavu-core && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 
