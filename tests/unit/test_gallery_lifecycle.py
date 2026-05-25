@@ -6,6 +6,8 @@ Verifies that:
 - Share-link creation auto-transitions draft→shared
 - Share-link revocation auto-transitions shared→draft
 - Sharing requires a share token
+- Complete-review sets gallery status to completed
+- Double-complete is rejected (409 idempotency guard)
 """
 
 import uuid
@@ -128,3 +130,40 @@ class TestTransitionEndpointGuards:
         with open("app/galleries/router.py") as f:
             source = f.read()
         assert "_get_owned_gallery" in source
+
+
+class TestCompleteReviewEndpoint:
+    """Verify the guest complete-review endpoint handles lifecycle correctly."""
+
+    def test_complete_sets_gallery_status_to_completed(self) -> None:
+        with open("app/guest/router.py") as f:
+            source = f.read()
+        assert "gallery.status = GalleryStatus.completed" in source
+
+    def test_complete_only_transitions_from_shared(self) -> None:
+        with open("app/guest/router.py") as f:
+            source = f.read()
+        assert "gallery.status == GalleryStatus.shared" in source
+
+    def test_complete_rejects_already_completed_session(self) -> None:
+        with open("app/guest/router.py") as f:
+            source = f.read()
+        assert "session.completed_at is not None" in source
+        assert "Review already completed" in source
+
+    def test_complete_uses_409_for_duplicate(self) -> None:
+        with open("app/guest/router.py") as f:
+            source = f.read()
+        assert "HTTP_409_CONFLICT" in source
+
+    def test_complete_returns_structured_response(self) -> None:
+        from app.guest.router import CompleteReviewResponse
+        fields = CompleteReviewResponse.model_fields
+        assert "message" in fields
+        assert "gallery_status" in fields
+        assert "session_completed" in fields
+
+    def test_complete_has_response_model(self) -> None:
+        with open("app/guest/router.py") as f:
+            source = f.read()
+        assert "response_model=CompleteReviewResponse" in source

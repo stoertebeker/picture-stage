@@ -46,6 +46,12 @@ class GuestImageResponse(BaseModel):
     preview_url: str
 
 
+class CompleteReviewResponse(BaseModel):
+    message: str
+    gallery_status: GalleryStatus
+    session_completed: bool
+
+
 async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
     result = await db.execute(
         select(Gallery).where(
@@ -256,12 +262,12 @@ async def get_selections(
     )
 
 
-@router.post("/{token}/complete")
+@router.post("/{token}/complete", response_model=CompleteReviewResponse)
 async def complete_review(
     token: str,
     session_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-) -> dict[str, str]:
+) -> CompleteReviewResponse:
     gallery = await _resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -274,7 +280,22 @@ async def complete_review(
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 
-    session.completed_at = datetime.now(timezone.utc)
-    await db.commit()
+    if session.completed_at is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Review already completed",
+        )
 
-    return {"message": "Review completed. Thank you!"}
+    session.completed_at = datetime.now(timezone.utc)
+
+    if gallery.status == GalleryStatus.shared:
+        gallery.status = GalleryStatus.completed
+
+    await db.commit()
+    await db.refresh(gallery)
+
+    return CompleteReviewResponse(
+        message="Review completed. Thank you!",
+        gallery_status=gallery.status,
+        session_completed=True,
+    )
