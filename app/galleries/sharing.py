@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
 from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
-from app.db.models import Gallery, User
+from app.db.models import Gallery, GalleryStatus, User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/api/v1/galleries", tags=["sharing"])
@@ -48,6 +48,9 @@ async def create_share_link(
     else:
         gallery.password_hash = None
 
+    if gallery.status == GalleryStatus.draft:
+        gallery.status = GalleryStatus.shared
+
     await db.commit()
 
     base_url = str(request.base_url).rstrip("/")
@@ -73,4 +76,8 @@ async def revoke_share_link(
     gallery.share_token_hash = None
     gallery.share_token_salt = None
     gallery.password_hash = None
+
+    if gallery.status == GalleryStatus.shared:
+        gallery.status = GalleryStatus.draft
+
     await db.commit()

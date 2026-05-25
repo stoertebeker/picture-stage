@@ -13,9 +13,12 @@ class GalleryCreate(BaseModel):
 
 class GalleryUpdate(BaseModel):
     name: str | None = None
-    status: GalleryStatus | None = None
     watermark_config: dict | None = None
     expires_at: datetime | None = None
+
+
+class GalleryStatusTransition(BaseModel):
+    status: GalleryStatus
 
 
 class GalleryResponse(BaseModel):

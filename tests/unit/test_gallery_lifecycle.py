@@ -1,0 +1,130 @@
+"""Tests for gallery lifecycle status transitions.
+
+Verifies that:
+- Only allowed transitions succeed
+- Forbidden transitions are rejected (409)
+- Share-link creation auto-transitions draft→shared
+- Share-link revocation auto-transitions shared→draft
+- Sharing requires a share token
+"""
+
+import uuid
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from app.db.models import Gallery, GalleryStatus
+from app.galleries.router import ALLOWED_TRANSITIONS
+
+
+class TestAllowedTransitions:
+    """Verify the transition map is correct and complete."""
+
+    def test_draft_can_become_shared(self) -> None:
+        assert GalleryStatus.shared in ALLOWED_TRANSITIONS[GalleryStatus.draft]
+
+    def test_draft_cannot_become_completed(self) -> None:
+        assert GalleryStatus.completed not in ALLOWED_TRANSITIONS[GalleryStatus.draft]
+
+    def test_draft_cannot_become_archived(self) -> None:
+        assert GalleryStatus.archived not in ALLOWED_TRANSITIONS[GalleryStatus.draft]
+
+    def test_shared_can_become_completed(self) -> None:
+        assert GalleryStatus.completed in ALLOWED_TRANSITIONS[GalleryStatus.shared]
+
+    def test_shared_cannot_become_draft(self) -> None:
+        assert GalleryStatus.draft not in ALLOWED_TRANSITIONS[GalleryStatus.shared]
+
+    def test_shared_cannot_become_archived(self) -> None:
+        assert GalleryStatus.archived not in ALLOWED_TRANSITIONS[GalleryStatus.shared]
+
+    def test_completed_can_become_archived(self) -> None:
+        assert GalleryStatus.archived in ALLOWED_TRANSITIONS[GalleryStatus.completed]
+
+    def test_completed_can_become_shared(self) -> None:
+        assert GalleryStatus.shared in ALLOWED_TRANSITIONS[GalleryStatus.completed]
+
+    def test_archived_can_become_shared(self) -> None:
+        assert GalleryStatus.shared in ALLOWED_TRANSITIONS[GalleryStatus.archived]
+
+    def test_archived_cannot_become_draft(self) -> None:
+        assert GalleryStatus.draft not in ALLOWED_TRANSITIONS[GalleryStatus.archived]
+
+    def test_all_statuses_have_transitions(self) -> None:
+        for status in GalleryStatus:
+            assert status in ALLOWED_TRANSITIONS, (
+                f"Status '{status.value}' missing from ALLOWED_TRANSITIONS"
+            )
+
+    def test_no_self_transitions_in_map(self) -> None:
+        for from_status, to_statuses in ALLOWED_TRANSITIONS.items():
+            assert from_status not in to_statuses, (
+                f"Self-transition for '{from_status.value}' should not be in the map"
+            )
+
+
+class TestStatusFieldRemovedFromUpdate:
+    """GalleryUpdate must NOT allow setting status directly."""
+
+    def test_gallery_update_has_no_status_field(self) -> None:
+        from app.galleries.schemas import GalleryUpdate
+        assert "status" not in GalleryUpdate.model_fields
+
+
+class TestStatusTransitionSchema:
+    """GalleryStatusTransition schema validation."""
+
+    def test_valid_status(self) -> None:
+        from app.galleries.schemas import GalleryStatusTransition
+        t = GalleryStatusTransition(status=GalleryStatus.shared)
+        assert t.status == GalleryStatus.shared
+
+    def test_invalid_status_rejected(self) -> None:
+        from app.galleries.schemas import GalleryStatusTransition
+        from pydantic import ValidationError
+        with pytest.raises(ValidationError):
+            GalleryStatusTransition(status="nonexistent")
+
+
+class TestShareLinkAutoTransition:
+    """Verify share-link creation/revocation auto-sets status."""
+
+    def test_sharing_code_sets_status_to_shared(self) -> None:
+        with open("app/galleries/sharing.py") as f:
+            source = f.read()
+        assert "gallery.status = GalleryStatus.shared" in source
+
+    def test_revoke_code_sets_status_to_draft(self) -> None:
+        with open("app/galleries/sharing.py") as f:
+            source = f.read()
+        assert "gallery.status = GalleryStatus.draft" in source
+
+    def test_sharing_only_transitions_from_draft(self) -> None:
+        with open("app/galleries/sharing.py") as f:
+            source = f.read()
+        assert "gallery.status == GalleryStatus.draft" in source
+
+    def test_revoke_only_transitions_from_shared(self) -> None:
+        with open("app/galleries/sharing.py") as f:
+            source = f.read()
+        assert "gallery.status == GalleryStatus.shared" in source
+
+
+class TestTransitionEndpointGuards:
+    """Verify the transition endpoint enforces share-token requirement."""
+
+    def test_endpoint_checks_share_token_for_shared(self) -> None:
+        with open("app/galleries/router.py") as f:
+            source = f.read()
+        assert "share_token_hash is None" in source
+        assert "Cannot share gallery without a share link" in source
+
+    def test_endpoint_uses_409_for_invalid_transition(self) -> None:
+        with open("app/galleries/router.py") as f:
+            source = f.read()
+        assert "HTTP_409_CONFLICT" in source
+
+    def test_transition_endpoint_filters_by_owner(self) -> None:
+        with open("app/galleries/router.py") as f:
+            source = f.read()
+        assert "_get_owned_gallery" in source

@@ -1,13 +1,19 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status as http_status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
-from app.db.models import Gallery, Image, User
+from app.db.models import Gallery, GalleryStatus, Image, User
 from app.db.session import get_db
-from app.galleries.schemas import GalleryCreate, GalleryListResponse, GalleryResponse, GalleryUpdate
+from app.galleries.schemas import (
+    GalleryCreate,
+    GalleryListResponse,
+    GalleryResponse,
+    GalleryStatusTransition,
+    GalleryUpdate,
+)
 from app.storage.base import StorageBackend
 from app.storage.dependencies import get_storage
 
@@ -37,7 +43,7 @@ async def _get_owned_gallery(
     )
     gallery = result.scalar_one_or_none()
     if gallery is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     return gallery
 
 
@@ -48,7 +54,7 @@ async def _count_images(gallery_id: uuid.UUID, db: AsyncSession) -> int:
     return result.scalar() or 0
 
 
-@router.post("", response_model=GalleryResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=GalleryResponse, status_code=http_status.HTTP_201_CREATED)
 async def create_gallery(
     body: GalleryCreate,
     user: User = Depends(require_active_user),
@@ -124,7 +130,7 @@ async def update_gallery(
     return _gallery_to_response(gallery, image_count)
 
 
-@router.delete("/{gallery_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{gallery_id}", status_code=http_status.HTTP_204_NO_CONTENT)
 async def delete_gallery(
     gallery_id: uuid.UUID,
     user: User = Depends(require_active_user),
@@ -149,3 +155,45 @@ async def delete_gallery(
 
     await db.delete(gallery)
     await db.commit()
+
+
+ALLOWED_TRANSITIONS: dict[GalleryStatus, set[GalleryStatus]] = {
+    GalleryStatus.draft: {GalleryStatus.shared},
+    GalleryStatus.shared: {GalleryStatus.completed},
+    GalleryStatus.completed: {GalleryStatus.archived, GalleryStatus.shared},
+    GalleryStatus.archived: {GalleryStatus.shared},
+}
+
+
+@router.patch("/{gallery_id}/status", response_model=GalleryResponse)
+async def transition_gallery_status(
+    gallery_id: uuid.UUID,
+    body: GalleryStatusTransition,
+    user: User = Depends(require_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> GalleryResponse:
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    if body.status == gallery.status:
+        image_count = await _count_images(gallery_id, db)
+        return _gallery_to_response(gallery, image_count)
+
+    allowed = ALLOWED_TRANSITIONS.get(gallery.status, set())
+    if body.status not in allowed:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=f"Transition from '{gallery.status.value}' to '{body.status.value}' is not allowed",
+        )
+
+    if body.status == GalleryStatus.shared and gallery.share_token_hash is None:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="Cannot share gallery without a share link. Create one first.",
+        )
+
+    gallery.status = body.status
+    await db.commit()
+    await db.refresh(gallery)
+
+    image_count = await _count_images(gallery_id, db)
+    return _gallery_to_response(gallery, image_count)
