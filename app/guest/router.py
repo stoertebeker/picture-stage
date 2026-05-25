@@ -17,6 +17,7 @@ from app.db.models import (
     ShareSession,
 )
 from app.db.session import get_db
+from app.security.rate_limit import limiter
 from app.security.signing import sign_url
 from app.selections.schemas import SelectionEventCreate, SelectionSummary
 from app.selections.service import get_current_selections
@@ -67,6 +68,7 @@ def _check_gallery_accessible(gallery: Gallery) -> None:
 
 
 @router.get("/{token}", response_model=GuestGalleryResponse)
+@limiter.limit("20/10minutes")
 async def get_shared_gallery(
     token: str,
     request: Request,
@@ -107,6 +109,7 @@ async def get_shared_gallery(
 
 
 @router.post("/{token}/verify-password", response_model=GuestGalleryResponse)
+@limiter.limit("5/minute")
 async def verify_gallery_password(
     token: str,
     body: PasswordVerifyRequest,
