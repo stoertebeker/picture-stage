@@ -1,8 +1,9 @@
+import enum
 import logging
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,24 @@ from app.selections.service import get_current_selections
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/g", tags=["guest"])
+
+
+class ImageSortBy(str, enum.Enum):
+    sort_order = "sort_order"
+    filename = "filename"
+    exif_date = "exif_date"
+
+
+class SortDirection(str, enum.Enum):
+    asc = "asc"
+    desc = "desc"
+
+
+class ImageFilter(str, enum.Enum):
+    all = "all"
+    selected = "selected"
+    favorited = "favorited"
+    unrated = "unrated"
 
 
 class GuestGalleryResponse(BaseModel):
@@ -160,9 +179,25 @@ async def verify_gallery_password(
     )
 
 
+def _parse_exif_date(exif: dict | None) -> datetime | None:
+    if not exif:
+        return None
+    raw = exif.get("DateTimeOriginal") or exif.get("DateTime")
+    if not raw or not isinstance(raw, str):
+        return None
+    try:
+        return datetime.strptime(raw, "%Y:%m:%d %H:%M:%S")
+    except ValueError:
+        return None
+
+
 @router.get("/{token}/images", response_model=list[GuestImageResponse])
 async def list_shared_images(
     token: str,
+    sort_by: ImageSortBy = Query(ImageSortBy.sort_order),
+    sort_dir: SortDirection = Query(SortDirection.asc),
+    filter: ImageFilter = Query(ImageFilter.all),
+    session_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> list[GuestImageResponse]:
     gallery = await _resolve_gallery_by_token(token, db)
@@ -171,13 +206,46 @@ async def list_shared_images(
 
     _check_gallery_accessible(gallery)
 
+    if filter != ImageFilter.all and session_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="session_id is required when using filters",
+        )
+
+    order_col = Image.sort_order
+    if sort_by == ImageSortBy.filename:
+        order_col = Image.filename
+    order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
+
     result = await db.execute(
         select(Image)
         .where(Image.gallery_id == gallery.id)
         .options(selectinload(Image.previews))
-        .order_by(Image.sort_order)
+        .order_by(order_clause)
     )
-    images = result.scalars().all()
+    images = list(result.scalars().all())
+
+    if sort_by == ImageSortBy.exif_date:
+        far_future = datetime(9999, 1, 1)
+        images.sort(
+            key=lambda img: _parse_exif_date(img.exif) or far_future,
+            reverse=(sort_dir == SortDirection.desc),
+        )
+
+    if filter != ImageFilter.all and session_id is not None:
+        selections = await get_current_selections(gallery.id, session_id, db)
+        sel_map = {s.image_id: s for s in selections}
+
+        if filter == ImageFilter.selected:
+            images = [img for img in images if sel_map.get(img.id) and sel_map[img.id].selected]
+        elif filter == ImageFilter.favorited:
+            images = [img for img in images if sel_map.get(img.id) and sel_map[img.id].favorited]
+        elif filter == ImageFilter.unrated:
+            images = [
+                img for img in images
+                if not sel_map.get(img.id)
+                or (not sel_map[img.id].selected and not sel_map[img.id].favorited)
+            ]
 
     guest_images = []
     for img in images:
