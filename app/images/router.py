@@ -18,7 +18,7 @@ from app.images.processing import (
     generate_thumbnail,
     get_image_dimensions,
 )
-from app.images.schemas import ImageResponse, ImageUploadResponse
+from app.images.schemas import BulkDeleteRequest, BulkDeleteResponse, ImageResponse, ImageUploadResponse
 from app.security.signing import verify_signed_url
 from app.storage.base import StorageBackend, storage_key
 from app.storage.dependencies import get_storage
@@ -206,6 +206,49 @@ async def delete_image(
 
     await db.delete(image)
     await db.commit()
+
+
+@router.post(
+    "/api/v1/galleries/{gallery_id}/images/bulk-delete",
+    response_model=BulkDeleteResponse,
+)
+async def bulk_delete_images(
+    gallery_id: uuid.UUID,
+    body: BulkDeleteRequest,
+    user: User = Depends(require_active_user),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> BulkDeleteResponse:
+    result = await db.execute(
+        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+
+    if not body.image_ids:
+        return BulkDeleteResponse(deleted=0)
+
+    result = await db.execute(
+        select(Image)
+        .where(Image.id.in_(body.image_ids), Image.gallery_id == gallery_id)
+        .options(selectinload(Image.previews))
+    )
+    images = result.scalars().all()
+
+    for image in images:
+        try:
+            await storage.delete(image.storage_key)
+        except Exception:
+            pass
+        for preview in image.previews:
+            try:
+                await storage.delete(preview.storage_key)
+            except Exception:
+                pass
+        await db.delete(image)
+
+    await db.commit()
+    return BulkDeleteResponse(deleted=len(images))
 
 
 @router.get("/media/{key:path}")

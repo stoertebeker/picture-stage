@@ -59,3 +59,7 @@ class DashboardResponse(BaseModel):
     galleries: list[DashboardGalleryResponse]
     total_galleries: int
     pending_signups_count: int | None = None
+
+
+class GalleryDuplicateRequest(BaseModel):
+    name: str | None = None

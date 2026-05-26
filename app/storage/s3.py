@@ -57,3 +57,11 @@ class S3Storage(StorageBackend):
                 ExpiresIn=expires_in,
             )
             return url
+
+    async def copy(self, src_key: str, dst_key: str) -> None:
+        async with self.session.client(**self.client_kwargs) as s3:
+            await s3.copy_object(
+                Bucket=self.bucket,
+                CopySource={"Bucket": self.bucket, "Key": src_key},
+                Key=dst_key,
+            )

@@ -1,4 +1,5 @@
 import os
+import shutil
 from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import BinaryIO
@@ -46,3 +47,9 @@ class LocalStorage(StorageBackend):
 
     async def get_signed_url(self, key: str, expires_in: int = 3600) -> str:
         return sign_url(f"/media/{key}", expires_in=expires_in)
+
+    async def copy(self, src_key: str, dst_key: str) -> None:
+        src = self._full_path(src_key)
+        dst = self._full_path(dst_key)
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src, dst)

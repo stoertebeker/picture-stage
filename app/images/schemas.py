@@ -21,3 +21,11 @@ class ImageResponse(BaseModel):
 class ImageUploadResponse(BaseModel):
     uploaded: int
     images: list[ImageResponse]
+
+
+class BulkDeleteRequest(BaseModel):
+    image_ids: list[uuid.UUID]
+
+
+class BulkDeleteResponse(BaseModel):
+    deleted: int

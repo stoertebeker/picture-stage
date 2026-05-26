@@ -24,6 +24,10 @@ class StorageBackend(ABC):
     async def get_signed_url(self, key: str, expires_in: int = 3600) -> str:
         """Return a time-limited URL for the file."""
 
+    @abstractmethod
+    async def copy(self, src_key: str, dst_key: str) -> None:
+        """Copy a file from src_key to dst_key."""
+
 
 def storage_key(gallery_id: str, category: str, filename: str) -> str:
     return f"{gallery_id}/{category}/{filename}"
