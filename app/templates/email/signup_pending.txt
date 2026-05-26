@@ -1,0 +1,11 @@
+Neue Registrierung
+==================
+
+Ein neuer Benutzer hat sich registriert und wartet auf Freigabe:
+
+  E-Mail: {{ email }}
+
+Admin-Ansicht: {{ admin_url }}
+
+--
+Picture-Stage — Self-hosted Photo Proofing

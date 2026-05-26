@@ -1,0 +1,13 @@
+Bewertung abgeschlossen
+=======================
+
+Die Bewertung für die Galerie "{{ gallery_name }}" wurde abgeschlossen.
+
+  Bilder gesamt: {{ total_images }}
+  Ausgewählt:    {{ selected_count }}
+  Favorisiert:   {{ favorited_count }}
+
+Dashboard: {{ dashboard_url }}
+
+--
+Picture-Stage — Self-hosted Photo Proofing

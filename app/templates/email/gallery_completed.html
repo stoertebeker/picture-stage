@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="de">
+<head><meta charset="UTF-8"></head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; color: #333;">
+  <h2 style="color: #1a1a1a;">Bewertung abgeschlossen</h2>
+  <p>Die Bewertung für die Galerie <strong>{{ gallery_name }}</strong> wurde abgeschlossen.</p>
+  <table style="border-collapse: collapse; width: 100%; margin: 16px 0;">
+    <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Bilder gesamt</td><td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">{{ total_images }}</td></tr>
+    <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Ausgewählt</td><td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">{{ selected_count }}</td></tr>
+    <tr><td style="padding: 8px; border-bottom: 1px solid #eee;">Favorisiert</td><td style="padding: 8px; border-bottom: 1px solid #eee; text-align: right;">{{ favorited_count }}</td></tr>
+  </table>
+  <p><a href="{{ dashboard_url }}" style="display: inline-block; padding: 10px 20px; background: #2563eb; color: #fff; text-decoration: none; border-radius: 6px;">Zum Dashboard</a></p>
+  <p style="font-size: 12px; color: #999; margin-top: 32px;">Picture-Stage &mdash; Self-hosted Photo Proofing</p>
+</body>
+</html>

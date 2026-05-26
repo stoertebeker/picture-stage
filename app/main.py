@@ -15,6 +15,7 @@ from app.galleries.router import router as galleries_router
 from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
 from app.images.router import router as images_router
+from app.notifications.router import router as notifications_router
 from app.security.middleware import SecurityHeadersMiddleware
 from app.security.rate_limit import limiter
 
@@ -50,6 +51,7 @@ app.include_router(sharing_router)
 app.include_router(export_router)
 app.include_router(images_router)
 app.include_router(guest_router)
+app.include_router(notifications_router)
 
 
 @app.get("/health")

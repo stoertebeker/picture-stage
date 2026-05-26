@@ -1,26 +1,32 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.passwords import verify_password, verify_token
+from app.config import settings
 from app.db.models import (
     Gallery,
     GalleryStatus,
     Image,
     PreviewVariant,
+    SelectionAction,
     SelectionEvent,
     ShareSession,
 )
 from app.db.session import get_db
+from app.notifications.service import send_notification
 from app.security.rate_limit import limiter
 from app.security.signing import sign_url
 from app.selections.schemas import SelectionEventCreate, SelectionSummary
 from app.selections.service import get_current_selections
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/g", tags=["guest"])
 
@@ -293,6 +299,41 @@ async def complete_review(
 
     await db.commit()
     await db.refresh(gallery)
+
+    try:
+        img_count = await db.execute(
+            select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
+        )
+        total_images = img_count.scalar() or 0
+
+        sel_counts = await db.execute(
+            select(
+                func.count(func.distinct(SelectionEvent.image_id)).filter(
+                    SelectionEvent.action == SelectionAction.select
+                ),
+                func.count(func.distinct(SelectionEvent.image_id)).filter(
+                    SelectionEvent.action == SelectionAction.favorite
+                ),
+            )
+            .join(Image, SelectionEvent.image_id == Image.id)
+            .where(Image.gallery_id == gallery.id)
+        )
+        row = sel_counts.one()
+
+        await send_notification(
+            event_type="gallery_completed",
+            user_id=str(gallery.owner_id),
+            payload={
+                "gallery_name": gallery.name,
+                "total_images": total_images,
+                "selected_count": row[0],
+                "favorited_count": row[1],
+                "dashboard_url": f"{settings.app_url}/api/v1/galleries/dashboard",
+            },
+            db=db,
+        )
+    except Exception:
+        logger.exception("Failed to send gallery_completed notification")
 
     return CompleteReviewResponse(
         message="Review completed. Thank you!",
