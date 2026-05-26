@@ -3,6 +3,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
@@ -16,7 +17,7 @@ from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
 from app.images.router import router as images_router
 from app.notifications.router import router as notifications_router
-from app.security.middleware import SecurityHeadersMiddleware
+from app.security.middleware import CSRFMiddleware, SecurityHeadersMiddleware
 from app.security.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,9 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(CSRFMiddleware)
+
+app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 
 app.include_router(auth_router)
 app.include_router(admin_router)

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="de"
+      x-data
+      :class="{ 'dark': window.matchMedia('(prefers-color-scheme: dark)').matches }">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Gallery{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+    <header style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--color-border);">
+        <h1>{% block gallery_name %}Gallery{% endblock %}</h1>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/alpine.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

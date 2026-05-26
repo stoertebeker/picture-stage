@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="de"
+      x-data="{ darkMode: localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches) }"
+      :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}Picture-Stage{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+    <nav>
+        <div>
+            <a href="/dashboard"><strong>Picture-Stage</strong></a>
+        </div>
+        <div>
+            <a href="/dashboard">Dashboard</a>
+            <button @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')" type="button">
+                <span x-show="!darkMode">Dark</span>
+                <span x-show="darkMode">Light</span>
+            </button>
+            <form method="post" action="/api/v1/auth/logout" style="display:inline;">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit">Logout</button>
+            </form>
+        </div>
+    </nav>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <script src="/static/js/htmx.min.js"></script>
+    <script src="/static/js/alpine.min.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

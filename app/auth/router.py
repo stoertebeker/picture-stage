@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -84,6 +85,46 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 
     access_token = create_access_token(str(user.id))
     return LoginResponse(access_token=access_token)
+
+
+@router.post("/login-form")
+@limiter.limit("10/minute")
+async def login_form(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
+    form = await request.form()
+    email = form.get("email")
+    password = form.get("password")
+
+    if not email or not password:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Email and password required")
+
+    result = await db.execute(select(User).where(User.email == str(email)))
+    user = result.scalar_one_or_none()
+
+    if user is None or not verify_password(str(password), user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    if user.status == "pending":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not yet approved by admin")
+
+    access_token = create_access_token(str(user.id))
+    response = RedirectResponse(url="/dashboard", status_code=303)
+    response.set_cookie(
+        key="session",
+        value=access_token,
+        httponly=True,
+        secure=True,
+        samesite="lax",
+        max_age=86400,
+        path="/",
+    )
+    return response
+
+
+@router.post("/logout")
+async def logout() -> Response:
+    response = RedirectResponse(url="/login", status_code=303)
+    response.delete_cookie(key="session", path="/")
+    return response
 
 
 @router.get("/me", response_model=UserResponse)
