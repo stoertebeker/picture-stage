@@ -1,0 +1,40 @@
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+    {% for img in images %}
+    <div class="relative group cursor-pointer rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-800 aspect-square"
+         @click="openLightbox({{ loop.index0 }})">
+        <img src="{{ img.thumb_md_url or img.thumb_sm_url }}"
+             alt="{{ img.filename }}"
+             loading="lazy"
+             class="w-full h-full object-cover">
+
+        <!-- Selection Overlay -->
+        <div class="absolute inset-0 flex items-end justify-between p-2 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+             :class="{ 'opacity-100': images[{{ loop.index0 }}]?.selected || images[{{ loop.index0 }}]?.favorited }">
+            <button @click.stop="toggleSelect('{{ img.id }}')"
+                    class="w-7 h-7 rounded-full flex items-center justify-center text-white transition-colors"
+                    :class="images[{{ loop.index0 }}]?.selected ? 'bg-blue-500' : 'bg-black/50 hover:bg-blue-500'">
+                ✓
+            </button>
+            <button @click.stop="toggleFavorite('{{ img.id }}')"
+                    class="w-7 h-7 rounded-full flex items-center justify-center text-white transition-colors"
+                    :class="images[{{ loop.index0 }}]?.favorited ? 'bg-yellow-500' : 'bg-black/50 hover:bg-yellow-500'">
+                ★
+            </button>
+        </div>
+
+        <!-- Selection indicator (always visible when selected) -->
+        <template x-if="images[{{ loop.index0 }}]?.selected">
+            <div class="absolute top-2 left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">✓</div>
+        </template>
+        <template x-if="images[{{ loop.index0 }}]?.favorited">
+            <div class="absolute top-2 right-2 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-white text-xs">★</div>
+        </template>
+    </div>
+    {% endfor %}
+</div>
+
+{% if not images %}
+<div class="text-center py-16 text-gray-500 dark:text-gray-400">
+    <p>Keine Bilder in dieser Galerie.</p>
+</div>
+{% endif %}

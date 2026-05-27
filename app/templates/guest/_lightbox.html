@@ -1,0 +1,68 @@
+<div x-show="lightboxOpen"
+     x-transition
+     @keydown.window="handleKeydown($event)"
+     class="fixed inset-0 z-50 bg-black flex items-center justify-center"
+     style="display: none;">
+
+    <!-- Close button -->
+    <button @click="closeLightbox()"
+            class="absolute top-4 right-4 z-10 text-white/70 hover:text-white text-2xl w-10 h-10 flex items-center justify-center">
+        ✕
+    </button>
+
+    <!-- Image counter -->
+    <div class="absolute top-4 left-4 z-10 text-white/70 text-sm">
+        <span x-text="lightboxIndex + 1"></span> / <span x-text="images.length"></span>
+    </div>
+
+    <!-- Previous button -->
+    <button @click="prevImage()"
+            x-show="lightboxIndex > 0"
+            class="absolute left-4 z-10 text-white/70 hover:text-white text-4xl w-12 h-12 flex items-center justify-center">
+        ‹
+    </button>
+
+    <!-- Image -->
+    <template x-if="currentImage">
+        <img :src="currentImage.preview_url || currentImage.thumb_md_url"
+             :alt="currentImage.filename"
+             class="max-h-[85vh] max-w-[90vw] object-contain">
+    </template>
+
+    <!-- Next button -->
+    <button @click="nextImage()"
+            x-show="lightboxIndex < images.length - 1"
+            class="absolute right-4 z-10 text-white/70 hover:text-white text-4xl w-12 h-12 flex items-center justify-center">
+        ›
+    </button>
+
+    <!-- Bottom toolbar -->
+    <template x-if="currentImage">
+        <div class="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur px-6 py-4">
+            <div class="max-w-2xl mx-auto flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <button @click="toggleSelect(currentImage.id)"
+                            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                            :class="currentImage.selected ? 'bg-blue-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'">
+                        ✓ <span x-text="currentImage.selected ? 'Ausgewählt' : 'Auswählen'"></span>
+                    </button>
+                    <button @click="toggleFavorite(currentImage.id)"
+                            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
+                            :class="currentImage.favorited ? 'bg-yellow-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'">
+                        ★ <span x-text="currentImage.favorited ? 'Favorit' : 'Favorisieren'"></span>
+                    </button>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="text"
+                           :value="currentImage.comment || ''"
+                           @keydown.enter="submitComment(currentImage.id, $event.target.value)"
+                           placeholder="Kommentar..."
+                           class="px-3 py-1.5 text-sm bg-white/20 text-white placeholder-white/50 rounded-lg border-0 focus:ring-2 focus:ring-blue-500 w-48">
+                </div>
+            </div>
+            <div class="max-w-2xl mx-auto mt-1 text-xs text-white/50">
+                <span x-text="currentImage.filename"></span>
+            </div>
+        </div>
+    </template>
+</div>

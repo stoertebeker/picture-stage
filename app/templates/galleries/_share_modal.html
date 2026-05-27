@@ -1,0 +1,72 @@
+<div class="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+    <h3 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Teilen</h3>
+
+    {% if has_share_token %}
+    <!-- Active share link -->
+    <div x-data="{ copied: false, shareUrl: '{{ share_url | default('') }}' }">
+        {% if share_url is defined and share_url %}
+        <div class="flex items-center gap-2 mb-4">
+            <input type="text"
+                   readonly
+                   :value="shareUrl"
+                   class="flex-1 px-3 py-2 text-sm bg-gray-50 dark:bg-gray-900 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 font-mono">
+            <button @click="navigator.clipboard.writeText(shareUrl).then(() => { copied = true; setTimeout(() => copied = false, 2000) })"
+                    class="px-3 py-2 text-sm font-medium rounded-lg transition-colors"
+                    :class="copied ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300' : 'bg-blue-600 hover:bg-blue-700 text-white'">
+                <span x-show="!copied">Kopieren</span>
+                <span x-show="copied">Kopiert!</span>
+            </button>
+        </div>
+        {% else %}
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Galerie ist geteilt. Der Share-Link wurde bei der Erstellung angezeigt.
+        </p>
+        {% endif %}
+
+        <div class="flex items-center gap-3">
+            <form hx-delete="/galleries/{{ gallery.id }}/share"
+                  hx-target="#share-section"
+                  hx-swap="innerHTML"
+                  hx-confirm="Share-Link wirklich widerrufen? Der Link wird ungueltig.">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <button type="submit"
+                        class="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/40 border border-red-200 dark:border-red-800 rounded-lg transition-colors">
+                    Link widerrufen
+                </button>
+            </form>
+        </div>
+    </div>
+    {% else %}
+    <!-- No share link yet -->
+    <div x-data="{ showPassword: false }">
+        <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Erstelle einen Share-Link, um die Galerie mit deinem Model zu teilen.
+        </p>
+        <form hx-post="/galleries/{{ gallery.id }}/share"
+              hx-target="#share-section"
+              hx-swap="innerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+            <!-- Password toggle -->
+            <div class="mb-4">
+                <label class="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+                    <input type="checkbox" x-model="showPassword"
+                           class="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500">
+                    Mit Passwort schuetzen
+                </label>
+                <div x-show="showPassword" x-transition class="mt-2">
+                    <input type="password"
+                           name="password"
+                           placeholder="Passwort eingeben"
+                           class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+
+            <button type="submit"
+                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg transition-colors">
+                Share-Link erstellen
+            </button>
+        </form>
+    </div>
+    {% endif %}
+</div>

@@ -1,0 +1,82 @@
+<div x-data="uploadZone()" class="relative">
+    <form hx-post="/galleries/{{ gallery.id }}/upload"
+          hx-target="#image-grid"
+          hx-swap="innerHTML"
+          hx-encoding="multipart/form-data"
+          x-ref="uploadForm"
+          @htmx:xhr:progress.window="uploadProgress = Math.round((event.detail.loaded / event.detail.total) * 100)"
+          @htmx:after-request.window="uploadProgress = 0; uploading = false">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+
+        <!-- Drop Zone -->
+        <div class="border-2 border-dashed rounded-xl p-8 text-center transition-colors"
+             :class="dragOver ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'"
+             @dragover.prevent="dragOver = true"
+             @dragleave.prevent="dragOver = false"
+             @drop.prevent="handleDrop($event)">
+
+            <svg class="mx-auto h-10 w-10 text-gray-400 dark:text-gray-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                      d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+            </svg>
+
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                Bilder hierher ziehen oder
+                <label class="text-blue-600 hover:text-blue-800 dark:text-blue-400 cursor-pointer font-medium">
+                    auswaehlen
+                    <input type="file"
+                           name="files"
+                           multiple
+                           accept="image/jpeg,image/png,image/webp"
+                           class="hidden"
+                           x-ref="fileInput"
+                           @change="handleFiles($event)">
+                </label>
+            </p>
+            <p class="text-xs text-gray-400 dark:text-gray-500">JPEG, PNG, WebP</p>
+        </div>
+    </form>
+
+    <!-- Progress Bar -->
+    <div x-show="uploading" x-transition class="mt-4">
+        <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
+            <span>Hochladen...</span>
+            <span x-text="uploadProgress + '%'"></span>
+        </div>
+        <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+            <div class="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                 :style="'width: ' + uploadProgress + '%'"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+function uploadZone() {
+    return {
+        dragOver: false,
+        uploading: false,
+        uploadProgress: 0,
+
+        handleDrop(event) {
+            this.dragOver = false;
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                this.$refs.fileInput.files = files;
+                this.startUpload();
+            }
+        },
+
+        handleFiles(event) {
+            if (event.target.files.length > 0) {
+                this.startUpload();
+            }
+        },
+
+        startUpload() {
+            this.uploading = true;
+            this.uploadProgress = 0;
+            htmx.trigger(this.$refs.uploadForm, 'submit');
+        }
+    };
+}
+</script>

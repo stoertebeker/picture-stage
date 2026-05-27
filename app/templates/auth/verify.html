@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="de"
+      x-data="{ darkMode: localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches) }"
+      :class="{ 'dark': darkMode }">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - Picture-Stage</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex items-center justify-center">
+    <div class="w-full max-w-md px-6">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
+            <div class="flex items-center justify-between mb-6">
+                <h1 class="text-2xl font-bold">Picture-Stage</h1>
+                <button @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')"
+                        type="button"
+                        class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+                    <span x-show="!darkMode">Dark</span>
+                    <span x-show="darkMode">Light</span>
+                </button>
+            </div>
+
+            {% if success %}
+            <div class="bg-green-100 dark:bg-green-900 border border-green-400 dark:border-green-700 text-green-700 dark:text-green-200 px-4 py-3 rounded mb-4" role="alert">
+                Email verified successfully. Your account is now waiting for admin approval.
+            </div>
+            {% else %}
+            <div class="bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 px-4 py-3 rounded mb-4" role="alert">
+                {{ error }}
+            </div>
+            {% endif %}
+
+            <p class="text-center text-sm text-gray-600 dark:text-gray-400">
+                <a href="/login" class="text-blue-600 dark:text-blue-400 hover:underline">Back to Login</a>
+            </p>
+        </div>
+    </div>
+
+    <script src="/static/js/alpine.min.js"></script>
+</body>
+</html>

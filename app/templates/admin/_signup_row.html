@@ -1,0 +1,24 @@
+<tr>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ signup.email }}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ signup.requested_at.strftime('%d.%m.%Y %H:%M') }}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-right text-sm space-x-2">
+        <button
+            hx-post="/admin/approve/{{ signup.id }}"
+            hx-target="closest tr"
+            hx-swap="outerHTML"
+            hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'
+            hx-confirm="Registrierung von {{ signup.email }} genehmigen?"
+            class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 transition-colors">
+            Genehmigen
+        </button>
+        <button
+            hx-post="/admin/reject/{{ signup.id }}"
+            hx-target="closest tr"
+            hx-swap="outerHTML"
+            hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'
+            hx-confirm="Registrierung von {{ signup.email }} ablehnen?"
+            class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 transition-colors">
+            Ablehnen
+        </button>
+    </td>
+</tr>

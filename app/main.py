@@ -16,6 +16,11 @@ from app.galleries.router import router as galleries_router
 from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
 from app.images.router import router as images_router
+from app.frontend.admin import router as frontend_admin_router
+from app.frontend.auth import router as frontend_auth_router
+from app.frontend.dashboard import router as frontend_dashboard_router
+from app.frontend.galleries import router as frontend_galleries_router
+from app.frontend.guest import router as frontend_guest_router
 from app.notifications.router import router as notifications_router
 from app.security.middleware import CSRFMiddleware, SecurityHeadersMiddleware
 from app.security.rate_limit import limiter
@@ -54,8 +59,13 @@ app.include_router(galleries_router)
 app.include_router(sharing_router)
 app.include_router(export_router)
 app.include_router(images_router)
+app.include_router(frontend_guest_router)
 app.include_router(guest_router)
 app.include_router(notifications_router)
+app.include_router(frontend_auth_router)
+app.include_router(frontend_dashboard_router)
+app.include_router(frontend_galleries_router)
+app.include_router(frontend_admin_router)
 
 
 @app.get("/health")
