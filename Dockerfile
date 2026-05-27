@@ -1,11 +1,12 @@
 FROM python:3.12-slim AS builder
 
 WORKDIR /build
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 COPY app/ ./app/
 
-RUN pip install --user --no-cache-dir . && \
-    pip install --user --no-cache-dir alembic
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+RUN pip install --no-cache-dir .
 
 FROM python:3.12-slim
 
@@ -17,14 +18,14 @@ RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 
 WORKDIR /app
 
-COPY --from=builder /root/.local /home/app/.local
+COPY --from=builder /opt/venv /opt/venv
 COPY . .
 
 RUN mkdir -p /app/uploads && chown -R app:app /app
 
 USER app
 
-ENV PATH=/home/app/.local/bin:$PATH \
+ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1
 
