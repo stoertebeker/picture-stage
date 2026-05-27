@@ -17,23 +17,37 @@ Picture-Stage lets photographers share image galleries with models for review. M
 - **Multi-tenant** — multiple photographers with admin approval registration
 - **Multi-arch Docker image** — runs on amd64 and arm64 (Raspberry Pi, Synology)
 
-## Quick Start
+## Installation (Docker)
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/stoertebeker/picture-stage.git
-cd picture-stage
+# 1. Verzeichnis anlegen
+mkdir picture-stage && cd picture-stage
 
-# 2. Configure
+# 2. Compose und Konfiguration herunterladen
+curl -O https://raw.githubusercontent.com/stoertebeker/picture-stage/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/stoertebeker/picture-stage/main/.env.example
 cp .env.example .env
-# Edit .env — at minimum set SECRET_KEY, HMAC_SECRET_KEY, ADMIN_EMAIL, ADMIN_PASSWORD
 
-# 3. Run
+# 3. .env anpassen — mindestens diese Werte setzen:
+#    SECRET_KEY         (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(64))")
+#    HMAC_SECRET_KEY    (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+#    ADMIN_EMAIL        (E-Mail des ersten Admin-Accounts)
+#    ADMIN_PASSWORD     (Passwort des ersten Admin-Accounts, min. 8 Zeichen)
+
+# 4. Starten
 docker compose up -d
 
-# 4. Open
-# http://localhost:8000
-# API docs: http://localhost:8000/docs
+# 5. Öffnen
+#    http://localhost:8000
+#    API-Docs: http://localhost:8000/docs
+```
+
+### Update auf eine neue Version
+
+```bash
+# Image-Tag in docker-compose.yml anpassen oder :latest verwenden, dann:
+docker compose pull
+docker compose up -d
 ```
 
 ## API Overview
@@ -149,7 +163,7 @@ pytest tests/security/ -v
 ## Docker Hub
 
 ```bash
-docker pull stoertebeker/picture-stage:latest
+docker pull stoertebeker2k/picture-stage:latest
 ```
 
 Multi-arch images (amd64 + arm64) are built automatically on each tagged release via GitHub Actions.

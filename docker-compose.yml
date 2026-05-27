@@ -14,24 +14,12 @@ services:
       timeout: 3s
       retries: 5
 
-  migrate:
-    build: .
-    command: alembic upgrade head
-    depends_on:
-      db:
-        condition: service_healthy
-    environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://picstage:picstage@db:5432/picstage}
-    restart: "no"
-
   app:
-    build: .
+    image: stoertebeker2k/picture-stage:0.4.0
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     ports:
       - "${APP_PORT:-8000}:8000"
     volumes:
