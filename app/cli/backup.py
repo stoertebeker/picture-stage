@@ -19,11 +19,11 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import subprocess  # noqa: S404
+import subprocess
 import sys
 import tarfile
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -77,7 +77,7 @@ def _safe_tar_extract(tar: tarfile.TarFile, dest: Path) -> None:
             raise ValueError(
                 f"Refusing to extract {member.name!r}: path traversal detected"
             )
-    tar.extractall(dest, filter="data")  # noqa: S202
+    tar.extractall(dest, filter="data")
 
 
 # ---------------------------------------------------------------------------
@@ -96,7 +96,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
     if args.output:
         output_path = Path(args.output)
     else:
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
         output_path = Path(f"picture-stage-backup-{ts}.tar.gz")
 
     print(f"[backup] Storage backend : {storage_type}")
@@ -105,8 +105,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
 
     # --- Verify DB connectivity ---
     try:
-        subprocess.run(  # noqa: S603
-            [
+        subprocess.run(            [
                 "pg_isready",
                 "-h", db["host"],
                 "-p", db["port"],
@@ -130,8 +129,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
         print("[backup] Dumping database …")
         dump_path = tmp / "db.sql"
         try:
-            subprocess.run(  # noqa: S603
-                [
+            subprocess.run(                [
                     "pg_dump",
                     "-h", db["host"],
                     "-p", db["port"],
@@ -156,7 +154,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
         # --- Metadata ---
         metadata: dict[str, object] = {
             "app_version": APP_VERSION,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "storage_type": storage_type,
         }
 
@@ -262,8 +260,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
 
         # --- Warn if DB is non-empty ---
         try:
-            result = subprocess.run(  # noqa: S603
-                [
+            result = subprocess.run(                [
                     "psql",
                     "-h", db["host"],
                     "-p", db["port"],
@@ -288,8 +285,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
         # --- Restore database ---
         print("[restore] Restoring database …")
         try:
-            subprocess.run(  # noqa: S603
-                [
+            subprocess.run(                [
                     "psql",
                     "-h", db["host"],
                     "-p", db["port"],

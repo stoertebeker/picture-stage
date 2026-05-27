@@ -8,13 +8,25 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import delete as sa_delete, select, update as sa_update
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
+from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import require_authenticated_page
 from app.auth.passwords import hash_password, hash_token
-from app.db.models import AuditLog, Gallery, GalleryStatus, Image, ImagePreview, PreviewVariant, SelectionEvent, ShareSession, User
+from app.db.models import (
+    AuditLog,
+    Gallery,
+    GalleryStatus,
+    Image,
+    ImagePreview,
+    PreviewVariant,
+    SelectionEvent,
+    ShareSession,
+    User,
+)
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.security.signing import sign_url

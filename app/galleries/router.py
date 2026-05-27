@@ -494,7 +494,10 @@ async def export_audit_log(
     def generate_csv():
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow(["id", "event_type", "actor_user_id", "actor_session_id", "ip_address", "user_agent", "details", "created_at"])
+        writer.writerow([
+            "id", "event_type", "actor_user_id", "actor_session_id",
+            "ip_address", "user_agent", "details", "created_at",
+        ])
         yield output.getvalue()
         output.seek(0)
         output.truncate(0)
