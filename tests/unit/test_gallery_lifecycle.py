@@ -10,12 +10,10 @@ Verifies that:
 - Double-complete is rejected (409 idempotency guard)
 """
 
-import uuid
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from app.db.models import Gallery, GalleryStatus
+from app.db.models import GalleryStatus
 from app.galleries.router import ALLOWED_TRANSITIONS
 
 
@@ -82,8 +80,9 @@ class TestStatusTransitionSchema:
         assert t.status == GalleryStatus.shared
 
     def test_invalid_status_rejected(self) -> None:
-        from app.galleries.schemas import GalleryStatusTransition
         from pydantic import ValidationError
+
+        from app.galleries.schemas import GalleryStatusTransition
         with pytest.raises(ValidationError):
             GalleryStatusTransition(status="nonexistent")
 

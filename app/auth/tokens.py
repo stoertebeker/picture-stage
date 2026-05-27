@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from jose import JWTError, jwt
 
@@ -10,7 +10,7 @@ ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 
 def create_access_token(user_id: str) -> str:
-    expire = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    expire = datetime.now(UTC) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     payload = {"sub": user_id, "exp": expire, "type": "access"}
     return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
 

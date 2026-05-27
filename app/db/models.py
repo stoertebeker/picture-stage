@@ -19,34 +19,33 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base, TimestampMixin, generate_uuid
 
-
 # --- Enums ---
 
 
-class UserStatus(str, enum.Enum):
+class UserStatus(enum.StrEnum):
     pending = "pending"
     active = "active"
     admin = "admin"
 
 
-class GalleryPhase(str, enum.Enum):
+class GalleryPhase(enum.StrEnum):
     review = "review"
 
 
-class GalleryStatus(str, enum.Enum):
+class GalleryStatus(enum.StrEnum):
     draft = "draft"
     shared = "shared"
     completed = "completed"
     archived = "archived"
 
 
-class PreviewVariant(str, enum.Enum):
+class PreviewVariant(enum.StrEnum):
     thumb_sm = "thumb_sm"
     thumb_md = "thumb_md"
     preview = "preview"
 
 
-class SelectionAction(str, enum.Enum):
+class SelectionAction(enum.StrEnum):
     select = "select"
     deselect = "deselect"
     favorite = "favorite"
@@ -116,7 +115,9 @@ class Image(TimestampMixin, Base):
 
     gallery: Mapped["Gallery"] = relationship(back_populates="images")
     previews: Mapped[list["ImagePreview"]] = relationship(back_populates="image", cascade="all, delete-orphan")
-    selection_events: Mapped[list["SelectionEvent"]] = relationship(back_populates="image", cascade="all, delete-orphan")
+    selection_events: Mapped[list["SelectionEvent"]] = relationship(
+        back_populates="image", cascade="all, delete-orphan"
+    )
 
 
 class ImagePreview(Base):

@@ -196,12 +196,12 @@ async def delete_image(
 
     try:
         await storage.delete(image.storage_key)
-    except Exception:
+    except Exception:  # noqa: S110
         pass
     for preview in image.previews:
         try:
             await storage.delete(preview.storage_key)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
     await db.delete(image)
@@ -238,12 +238,12 @@ async def bulk_delete_images(
     for image in images:
         try:
             await storage.delete(image.storage_key)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         for preview in image.previews:
             try:
                 await storage.delete(preview.storage_key)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         await db.delete(image)
 

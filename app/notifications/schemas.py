@@ -4,7 +4,7 @@ from pydantic import BaseModel, HttpUrl, field_validator
 
 VALID_EVENT_TYPES = {"gallery_completed", "signup_pending"}
 
-BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "metadata.google.internal", "169.254.169.254"}
+BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "metadata.google.internal", "169.254.169.254"}  # noqa: S104
 
 
 class NotificationConfigUpdate(BaseModel):

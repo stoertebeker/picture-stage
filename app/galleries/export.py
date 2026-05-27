@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
-from app.db.models import Gallery, Image, SelectionAction, SelectionEvent, ShareSession, User
+from app.db.models import Gallery, Image, SelectionAction, SelectionEvent, User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/api/v1/galleries", tags=["export"])

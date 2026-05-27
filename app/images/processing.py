@@ -40,7 +40,7 @@ def apply_watermark(image_data: BinaryIO, text: str | None = None) -> io.BytesIO
 
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=font_size)
-    except (OSError, IOError):
+    except OSError:
         font = ImageFont.load_default(size=font_size)
 
     bbox = draw.textbbox((0, 0), wm_text, font=font)
@@ -74,7 +74,7 @@ def generate_preview_with_watermark(
 
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=font_size)
-    except (OSError, IOError):
+    except OSError:
         font = ImageFont.load_default(size=font_size)
 
     bbox = draw.textbbox((0, 0), watermark_text, font=font)
@@ -103,7 +103,7 @@ def extract_exif(image_data: BinaryIO) -> dict:
             try:
                 str(value)
                 safe_exif[str(tag_id)] = str(value)
-            except Exception:
+            except Exception:  # noqa: S112
                 continue
         return safe_exif
     except Exception:

@@ -11,11 +11,6 @@ Verifies that:
 
 import uuid
 
-import pytest
-from pydantic import ValidationError
-
-from app.db.models import GalleryStatus
-
 
 class TestBulkDeleteSchema:
     """Verify bulk-delete request/response schemas."""

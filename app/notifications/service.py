@@ -15,11 +15,11 @@ from app.db.models import NotificationConfig, NotificationDelivery, User, UserSt
 logger = logging.getLogger(__name__)
 
 TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates" / "email"
-_jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=False)
+_jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=True)
 
 SUBJECT_MAP = {
-    "gallery_completed": "Bewertung abgeschlossen – {{ gallery_name }}",
-    "signup_pending": "Neue Registrierung – {{ email }}",
+    "gallery_completed": "Bewertung abgeschlossen - {{ gallery_name }}",
+    "signup_pending": "Neue Registrierung - {{ email }}",
 }
 
 

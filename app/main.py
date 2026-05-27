@@ -11,16 +11,16 @@ from app.admin.router import router as admin_router
 from app.auth.router import router as auth_router
 from app.auth.startup import create_initial_admin
 from app.config import settings
-from app.galleries.export import router as export_router
-from app.galleries.router import router as galleries_router
-from app.galleries.sharing import router as sharing_router
-from app.guest.router import router as guest_router
-from app.images.router import router as images_router
 from app.frontend.admin import router as frontend_admin_router
 from app.frontend.auth import router as frontend_auth_router
 from app.frontend.dashboard import router as frontend_dashboard_router
 from app.frontend.galleries import router as frontend_galleries_router
 from app.frontend.guest import router as frontend_guest_router
+from app.galleries.export import router as export_router
+from app.galleries.router import router as galleries_router
+from app.galleries.sharing import router as sharing_router
+from app.guest.router import router as guest_router
+from app.images.router import router as images_router
 from app.notifications.router import router as notifications_router
 from app.security.middleware import CSRFMiddleware, SecurityHeadersMiddleware
 from app.security.rate_limit import limiter
@@ -30,9 +30,9 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    if settings.secret_key == "CHANGE_ME":
+    if settings.secret_key == "CHANGE_ME":  # noqa: S105
         logger.warning("SECRET_KEY is not set — using insecure default. Set it in .env before deploying.")
-    if settings.hmac_secret_key == "CHANGE_ME":
+    if settings.hmac_secret_key == "CHANGE_ME":  # noqa: S105
         logger.warning("HMAC_SECRET_KEY is not set — using insecure default. Set it in .env before deploying.")
 
     await create_initial_admin()

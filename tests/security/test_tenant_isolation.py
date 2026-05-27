@@ -10,10 +10,6 @@ Requires: PostgreSQL (via DATABASE_URL env var)
 import uuid
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from app.db.models import Gallery, GalleryStatus, Image, User, UserStatus
 
 
 @pytest.fixture
@@ -54,7 +50,6 @@ class TestGalleryIsolation:
 
     def test_gallery_list_query_filters_owner(self) -> None:
         """list_galleries endpoint must filter by owner_id."""
-        import ast
 
         with open("app/galleries/router.py") as f:
             source = f.read()
@@ -65,7 +60,6 @@ class TestGalleryIsolation:
 
     def test_gallery_detail_query_filters_owner(self) -> None:
         """get_gallery endpoint must filter by owner_id."""
-        import ast
 
         with open("app/galleries/router.py") as f:
             source = f.read()

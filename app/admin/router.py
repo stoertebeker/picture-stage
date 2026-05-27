@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
@@ -43,7 +43,7 @@ async def approve_signup(
         email=signup.email,
         password_hash=signup.password_hash,
         status=UserStatus.active,
-        email_verified_at=datetime.now(timezone.utc),
+        email_verified_at=datetime.now(UTC),
     )
     db.add(user)
     await db.delete(signup)

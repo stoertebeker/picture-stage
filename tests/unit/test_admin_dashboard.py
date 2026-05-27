@@ -8,7 +8,6 @@ Verifies that:
 - Endpoint uses require_active_user (not require_admin)
 """
 
-from app.db.models import GalleryStatus, UserStatus
 
 
 class TestDashboardSchemas:

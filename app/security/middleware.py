@@ -1,4 +1,5 @@
 import secrets
+from typing import ClassVar
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -11,8 +12,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
     Skips API routes (/api/) that use Bearer auth and guest routes (/g/) that use token-in-URL.
     """
 
-    SAFE_METHODS = {"GET", "HEAD", "OPTIONS", "TRACE"}
-    EXEMPT_PREFIXES = ("/api/", "/g/")
+    SAFE_METHODS: ClassVar[set[str]] = {"GET", "HEAD", "OPTIONS", "TRACE"}
+    EXEMPT_PREFIXES: ClassVar[tuple[str, ...]] = ("/api/", "/g/")
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path

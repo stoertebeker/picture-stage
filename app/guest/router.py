@@ -1,7 +1,7 @@
 import enum
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
@@ -32,18 +32,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/g", tags=["guest"])
 
 
-class ImageSortBy(str, enum.Enum):
+class ImageSortBy(enum.StrEnum):
     sort_order = "sort_order"
     filename = "filename"
     exif_date = "exif_date"
 
 
-class SortDirection(str, enum.Enum):
+class SortDirection(enum.StrEnum):
     asc = "asc"
     desc = "desc"
 
 
-class ImageFilter(str, enum.Enum):
+class ImageFilter(enum.StrEnum):
     all = "all"
     selected = "selected"
     favorited = "favorited"
@@ -94,7 +94,7 @@ async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | N
 
 
 def _check_gallery_accessible(gallery: Gallery) -> None:
-    if gallery.expires_at and gallery.expires_at < datetime.now(timezone.utc):
+    if gallery.expires_at and gallery.expires_at < datetime.now(UTC):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gallery link has expired")
 
 
@@ -360,7 +360,7 @@ async def complete_review(
             detail="Review already completed",
         )
 
-    session.completed_at = datetime.now(timezone.utc)
+    session.completed_at = datetime.now(UTC)
 
     if gallery.status == GalleryStatus.shared:
         gallery.status = GalleryStatus.completed

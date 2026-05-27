@@ -1,7 +1,8 @@
 import logging
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status as http_status
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi import status as http_status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -19,7 +20,6 @@ from app.db.models import (
     User,
     UserStatus,
 )
-
 from app.db.session import get_db
 from app.galleries.schemas import (
     DashboardGalleryResponse,
@@ -235,12 +235,12 @@ async def delete_gallery(
     for image in images:
         try:
             await storage.delete(image.storage_key)
-        except Exception:
+        except Exception:  # noqa: S110
             pass
         for preview in await image.awaitable_attrs.previews:
             try:
                 await storage.delete(preview.storage_key)
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
     await db.delete(gallery)

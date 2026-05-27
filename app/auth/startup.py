@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from sqlalchemy import func, select
 
@@ -26,7 +26,7 @@ async def create_initial_admin() -> None:
             email=settings.admin_email,
             password_hash=hash_password(settings.admin_password),
             status=UserStatus.admin,
-            email_verified_at=datetime.now(timezone.utc),
+            email_verified_at=datetime.now(UTC),
         )
         db.add(admin)
         await db.commit()

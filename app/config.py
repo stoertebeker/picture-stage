@@ -6,7 +6,7 @@ class Settings(BaseSettings):
 
     app_name: str = "Picture-Stage"
     app_url: str = "http://localhost:8000"
-    secret_key: str = "CHANGE_ME"
+    secret_key: str = "CHANGE_ME"  # noqa: S105
     debug: bool = False
 
     database_url: str = "postgresql+asyncpg://picstage:picstage@db:5432/picstage"
@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     s3_bucket_name: str = ""
     s3_region: str = ""
 
-    hmac_secret_key: str = "CHANGE_ME"
+    hmac_secret_key: str = "CHANGE_ME"  # noqa: S105
 
     smtp_host: str = ""
     smtp_port: int = 587

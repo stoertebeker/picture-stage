@@ -11,8 +11,6 @@ Verifies that:
 import enum
 from datetime import datetime
 
-import pytest
-
 
 class TestSortByEnum:
     """Verify ImageSortBy enum values."""

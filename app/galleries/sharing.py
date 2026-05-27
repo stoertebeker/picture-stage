@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
-from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
+from app.auth.passwords import hash_password, hash_token
 from app.db.models import Gallery, GalleryStatus, User
 from app.db.session import get_db
 

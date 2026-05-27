@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
@@ -28,7 +27,10 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Signup already pending")
 
     if len(body.password) < 8:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Password must be at least 8 characters")
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Password must be at least 8 characters",
+        )
 
     verification_token = generate_verification_token()
     token_hash, token_salt = hash_token(verification_token)
