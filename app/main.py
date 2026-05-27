@@ -10,6 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from app.admin.router import router as admin_router
 from app.auth.router import router as auth_router
 from app.config import settings
+from app.db.base import Base, engine
 from app.frontend.admin import router as frontend_admin_router
 from app.frontend.auth import router as frontend_auth_router
 from app.frontend.dashboard import router as frontend_dashboard_router
@@ -34,6 +35,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.warning("SECRET_KEY is not set — using insecure default. Set it in .env before deploying.")
     if settings.hmac_secret_key == "CHANGE_ME":  # noqa: S105
         logger.warning("HMAC_SECRET_KEY is not set — using insecure default. Set it in .env before deploying.")
+
+    import app.db.models  # noqa: F401
+
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
 
     yield
 
