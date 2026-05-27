@@ -1,9 +1,9 @@
 {% if images %}
 <div class="flex items-center justify-between mb-4">
-    <p class="text-sm text-gray-600 dark:text-gray-400">{{ image_count }} Bild{% if image_count != 1 %}er{% endif %}</p>
+    <p class="text-sm text-gray-600 dark:text-gray-400">{% if image_count != 1 %}{{ t('gallery.image_count_label_plural').replace('{count}', image_count | string) }}{% else %}{{ t('gallery.image_count_label').replace('{count}', image_count | string) }}{% endif %}</p>
     <button @click="selectAll()"
             class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
-        Alle auswaehlen
+        {{ t('gallery.select_all') }}
     </button>
 </div>
 
@@ -62,7 +62,7 @@
                   d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
         </svg>
     </div>
-    <h2 class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">Noch keine Bilder</h2>
-    <p class="text-gray-500 dark:text-gray-500">Lade Bilder hoch, um loszulegen.</p>
+    <h2 class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">{{ t('gallery.no_images_title') }}</h2>
+    <p class="text-gray-500 dark:text-gray-500">{{ t('gallery.no_images_text') }}</p>
 </div>
 {% endif %}

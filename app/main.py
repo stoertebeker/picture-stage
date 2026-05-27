@@ -2,10 +2,12 @@ import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from app.admin.router import router as admin_router
 from app.auth.router import router as auth_router
@@ -16,11 +18,13 @@ from app.frontend.auth import router as frontend_auth_router
 from app.frontend.dashboard import router as frontend_dashboard_router
 from app.frontend.galleries import router as frontend_galleries_router
 from app.frontend.guest import router as frontend_guest_router
+from app.frontend.legal import router as frontend_legal_router
 from app.frontend.setup import router as frontend_setup_router
 from app.galleries.export import router as export_router
 from app.galleries.router import router as galleries_router
 from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
+from app.i18n import detect_locale
 from app.images.router import router as images_router
 from app.notifications.router import router as notifications_router
 from app.security.middleware import CSRFMiddleware, SecurityHeadersMiddleware
@@ -53,8 +57,20 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
+
+
+class LocaleMiddleware(BaseHTTPMiddleware):
+    """Detect locale per request and store it in request.state.locale."""
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        request.state.locale = detect_locale(request)
+        response = await call_next(request)
+        return response
+
+
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
+app.add_middleware(LocaleMiddleware)
 
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 
@@ -72,8 +88,31 @@ app.include_router(frontend_dashboard_router)
 app.include_router(frontend_galleries_router)
 app.include_router(frontend_admin_router)
 app.include_router(frontend_setup_router)
+app.include_router(frontend_legal_router)
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/set-lang/{locale}")
+async def set_language(locale: str, request: Request) -> Response:
+    """Set language cookie and redirect back to the referring page."""
+    from app.i18n import get_supported_locales
+
+    if locale not in get_supported_locales():
+        locale = "de"
+
+    referer = request.headers.get("referer", "/")
+    response = RedirectResponse(url=referer, status_code=303)
+    response.set_cookie(
+        key="lang",
+        value=locale,
+        max_age=365 * 24 * 3600,  # 1 year
+        httponly=False,  # needs to be readable by JS for language switcher state
+        secure=request.url.scheme == "https",
+        samesite="lax",
+        path="/",
+    )
+    return response

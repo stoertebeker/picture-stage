@@ -44,19 +44,19 @@
                     <button @click="toggleSelect(currentImage.id)"
                             class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
                             :class="currentImage.selected ? 'bg-blue-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'">
-                        ✓ <span x-text="currentImage.selected ? 'Ausgewählt' : 'Auswählen'"></span>
+                        ✓ <span x-text="currentImage.selected ? '{{ t('guest.lightbox_selected') }}' : '{{ t('guest.lightbox_select') }}'"></span>
                     </button>
                     <button @click="toggleFavorite(currentImage.id)"
                             class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors"
                             :class="currentImage.favorited ? 'bg-yellow-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'">
-                        ★ <span x-text="currentImage.favorited ? 'Favorit' : 'Favorisieren'"></span>
+                        ★ <span x-text="currentImage.favorited ? '{{ t('guest.lightbox_favorited') }}' : '{{ t('guest.lightbox_favorite') }}'"></span>
                     </button>
                 </div>
                 <div class="flex items-center gap-2">
                     <input type="text"
                            :value="currentImage.comment || ''"
                            @keydown.enter="submitComment(currentImage.id, $event.target.value)"
-                           placeholder="Kommentar..."
+                           placeholder="{{ t('guest.lightbox_comment_placeholder') }}"
                            class="px-3 py-1.5 text-sm bg-white/20 text-white placeholder-white/50 rounded-lg border-0 focus:ring-2 focus:ring-blue-500 w-48">
                 </div>
             </div>

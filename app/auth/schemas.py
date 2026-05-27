@@ -41,3 +41,7 @@ class PendingSignupResponse(BaseModel):
     requested_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class LocaleUpdate(BaseModel):
+    locale: str

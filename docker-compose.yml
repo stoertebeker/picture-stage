@@ -24,6 +24,7 @@ services:
       - "${APP_PORT:-8000}:8000"
     volumes:
       - uploads:/app/uploads
+      - ./legal:/data/legal:ro
     env_file:
       - .env
 

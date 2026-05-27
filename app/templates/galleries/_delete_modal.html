@@ -1,0 +1,55 @@
+<!-- Delete Gallery Confirmation Modal -->
+<div x-data="{ deleteConfirmName: '', galleryName: '{{ gallery.name }}' }"
+     {% if delete_error is defined and delete_error %}x-init="$nextTick(() => $refs.deleteModal.showModal())"{% endif %}>
+    <button @click="$refs.deleteModal.showModal(); deleteConfirmName = ''"
+            class="px-3 py-1.5 text-sm font-medium rounded-lg border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+        {{ t('gallery.delete_button') }}
+    </button>
+
+    <dialog x-ref="deleteModal"
+            class="rounded-xl shadow-2xl p-0 backdrop:bg-black/70 max-w-md w-full bg-white dark:bg-gray-800"
+            @click.self="$refs.deleteModal.close()">
+        <div class="p-6">
+            <h3 class="text-lg font-semibold text-red-700 dark:text-red-400 mb-2">
+                {{ t('gallery.delete_title') }}
+            </h3>
+            <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                {{ t('gallery.delete_warning') }}
+            </p>
+            <p class="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                {{ t('gallery.delete_confirm_text').replace('{name}', gallery.name) | safe }}
+            </p>
+
+            {% if delete_error is defined and delete_error %}
+            <div class="mb-3 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg text-sm text-red-700 dark:text-red-300">
+                {{ delete_error }}
+            </div>
+            {% endif %}
+
+            <form method="post" action="/galleries/{{ gallery.id }}/delete">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                <input type="text"
+                       name="confirm_name"
+                       x-model="deleteConfirmName"
+                       autocomplete="off"
+                       placeholder="{{ t('gallery.delete_confirm_placeholder') }}"
+                       class="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-red-500 focus:border-red-500 mb-4">
+                <div class="flex items-center justify-end gap-3">
+                    <button type="button"
+                            @click="$refs.deleteModal.close()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors">
+                        {{ t('gallery.cancel') }}
+                    </button>
+                    <button type="submit"
+                            :disabled="deleteConfirmName !== galleryName"
+                            :class="deleteConfirmName === galleryName
+                                ? 'bg-red-600 hover:bg-red-700 text-white cursor-pointer'
+                                : 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'"
+                            class="px-4 py-2 text-sm font-medium rounded-lg transition-colors">
+                        {{ t('gallery.delete_confirm_button') }}
+                    </button>
+                </div>
+            </form>
+        </div>
+    </dialog>
+</div>

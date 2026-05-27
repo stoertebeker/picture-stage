@@ -94,7 +94,7 @@ class Gallery(TimestampMixin, Base):
     owner: Mapped["User"] = relationship(back_populates="galleries")
     images: Mapped[list["Image"]] = relationship(back_populates="gallery", cascade="all, delete-orphan")
     share_sessions: Mapped[list["ShareSession"]] = relationship(back_populates="gallery", cascade="all, delete-orphan")
-    audit_entries: Mapped[list["AuditLog"]] = relationship(back_populates="gallery", cascade="all, delete-orphan")
+    audit_entries: Mapped[list["AuditLog"]] = relationship(back_populates="gallery", cascade="save-update, merge")
 
 
 class Image(TimestampMixin, Base):

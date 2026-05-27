@@ -65,9 +65,14 @@ async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | N
     return None
 
 
+def _is_gallery_expired(gallery: Gallery) -> bool:
+    """Check if gallery link has expired."""
+    return bool(gallery.expires_at and gallery.expires_at < datetime.now(UTC))
+
+
 def _check_gallery_accessible(gallery: Gallery) -> None:
-    """Raise 410 if gallery link has expired."""
-    if gallery.expires_at and gallery.expires_at < datetime.now(UTC):
+    """Raise 410 if gallery link has expired (used by non-HTML endpoints)."""
+    if _is_gallery_expired(gallery):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gallery link has expired")
 
 
@@ -188,7 +193,13 @@ async def guest_viewer(
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    _check_gallery_accessible(gallery)
+    if _is_gallery_expired(gallery):
+        return templates.TemplateResponse(
+            request,
+            "guest/expired.html",
+            {"request": request, "gallery_name": gallery.name},
+            status_code=410,
+        )
 
     requires_password = gallery.password_hash is not None
 

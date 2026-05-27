@@ -42,6 +42,9 @@ dev = [
     "types-aiofiles>=24.1",
 ]
 
+[project.scripts]
+picture-stage = "app.cli.backup:main"
+
 [build-system]
 requires = ["setuptools>=75"]
 build-backend = "setuptools.build_meta"

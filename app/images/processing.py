@@ -1,6 +1,6 @@
 import hashlib
 import io
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageFont import FreeTypeFont
@@ -12,6 +12,71 @@ PREVIEW_SIZES = {
     "thumb_md": 640,
     "preview": 1280,
 }
+
+VALID_POSITIONS = {"top-left", "top-right", "bottom-left", "bottom-right", "center"}
+
+MARGIN = 20
+
+
+def _resolve_watermark_settings(
+    watermark_config: dict[str, Any] | None,
+    gallery_id: str | None,
+    img_width: int,
+) -> tuple[str, str, int, int]:
+    """Resolve per-gallery watermark settings with global fallback.
+
+    Returns (text, position, opacity_alpha, font_size).
+    """
+    cfg = watermark_config or {}
+
+    # Text: per-gallery > global default; resolve {gallery_id} placeholder
+    text = cfg.get("text") or settings.watermark_text
+    if gallery_id:
+        text = text.replace("{gallery_id}", gallery_id[:8].upper())
+
+    # Position: per-gallery > global default
+    position = cfg.get("position") or settings.watermark_position
+    if position not in VALID_POSITIONS:
+        position = "bottom-right"
+
+    # Opacity: per-gallery (0.0-1.0) > global default (0.0-1.0) -> convert to alpha (0-255)
+    opacity_raw = cfg.get("opacity")
+    if opacity_raw is not None:
+        opacity_float = max(0.0, min(1.0, float(opacity_raw)))
+    else:
+        opacity_float = max(0.0, min(1.0, settings.watermark_opacity))
+    opacity_alpha = int(opacity_float * 255)
+
+    # Font size: per-gallery absolute > global absolute > ratio-based fallback
+    font_size_raw = cfg.get("font_size")
+    if font_size_raw is not None:
+        font_size = max(10, min(200, int(font_size_raw)))
+    elif settings.watermark_font_size:
+        font_size = max(10, min(200, settings.watermark_font_size))
+    else:
+        font_size = max(16, int(img_width * settings.watermark_font_size_ratio))
+
+    return text, position, opacity_alpha, font_size
+
+
+def _calculate_text_position(
+    position: str,
+    img_width: int,
+    img_height: int,
+    text_width: int,
+    text_height: int,
+) -> tuple[int, int]:
+    """Calculate (x, y) for the watermark text based on named position."""
+    if position == "top-left":
+        return MARGIN, MARGIN
+    if position == "top-right":
+        return img_width - text_width - MARGIN, MARGIN
+    if position == "bottom-left":
+        return MARGIN, img_height - text_height - MARGIN
+    if position == "center":
+        return (img_width - text_width) // 2, (img_height - text_height) // 2
+    # bottom-right (default)
+    return img_width - text_width - MARGIN, img_height - text_height - MARGIN
 
 
 def generate_thumbnail(image_data: BinaryIO, max_width: int) -> tuple[io.BytesIO, int, int]:
@@ -28,12 +93,21 @@ def generate_thumbnail(image_data: BinaryIO, max_width: int) -> tuple[io.BytesIO
     return buf, img.width, img.height
 
 
-def apply_watermark(image_data: BinaryIO, text: str | None = None) -> io.BytesIO:
+def apply_watermark(
+    image_data: BinaryIO,
+    text: str | None = None,
+    *,
+    watermark_config: dict[str, Any] | None = None,
+    gallery_id: str | None = None,
+) -> io.BytesIO:
     img = Image.open(image_data).convert("RGBA")
 
-    wm_text = text or settings.watermark_text
-    opacity = settings.watermark_opacity
-    font_size = max(16, int(img.width * settings.watermark_font_size_ratio))
+    wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(
+        watermark_config, gallery_id, img.width
+    )
+    # Legacy: explicit text parameter overrides config
+    if text:
+        wm_text = text
 
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
@@ -47,10 +121,9 @@ def apply_watermark(image_data: BinaryIO, text: str | None = None) -> io.BytesIO
     bbox = draw.textbbox((0, 0), wm_text, font=font)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
-    x = img.width - text_width - 20
-    y = img.height - text_height - 20
+    x, y = _calculate_text_position(position, img.width, img.height, text_width, text_height)
 
-    draw.text((x, y), wm_text, fill=(255, 255, 255, opacity), font=font)
+    draw.text((x, y), wm_text, fill=(255, 255, 255, opacity_alpha), font=font)
 
     composited = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
@@ -60,7 +133,12 @@ def apply_watermark(image_data: BinaryIO, text: str | None = None) -> io.BytesIO
 
 
 def generate_preview_with_watermark(
-    image_data: BinaryIO, max_width: int, watermark_text: str
+    image_data: BinaryIO,
+    max_width: int,
+    watermark_text: str,
+    *,
+    watermark_config: dict[str, Any] | None = None,
+    gallery_id: str | None = None,
 ) -> tuple[io.BytesIO, int, int]:
     img = Image.open(image_data).convert("RGBA")
 
@@ -69,7 +147,13 @@ def generate_preview_with_watermark(
         new_height = int(img.height * ratio)
         img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
-    font_size = max(16, int(img.width * settings.watermark_font_size_ratio))
+    wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(
+        watermark_config, gallery_id, img.width
+    )
+    # Legacy: explicit watermark_text parameter overrides config-resolved text
+    if watermark_text:
+        wm_text = watermark_text
+
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
@@ -79,13 +163,12 @@ def generate_preview_with_watermark(
     except OSError:
         font2 = ImageFont.load_default(size=font_size)  # type: ignore[assignment]
 
-    bbox = draw.textbbox((0, 0), watermark_text, font=font2)
+    bbox = draw.textbbox((0, 0), wm_text, font=font2)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
-    x = img.width - text_width - 20
-    y = img.height - text_height - 20
+    x, y = _calculate_text_position(position, img.width, img.height, text_width, text_height)
 
-    draw.text((x, y), watermark_text, fill=(255, 255, 255, settings.watermark_opacity), font=font2)
+    draw.text((x, y), wm_text, fill=(255, 255, 255, opacity_alpha), font=font2)
 
     composited = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()

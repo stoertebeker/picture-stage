@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
 from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
-from app.auth.schemas import LoginRequest, LoginResponse, SignupRequest, SignupResponse, UserResponse
+from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRequest, SignupResponse, UserResponse
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.db.models import PendingSignup, User
 from app.db.session import get_db
@@ -131,3 +131,18 @@ async def logout() -> Response:
 @router.get("/me", response_model=UserResponse)
 async def me(user: User = Depends(get_current_user)) -> User:
     return user
+
+
+@router.put("/locale")
+async def update_locale(
+    body: LocaleUpdate, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> dict[str, str]:
+    from app.i18n import get_supported_locales
+
+    if body.locale not in get_supported_locales():
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Unsupported locale")
+
+    user.locale = body.locale
+    db.add(user)
+    await db.commit()
+    return {"locale": body.locale}

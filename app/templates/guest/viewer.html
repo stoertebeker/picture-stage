@@ -17,8 +17,7 @@
         <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
             <div class="flex items-center gap-2 text-sm">
                 <span class="text-gray-600 dark:text-gray-400">
-                    <span x-text="selectedCount">{{ selected_count }}</span> / <span x-text="totalImages">{{ total_images }}</span> ausgewählt,
-                    <span x-text="favoritedCount">{{ favorited_count }}</span> Favoriten
+                    <span x-text="'{{ t('guest.selected_of_total') }}'.replace('{selected}', selectedCount).replace('{total}', totalImages).replace('{favorited}', favoritedCount)">{{ t('guest.selected_of_total').replace('{selected}', selected_count | string).replace('{total}', total_images | string).replace('{favorited}', favorited_count | string) }}</span>
                 </span>
             </div>
             <div class="flex items-center gap-2">
@@ -29,9 +28,9 @@
                     hx-include="[name='sort_dir'],[name='filter'],[name='session_id']"
                     name="sort_by"
                     class="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    <option value="sort_order" {% if sort_by == "sort_order" %}selected{% endif %}>Reihenfolge</option>
-                    <option value="filename" {% if sort_by == "filename" %}selected{% endif %}>Dateiname</option>
-                    <option value="exif_date" {% if sort_by == "exif_date" %}selected{% endif %}>Aufnahmedatum</option>
+                    <option value="sort_order" {% if sort_by == "sort_order" %}selected{% endif %}>{{ t('guest.sort_order') }}</option>
+                    <option value="filename" {% if sort_by == "filename" %}selected{% endif %}>{{ t('guest.sort_filename') }}</option>
+                    <option value="exif_date" {% if sort_by == "exif_date" %}selected{% endif %}>{{ t('guest.sort_exif_date') }}</option>
                 </select>
                 <select
                     hx-get="/g/{{ token }}/gallery-images"
@@ -40,8 +39,8 @@
                     hx-include="[name='sort_by'],[name='filter'],[name='session_id']"
                     name="sort_dir"
                     class="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    <option value="asc" {% if sort_dir == "asc" %}selected{% endif %}>Aufsteigend</option>
-                    <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>Absteigend</option>
+                    <option value="asc" {% if sort_dir == "asc" %}selected{% endif %}>{{ t('guest.sort_asc') }}</option>
+                    <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>{{ t('guest.sort_desc') }}</option>
                 </select>
                 <select
                     hx-get="/g/{{ token }}/gallery-images"
@@ -50,10 +49,10 @@
                     hx-include="[name='sort_by'],[name='sort_dir'],[name='session_id']"
                     name="filter"
                     class="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    <option value="all" {% if filter == "all" %}selected{% endif %}>Alle</option>
-                    <option value="selected" {% if filter == "selected" %}selected{% endif %}>Ausgewählt</option>
-                    <option value="favorited" {% if filter == "favorited" %}selected{% endif %}>Favoriten</option>
-                    <option value="unrated" {% if filter == "unrated" %}selected{% endif %}>Unbewertet</option>
+                    <option value="all" {% if filter == "all" %}selected{% endif %}>{{ t('guest.filter_all') }}</option>
+                    <option value="selected" {% if filter == "selected" %}selected{% endif %}>{{ t('guest.filter_selected') }}</option>
+                    <option value="favorited" {% if filter == "favorited" %}selected{% endif %}>{{ t('guest.filter_favorited') }}</option>
+                    <option value="unrated" {% if filter == "unrated" %}selected{% endif %}>{{ t('guest.filter_unrated') }}</option>
                 </select>
                 <input type="hidden" name="session_id" value="{{ session_id }}">
             </div>
@@ -69,12 +68,12 @@
     <div class="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-4 py-3">
         <div class="max-w-7xl mx-auto flex items-center justify-between">
             <div class="text-sm text-gray-600 dark:text-gray-400">
-                <span x-text="selectedCount">{{ selected_count }}</span> von <span x-text="totalImages">{{ total_images }}</span> bewertet
+                <span x-text="'{{ t('guest.rated_of_total') }}'.replace('{selected}', selectedCount).replace('{total}', totalImages)">{{ t('guest.rated_of_total').replace('{selected}', selected_count | string).replace('{total}', total_images | string) }}</span>
             </div>
             <button
                 @click="showCompleteModal = true"
                 class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm">
-                Bewertung abschließen
+                {{ t('guest.complete_button') }}
             </button>
         </div>
     </div>

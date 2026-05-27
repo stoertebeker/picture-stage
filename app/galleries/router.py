@@ -1,14 +1,20 @@
+import csv
+import io
 import logging
+import math
+import re
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
-from sqlalchemy import func, select
+from fastapi.responses import StreamingResponse
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import require_active_user
 from app.db.models import (
+    AuditLog,
     Gallery,
     GalleryStatus,
     Image,
@@ -22,6 +28,8 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.galleries.schemas import (
+    AuditLogEntry,
+    AuditLogResponse,
     DashboardGalleryResponse,
     DashboardResponse,
     GalleryCreate,
@@ -117,6 +125,7 @@ async def get_dashboard(
                 favorited_count=favorited_count,
                 commented_count=commented_count,
                 has_share_token=gallery.share_token_hash is not None,
+                expires_at=gallery.expires_at,
                 last_activity=last_activity,
                 created_at=gallery.created_at,
             )
@@ -144,6 +153,7 @@ async def create_gallery(
         owner_id=user.id,
         name=body.name,
         watermark_config=body.watermark_config,
+        expires_at=body.expires_at,
     )
     db.add(gallery)
     await db.commit()
@@ -173,6 +183,7 @@ async def list_galleries(
             name=gallery.name,
             status=gallery.status,
             image_count=count,
+            expires_at=gallery.expires_at,
             created_at=gallery.created_at,
         )
         for gallery, count in rows
@@ -219,21 +230,62 @@ async def delete_gallery(
 ) -> None:
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
-    # Delete images from storage
-    result = await db.execute(select(Image).where(Image.gallery_id == gallery.id))
+    # 1. Write audit log entry BEFORE deletion
+    audit_entry = AuditLog(
+        gallery_id=gallery.id,
+        event_type="gallery_deleted",
+        actor_user_id=user.id,
+        details={"gallery_name": gallery.name},
+    )
+    db.add(audit_entry)
+    await db.flush()
+
+    # 2. Delete image files from storage (best-effort: log warnings on failure)
+    result = await db.execute(
+        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews))
+    )
     images = result.scalars().all()
     for image in images:
         try:
             await storage.delete(image.storage_key)
-        except Exception:  # noqa: S110
-            pass
-        for preview in await image.awaitable_attrs.previews:
+        except Exception:
+            logger.warning("Failed to delete storage file %s during gallery deletion", image.storage_key)
+        for preview in image.previews:
             try:
                 await storage.delete(preview.storage_key)
-            except Exception:  # noqa: S110
-                pass
+            except Exception:
+                logger.warning("Failed to delete preview file %s during gallery deletion", preview.storage_key)
 
-    await db.delete(gallery)
+    # 3. Delete DB records in dependency order
+    # Delete image_previews
+    await db.execute(
+        delete(ImagePreview).where(
+            ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
+        )
+    )
+    # Delete selection_events
+    await db.execute(
+        delete(SelectionEvent).where(
+            SelectionEvent.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
+        )
+    )
+    # Delete share_sessions (selection_events referencing sessions already deleted above)
+    await db.execute(delete(ShareSession).where(ShareSession.gallery_id == gallery.id))
+    # Anonymize audit_log entries: keep event_type + timestamps, remove PII
+    await db.execute(
+        update(AuditLog)
+        .where(AuditLog.gallery_id == gallery.id)
+        .values(ip_address=None, user_agent=None)
+    )
+    # Detach audit_log from gallery (FK is SET NULL, but we do it explicitly before delete)
+    await db.execute(
+        update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None)
+    )
+    # Delete images
+    await db.execute(delete(Image).where(Image.gallery_id == gallery.id))
+    # Delete gallery
+    await db.execute(delete(Gallery).where(Gallery.id == gallery.id))
+
     await db.commit()
 
 
@@ -360,3 +412,111 @@ async def duplicate_gallery(
 
     image_count = await _count_images(new_gallery.id, db)
     return _gallery_to_response(new_gallery, image_count)
+
+
+# --- Audit Log ---
+
+
+@router.get("/{gallery_id}/audit-log", response_model=AuditLogResponse)
+async def get_audit_log(
+    gallery_id: uuid.UUID,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    event_type: str | None = Query(None),
+    user: User = Depends(require_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> AuditLogResponse:
+    """Return paginated audit log entries for a gallery (owner only)."""
+    # Tenant isolation: verify gallery ownership
+    await _get_owned_gallery(gallery_id, user, db)
+
+    # Base filter
+    conditions = [AuditLog.gallery_id == gallery_id]
+    if event_type:
+        conditions.append(AuditLog.event_type == event_type)
+
+    # Total count
+    count_stmt = select(func.count()).select_from(AuditLog).where(*conditions)
+    total = (await db.execute(count_stmt)).scalar() or 0
+
+    total_pages = max(1, math.ceil(total / per_page))
+
+    # Fetch page
+    offset = (page - 1) * per_page
+    stmt = (
+        select(AuditLog)
+        .where(*conditions)
+        .order_by(AuditLog.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+    )
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+
+    return AuditLogResponse(
+        entries=[
+            AuditLogEntry(
+                id=e.id,
+                event_type=e.event_type,
+                actor_user_id=e.actor_user_id,
+                actor_session_id=e.actor_session_id,
+                ip_address=e.ip_address,
+                user_agent=e.user_agent,
+                details=e.details,
+                created_at=e.created_at,
+            )
+            for e in entries
+        ],
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages,
+    )
+
+
+@router.get("/{gallery_id}/audit-log/export")
+async def export_audit_log(
+    gallery_id: uuid.UUID,
+    user: User = Depends(require_active_user),
+    db: AsyncSession = Depends(get_db),
+) -> StreamingResponse:
+    """Export all audit log entries for a gallery as CSV (owner only)."""
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    stmt = (
+        select(AuditLog)
+        .where(AuditLog.gallery_id == gallery_id)
+        .order_by(AuditLog.created_at.desc())
+    )
+    result = await db.execute(stmt)
+    entries = result.scalars().all()
+
+    def generate_csv():
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(["id", "event_type", "actor_user_id", "actor_session_id", "ip_address", "user_agent", "details", "created_at"])
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+        for entry in entries:
+            writer.writerow([
+                entry.id,
+                entry.event_type,
+                str(entry.actor_user_id) if entry.actor_user_id else "",
+                str(entry.actor_session_id) if entry.actor_session_id else "",
+                entry.ip_address or "",
+                entry.user_agent or "",
+                str(entry.details) if entry.details else "",
+                entry.created_at.isoformat(),
+            ])
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+
+    safe_name = re.sub(r'[^\w\s-]', '', gallery.name).strip()
+    return StreamingResponse(
+        generate_csv(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="audit-log-{safe_name}.csv"'},
+    )

@@ -21,9 +21,9 @@
             </svg>
 
             <p class="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                Bilder hierher ziehen oder
+                {{ t('gallery.upload_drag_text') }}
                 <label class="text-blue-600 hover:text-blue-800 dark:text-blue-400 cursor-pointer font-medium">
-                    auswaehlen
+                    {{ t('gallery.upload_browse') }}
                     <input type="file"
                            name="files"
                            multiple
@@ -33,14 +33,14 @@
                            @change="handleFiles($event)">
                 </label>
             </p>
-            <p class="text-xs text-gray-400 dark:text-gray-500">JPEG, PNG, WebP</p>
+            <p class="text-xs text-gray-400 dark:text-gray-500">{{ t('gallery.upload_formats') }}</p>
         </div>
     </form>
 
     <!-- Progress Bar -->
     <div x-show="uploading" x-transition class="mt-4">
         <div class="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
-            <span>Hochladen...</span>
+            <span>{{ t('gallery.upload_progress') }}</span>
             <span x-text="uploadProgress + '%'"></span>
         </div>
         <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">

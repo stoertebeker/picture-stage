@@ -1,16 +1,16 @@
 {% extends "base.html" %}
 
-{% block title %}Dashboard – Picture-Stage{% endblock %}
+{% block title %}{{ t('dashboard.title') }}{% endblock %}
 
 {% block content %}
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="flex items-center justify-between mb-8">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Meine Galerien</h1>
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('dashboard.my_galleries') }}</h1>
         <button
             @click="$refs.createModal.showModal()"
             class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
         >
-            + Neue Galerie
+            {{ t('dashboard.new_gallery') }}
         </button>
     </div>
 
@@ -28,13 +28,13 @@
                       d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
             </svg>
         </div>
-        <h2 class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">Noch keine Galerien</h2>
-        <p class="text-gray-500 dark:text-gray-500 mb-6">Erstelle deine erste Galerie, um Bilder mit deinen Models zu teilen.</p>
+        <h2 class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">{{ t('dashboard.no_galleries_title') }}</h2>
+        <p class="text-gray-500 dark:text-gray-500 mb-6">{{ t('dashboard.no_galleries_text') }}</p>
         <button
             @click="$refs.createModal.showModal()"
             class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
         >
-            + Neue Galerie erstellen
+            {{ t('dashboard.new_gallery_create') }}
         </button>
     </div>
     {% endif %}
@@ -43,7 +43,7 @@
 <!-- Create Gallery Modal -->
 <dialog x-ref="createModal" class="rounded-xl shadow-2xl p-0 backdrop:bg-black/50 dark:bg-gray-800 bg-white max-w-md w-full">
     <div class="p-6">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">Neue Galerie erstellen</h2>
+        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ t('dashboard.create_modal_title') }}</h2>
         <form
             hx-post="/dashboard/galleries"
             hx-target="#gallery-grid"
@@ -52,13 +52,13 @@
         >
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
             <div class="mb-4">
-                <label for="gallery-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Name</label>
+                <label for="gallery-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('dashboard.gallery_name_label') }}</label>
                 <input
                     type="text"
                     id="gallery-name"
                     name="name"
                     required
-                    placeholder="z.B. Shooting Hamburg 2026"
+                    placeholder="{{ t('dashboard.gallery_name_placeholder') }}"
                     class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 >
             </div>
@@ -68,13 +68,13 @@
                     onclick="this.closest('dialog').close()"
                     class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
-                    Abbrechen
+                    {{ t('dashboard.cancel') }}
                 </button>
                 <button
                     type="submit"
                     class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
                 >
-                    Erstellen
+                    {{ t('dashboard.create') }}
                 </button>
             </div>
         </form>

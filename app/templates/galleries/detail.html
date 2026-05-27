@@ -7,7 +7,7 @@
 
     <!-- Breadcrumb -->
     <nav class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-        <a href="/dashboard" class="hover:text-blue-600 dark:hover:text-blue-400">Dashboard</a>
+        <a href="/dashboard" class="hover:text-blue-600 dark:hover:text-blue-400">{{ t('nav.dashboard') }}</a>
         <span class="mx-2">/</span>
         <span class="text-gray-900 dark:text-white">{{ gallery.name }}</span>
     </nav>
@@ -30,8 +30,8 @@
                     @keydown.enter.prevent="submitName()"
                     class="text-2xl font-bold px-2 py-1 border border-blue-500 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
                 >
-                <button type="button" @click="submitName()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Speichern</button>
-                <button type="button" @click="editing = false; galleryName = '{{ gallery.name }}'" class="text-gray-500 hover:text-gray-700 text-sm">Abbrechen</button>
+                <button type="button" @click="submitName()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">{{ t('gallery.save') }}</button>
+                <button type="button" @click="editing = false; galleryName = '{{ gallery.name }}'" class="text-gray-500 hover:text-gray-700 text-sm">{{ t('gallery.cancel') }}</button>
             </div>
             <form x-ref="renameForm" style="display:none"
                   hx-post="/galleries/{{ gallery.id }}/rename"
@@ -77,11 +77,17 @@
             </form>
             {% endfor %}
 
+            <!-- Audit Log -->
+            <a href="/galleries/{{ gallery.id }}/audit-log"
+               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                {{ t('gallery.audit_log') }}
+            </a>
+
             <!-- Export -->
             <div class="relative" x-data="{ exportOpen: false }">
                 <button @click="exportOpen = !exportOpen"
                         class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                    Export
+                    {{ t('gallery.export') }}
                 </button>
                 <div x-show="exportOpen" @click.outside="exportOpen = false"
                      class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10">
@@ -95,6 +101,9 @@
                     </a>
                 </div>
             </div>
+
+            <!-- Delete Gallery -->
+            {% include "galleries/_delete_modal.html" %}
         </div>
     </div>
 
@@ -108,15 +117,56 @@
         {% include "galleries/_share_modal.html" %}
     </div>
 
+    <!-- Expiry Section -->
+    <div class="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
+        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">{{ t('gallery.expiry_heading') }}</h3>
+        <form hx-post="/galleries/{{ gallery.id }}/expiry"
+              hx-target="body"
+              hx-swap="innerHTML"
+              class="flex flex-wrap items-end gap-3">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div>
+                <label for="expires_at" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">{{ t('gallery.expiry_label') }}</label>
+                <input type="datetime-local"
+                       id="expires_at"
+                       name="expires_at"
+                       value="{% if gallery.expires_at %}{{ gallery.expires_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+                       class="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500">
+            </div>
+            <button type="submit"
+                    class="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">
+                {{ t('gallery.expiry_save') }}
+            </button>
+            {% if gallery.expires_at %}
+            <button type="submit"
+                    name="clear_expiry"
+                    value="1"
+                    class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                {{ t('gallery.expiry_remove') }}
+            </button>
+            {% endif %}
+        </form>
+        {% if gallery.expires_at %}
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            {% set now = gallery.updated_at %}
+            {{ t('gallery.expiry_current').replace('{date}', gallery.expires_at.strftime('%d.%m.%Y %H:%M')) }}
+        </p>
+        {% else %}
+        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
+            {{ t('gallery.expiry_none') }}
+        </p>
+        {% endif %}
+    </div>
+
     <!-- Bulk Delete Bar (visible when images selected) -->
     <div x-show="selectedImages.length > 0"
          x-transition
          class="mb-4 flex items-center gap-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
-        <span class="text-sm text-red-700 dark:text-red-300" x-text="selectedImages.length + ' Bild(er) ausgewählt'"></span>
+        <span class="text-sm text-red-700 dark:text-red-300" x-text="'{{ t('gallery.images_selected') }}'.replace('{count}', selectedImages.length)"></span>
         <form hx-post="/galleries/{{ gallery.id }}/bulk-delete"
               hx-target="#image-grid"
               hx-swap="innerHTML"
-              hx-confirm="Ausgewählte Bilder wirklich löschen?"
+              hx-confirm="{{ t('gallery.bulk_delete_confirm') }}"
               @htmx:after-request.window="selectedImages = []"
               x-ref="bulkDeleteForm">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -125,12 +175,12 @@
             </template>
             <button type="submit"
                     class="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 rounded-lg transition-colors">
-                Ausgewählte löschen
+                {{ t('gallery.bulk_delete_button') }}
             </button>
         </form>
         <button @click="selectedImages = []"
                 class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
-            Auswahl aufheben
+            {{ t('gallery.clear_selection') }}
         </button>
     </div>
 
@@ -148,7 +198,7 @@
                     class="absolute top-2 right-2 z-10 bg-black/50 hover:bg-black/70 text-white rounded-full w-8 h-8 flex items-center justify-center">
                 X
             </button>
-            <img :src="previewSrc" class="max-w-full max-h-[80vh] mx-auto rounded-xl" alt="Preview">
+            <img :src="previewSrc" class="max-w-full max-h-[80vh] mx-auto rounded-xl" alt="{{ t('gallery.preview_alt') }}">
             <div class="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-sm px-4 py-2 rounded-b-xl"
                  x-text="previewFilename"></div>
         </div>

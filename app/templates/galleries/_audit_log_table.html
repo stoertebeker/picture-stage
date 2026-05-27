@@ -1,0 +1,85 @@
+<!-- HTMX partial: audit log table with pagination -->
+<div id="audit-log-table">
+    {% if entries %}
+    <div class="overflow-x-auto">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-50 dark:bg-gray-800">
+                <tr>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_timestamp') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_event') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_actor') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_ip') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_details') }}</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                {% for entry in entries %}
+                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
+                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                        {{ entry.created_at.strftime('%d.%m.%Y %H:%M:%S') }}
+                    </td>
+                    <td class="px-4 py-3 text-sm">
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                            {{ entry.event_type }}
+                        </span>
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                        {% if entry.actor_user_id %}
+                            {{ t('audit.actor_user').replace('{id}', entry.actor_user_id | string | truncate(8, True, '')) }}
+                        {% elif entry.actor_session_id %}
+                            {{ t('audit.actor_guest').replace('{id}', entry.actor_session_id | string | truncate(8, True, '')) }}
+                        {% else %}
+                            {{ t('audit.actor_system') }}
+                        {% endif %}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap">
+                        {{ entry.ip_address or '-' }}
+                    </td>
+                    <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                        {% if entry.details %}
+                            {{ entry.details | tojson | truncate(80) }}
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if total_pages > 1 %}
+    <nav class="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-4 py-3 mt-4">
+        <div class="text-sm text-gray-500 dark:text-gray-400">
+            {{ t('audit.pagination_total').replace('{total}', total | string).replace('{page}', page | string).replace('{total_pages}', total_pages | string) }}
+        </div>
+        <div class="flex gap-2">
+            {% if page > 1 %}
+            <a href="/galleries/{{ gallery.id }}/audit-log?page={{ page - 1 }}{% if event_type %}&event_type={{ event_type }}{% endif %}"
+               hx-get="/galleries/{{ gallery.id }}/audit-log?page={{ page - 1 }}{% if event_type %}&event_type={{ event_type }}{% endif %}"
+               hx-target="#audit-log-table"
+               hx-swap="outerHTML"
+               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                {{ t('audit.pagination_prev') }}
+            </a>
+            {% endif %}
+            {% if page < total_pages %}
+            <a href="/galleries/{{ gallery.id }}/audit-log?page={{ page + 1 }}{% if event_type %}&event_type={{ event_type }}{% endif %}"
+               hx-get="/galleries/{{ gallery.id }}/audit-log?page={{ page + 1 }}{% if event_type %}&event_type={{ event_type }}{% endif %}"
+               hx-target="#audit-log-table"
+               hx-swap="outerHTML"
+               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                {{ t('audit.pagination_next') }}
+            </a>
+            {% endif %}
+        </div>
+    </nav>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-12 text-gray-500 dark:text-gray-400">
+        <p class="text-lg">{{ t('audit.no_entries') }}</p>
+    </div>
+    {% endif %}
+</div>

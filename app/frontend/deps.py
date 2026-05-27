@@ -1,3 +1,43 @@
+from functools import partial
+from typing import Any
+
+from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
+from app.i18n import t as _translate
+
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _t_for_request(request: Request, key: str, **kwargs: Any) -> str:
+    """Request-aware translation function for use in templates.
+
+    Automatically uses the locale from request.state.locale (set by LocaleMiddleware).
+    Usage in templates: {{ t('nav.dashboard') }} or {{ t('gallery.images_count', count=5) }}
+    """
+    locale = getattr(request.state, "locale", "de") if hasattr(request, "state") else "de"
+    return _translate(key, locale=locale, **kwargs)
+
+
+# Monkey-patch the _build_context to inject locale and t() into every template render.
+_original_TemplateResponse = templates.TemplateResponse
+
+
+def _patched_template_response(
+    request: Request, name: str, context: dict[str, Any] | None = None, **kwargs: Any
+) -> Any:
+    """Wrap TemplateResponse to inject locale and request-aware t() into context."""
+    if context is None:
+        context = {}
+    context.setdefault("request", request)
+    locale = getattr(request.state, "locale", "de") if hasattr(request, "state") else "de"
+    context.setdefault("locale", locale)
+    # Provide request-aware t() bound to the current request
+    context.setdefault("t", partial(_t_for_request, request))
+    return _original_TemplateResponse(request, name, context, **kwargs)
+
+
+templates.TemplateResponse = _patched_template_response  # type: ignore[assignment]
+
+# Also register in Jinja2 globals for templates that might use it outside TemplateResponse
+templates.env.globals["supported_locales"] = ("de", "en")

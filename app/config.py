@@ -29,14 +29,19 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@example.com"
     smtp_starttls: bool = True
 
-    watermark_text: str = "PREVIEW"
-    watermark_opacity: int = 80
+    watermark_text: str = "PREVIEW · {gallery_id}"
+    watermark_position: str = "bottom-right"
+    watermark_opacity: float = 0.3
+    watermark_font_size: int = 0  # 0 = use watermark_font_size_ratio instead
     watermark_font_size_ratio: float = 0.05
 
     ratelimit_enabled: bool = True
 
     captcha_enabled: bool = True
     altcha_secret_key: str = ""
+
+    legal_impressum_path: str = "/data/legal/impressum.md"
+    legal_datenschutz_path: str = "/data/legal/datenschutz.md"
 
 
 settings = Settings()

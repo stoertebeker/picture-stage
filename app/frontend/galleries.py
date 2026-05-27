@@ -1,19 +1,20 @@
-"""Frontend gallery management: detail, upload, share, status transitions."""
+"""Frontend gallery management: detail, upload, share, status transitions, expiry."""
 
 import logging
 import secrets
 import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import select
+from sqlalchemy import delete as sa_delete, select, update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import require_authenticated_page
 from app.auth.passwords import hash_password, hash_token
-from app.db.models import Gallery, GalleryStatus, Image, ImagePreview, PreviewVariant, User
+from app.db.models import AuditLog, Gallery, GalleryStatus, Image, ImagePreview, PreviewVariant, SelectionEvent, ShareSession, User
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.security.signing import sign_url
@@ -341,6 +342,38 @@ async def revoke_share_link(
     return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
 
 
+@router.post("/galleries/{gallery_id}/expiry", response_class=HTMLResponse)
+async def set_gallery_expiry(
+    gallery_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(require_authenticated_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Set or clear the gallery expiration date."""
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    form = await request.form()
+    clear_expiry = str(form.get("clear_expiry", "")).strip()
+
+    if clear_expiry:
+        gallery.expires_at = None
+    else:
+        expires_at_raw = str(form.get("expires_at", "")).strip()
+        if expires_at_raw:
+            try:
+                gallery.expires_at = datetime.fromisoformat(expires_at_raw)
+            except ValueError as err:
+                raise HTTPException(status_code=422, detail="Ungueltiges Datumsformat") from err
+        # If empty string and no clear flag, do nothing (just re-render)
+
+    await db.commit()
+    await db.refresh(gallery)
+
+    images = await _load_images_with_signed_urls(gallery_id, db)
+    ctx = _build_context(request, gallery, images, user)
+    return templates.TemplateResponse(request, "galleries/detail.html", ctx)
+
+
 @router.post("/galleries/{gallery_id}/status", response_class=HTMLResponse)
 async def transition_status(
     gallery_id: uuid.UUID,
@@ -437,6 +470,90 @@ async def bulk_delete_images(
     return templates.TemplateResponse(request, "galleries/_image_grid.html", ctx)
 
 
+@router.post("/galleries/{gallery_id}/delete", response_class=HTMLResponse)
+async def delete_gallery(
+    gallery_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(require_authenticated_page),
+    db: AsyncSession = Depends(get_db),
+    storage: StorageBackend = Depends(get_storage),
+) -> RedirectResponse:
+    """Delete a gallery after name confirmation. Redirects to dashboard."""
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    form = await request.form()
+    confirm_name = str(form.get("confirm_name", "")).strip()
+
+    if confirm_name != gallery.name:
+        # Name mismatch — re-render detail page with error
+        images = await _load_images_with_signed_urls(gallery_id, db)
+        ctx = _build_context(
+            request, gallery, images, user,
+            delete_error="Der eingegebene Name stimmt nicht mit dem Galerienamen ueberein.",
+        )
+        return templates.TemplateResponse(request, "galleries/detail.html", ctx)
+
+    # 1. Audit log entry BEFORE deletion
+    audit_entry = AuditLog(
+        gallery_id=gallery.id,
+        event_type="gallery_deleted",
+        actor_user_id=user.id,
+        details={"gallery_name": gallery.name},
+    )
+    db.add(audit_entry)
+    await db.flush()
+
+    # 2. Delete image files from storage (best-effort)
+    result = await db.execute(
+        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews))
+    )
+    images_to_delete = result.scalars().all()
+    for image in images_to_delete:
+        try:
+            await storage.delete(image.storage_key)
+        except Exception:
+            logger.warning("Failed to delete storage file %s during gallery deletion", image.storage_key)
+        for preview in image.previews:
+            try:
+                await storage.delete(preview.storage_key)
+            except Exception:
+                logger.warning("Failed to delete preview file %s during gallery deletion", preview.storage_key)
+
+    # 3. Delete DB records in dependency order
+    # Delete image_previews
+    await db.execute(
+        sa_delete(ImagePreview).where(
+            ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
+        )
+    )
+    # Delete selection_events
+    await db.execute(
+        sa_delete(SelectionEvent).where(
+            SelectionEvent.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
+        )
+    )
+    # Delete share_sessions
+    await db.execute(sa_delete(ShareSession).where(ShareSession.gallery_id == gallery.id))
+    # Anonymize audit_log entries
+    await db.execute(
+        sa_update(AuditLog)
+        .where(AuditLog.gallery_id == gallery.id)
+        .values(ip_address=None, user_agent=None)
+    )
+    # Detach audit_log from gallery
+    await db.execute(
+        sa_update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None)
+    )
+    # Delete images
+    await db.execute(sa_delete(Image).where(Image.gallery_id == gallery.id))
+    # Delete gallery
+    await db.execute(sa_delete(Gallery).where(Gallery.id == gallery.id))
+
+    await db.commit()
+
+    return RedirectResponse(url="/dashboard", status_code=303)
+
+
 @router.get("/galleries/{gallery_id}/export")
 async def export_redirect(
     gallery_id: uuid.UUID,
@@ -452,3 +569,76 @@ async def export_redirect(
         url=f"/api/v1/galleries/{gallery_id}/export?format={format}",
         status_code=302,
     )
+
+
+# --- Audit Log ---
+
+
+@router.get("/galleries/{gallery_id}/audit-log", response_class=HTMLResponse)
+async def gallery_audit_log(
+    gallery_id: uuid.UUID,
+    request: Request,
+    page: int = 1,
+    event_type: str | None = None,
+    user: User = Depends(require_authenticated_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Audit log page for a gallery (owner only)."""
+    import math
+
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    per_page = 50
+    conditions = [AuditLog.gallery_id == gallery_id]
+    if event_type:
+        conditions.append(AuditLog.event_type == event_type)
+
+    # Total count
+    from sqlalchemy import func as sa_func
+
+    count_result = await db.execute(
+        select(sa_func.count()).select_from(AuditLog).where(*conditions)
+    )
+    total = count_result.scalar() or 0
+    total_pages = max(1, math.ceil(total / per_page))
+    page = max(1, min(page, total_pages))
+
+    # Fetch entries
+    offset = (page - 1) * per_page
+    result = await db.execute(
+        select(AuditLog)
+        .where(*conditions)
+        .order_by(AuditLog.created_at.desc())
+        .offset(offset)
+        .limit(per_page)
+    )
+    entries = result.scalars().all()
+
+    # Get distinct event types for filter dropdown
+    event_types_result = await db.execute(
+        select(AuditLog.event_type)
+        .where(AuditLog.gallery_id == gallery_id)
+        .distinct()
+        .order_by(AuditLog.event_type)
+    )
+    event_types = [row[0] for row in event_types_result.all()]
+
+    ctx = {
+        "request": request,
+        "user": user,
+        "gallery": gallery,
+        "entries": entries,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "event_type": event_type,
+        "event_types": event_types,
+        "csrf_token": request.cookies.get("csrf_token", ""),
+    }
+
+    # If HTMX request, return only the table partial
+    if request.headers.get("HX-Request"):
+        return templates.TemplateResponse(request, "galleries/_audit_log_table.html", ctx)
+
+    return templates.TemplateResponse(request, "galleries/audit_log.html", ctx)

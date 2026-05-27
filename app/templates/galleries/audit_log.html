@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('audit.title').replace('{name}', gallery.name) }}{% endblock %}
+
+{% block content %}
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+    <!-- Breadcrumb -->
+    <nav class="mb-6 text-sm text-gray-500 dark:text-gray-400">
+        <a href="/dashboard" class="hover:text-blue-600 dark:hover:text-blue-400">{{ t('nav.dashboard') }}</a>
+        <span class="mx-2">/</span>
+        <a href="/galleries/{{ gallery.id }}" class="hover:text-blue-600 dark:hover:text-blue-400">{{ gallery.name }}</a>
+        <span class="mx-2">/</span>
+        <span class="text-gray-900 dark:text-white">{{ t('audit.heading') }}</span>
+    </nav>
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('audit.heading') }}</h1>
+
+        <div class="flex items-center gap-3">
+            <!-- Event Type Filter -->
+            <div class="relative">
+                <select onchange="window.location.href='/galleries/{{ gallery.id }}/audit-log' + (this.value ? '?event_type=' + this.value : '')"
+                        class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
+                    <option value="">{{ t('audit.filter_all') }}</option>
+                    {% for et in event_types %}
+                    <option value="{{ et }}" {% if event_type == et %}selected{% endif %}>{{ et }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <!-- CSV Export -->
+            <a href="/api/v1/galleries/{{ gallery.id }}/audit-log/export"
+               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                {{ t('audit.csv_export') }}
+            </a>
+
+            <!-- Back to Gallery -->
+            <a href="/galleries/{{ gallery.id }}"
+               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+                {{ t('audit.back_to_gallery') }}
+            </a>
+        </div>
+    </div>
+
+    <!-- Audit Log Table -->
+    {% include "galleries/_audit_log_table.html" %}
+
+</div>
+{% endblock %}

@@ -20,6 +20,16 @@
                 <span x-show="!darkMode">Dark</span>
                 <span x-show="darkMode">Light</span>
             </button>
+            <!-- Language Switcher -->
+            <div x-data="{ currentLang: document.cookie.match(/lang=(\w+)/)?.[1] || 'de' }" class="inline-flex items-center gap-1 text-sm">
+                <a href="/set-lang/de"
+                   :class="currentLang === 'de' ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
+                   class="px-1">DE</a>
+                <span class="text-gray-300 dark:text-gray-600">|</span>
+                <a href="/set-lang/en"
+                   :class="currentLang === 'en' ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
+                   class="px-1">EN</a>
+            </div>
             <form method="post" action="/api/v1/auth/logout" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit">Logout</button>
@@ -29,6 +39,29 @@
     <main>
         {% block content %}{% endblock %}
     </main>
+    <footer class="border-t border-gray-200 dark:border-gray-700 mt-12 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+        <a href="/legal/impressum" class="hover:underline">Impressum</a>
+        <span class="mx-2">|</span>
+        <a href="/legal/datenschutz" class="hover:underline">Datenschutz</a>
+    </footer>
+    <!-- Cookie Consent Banner -->
+    <div x-data="{ show: !localStorage.getItem('cookie_consent') }"
+         x-show="show"
+         x-transition
+         class="fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-300 dark:border-gray-600 shadow-lg p-4">
+        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <p class="text-sm text-gray-700 dark:text-gray-300">
+                Diese Website verwendet technisch notwendige Cookies f&uuml;r die Sitzungsverwaltung.
+                Weitere Informationen finden Sie in unserer
+                <a href="/legal/datenschutz" class="underline">Datenschutzerkl&auml;rung</a>.
+            </p>
+            <button @click="localStorage.setItem('cookie_consent', 'accepted'); show = false"
+                    type="button"
+                    class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded">
+                Verstanden
+            </button>
+        </div>
+    </div>
     <script src="/static/js/htmx.min.js"></script>
     <script src="/static/js/alpine.min.js"></script>
     <script src="/static/js/app.js"></script>

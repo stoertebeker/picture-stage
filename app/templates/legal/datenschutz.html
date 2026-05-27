@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('legal.datenschutz_title') }}{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-6">{{ t('legal.datenschutz_heading') }}</h1>
+    {% if has_content %}
+        <div class="prose dark:prose-invert max-w-none">
+            {{ content | safe }}
+        </div>
+    {% else %}
+        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6">
+            <p class="text-yellow-800 dark:text-yellow-200">
+                {{ t('legal.config_missing') }}
+            </p>
+            <p class="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
+                {{ t('legal.datenschutz_config_hint') | safe }}
+            </p>
+        </div>
+    {% endif %}
+</div>
+{% endblock %}

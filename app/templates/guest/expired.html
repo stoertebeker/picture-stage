@@ -1,0 +1,25 @@
+{% extends "guest_base.html" %}
+
+{% block title %}{{ t('guest.expired_title') }}{% endblock %}
+{% block gallery_name %}{{ gallery_name }}{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-center py-20 px-4">
+    <div class="max-w-md w-full text-center">
+        <div class="mb-6">
+            <svg class="mx-auto h-16 w-16 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+        </div>
+        <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+            {{ t('guest.expired_title') }}
+        </h2>
+        <p class="text-gray-600 dark:text-gray-400 mb-2">
+            {{ t('guest.expired_text') }}
+        </p>
+        <p class="text-sm text-gray-500 dark:text-gray-500">
+            {{ t('guest.expired_contact') }}
+        </p>
+    </div>
+</div>
+{% endblock %}

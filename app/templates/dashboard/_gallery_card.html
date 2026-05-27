@@ -8,19 +8,19 @@
         {% set status = g.gallery.status.value %}
         {% if status == "draft" %}
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-            Entwurf
+            {{ t('gallery.status_draft') }}
         </span>
         {% elif status == "shared" %}
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-            Geteilt
+            {{ t('gallery.status_shared') }}
         </span>
         {% elif status == "completed" %}
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-            Abgeschlossen
+            {{ t('gallery.status_completed') }}
         </span>
         {% elif status == "archived" %}
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
-            Archiviert
+            {{ t('gallery.status_archived') }}
         </span>
         {% endif %}
     </div>
@@ -30,18 +30,18 @@
             <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14" />
             </svg>
-            <span>{{ g.image_count }} Bilder</span>
+            <span>{{ t('gallery.images_count').replace('{count}', g.image_count | string) }}</span>
         </div>
         {% if g.selected_count > 0 or g.favorited_count > 0 or g.commented_count > 0 %}
         <div class="flex items-center gap-3">
             {% if g.selected_count > 0 %}
-            <span title="Ausgewählt">{{ g.selected_count }} ausgewählt</span>
+            <span title="{{ t('gallery.selected_count').replace('{count}', g.selected_count | string) }}">{{ t('gallery.selected_count').replace('{count}', g.selected_count | string) }}</span>
             {% endif %}
             {% if g.favorited_count > 0 %}
-            <span title="Favoriten">{{ g.favorited_count }} Favoriten</span>
+            <span title="{{ t('gallery.favorited_count').replace('{count}', g.favorited_count | string) }}">{{ t('gallery.favorited_count').replace('{count}', g.favorited_count | string) }}</span>
             {% endif %}
             {% if g.commented_count > 0 %}
-            <span title="Kommentare">{{ g.commented_count }} Kommentare</span>
+            <span title="{{ t('gallery.commented_count').replace('{count}', g.commented_count | string) }}">{{ t('gallery.commented_count').replace('{count}', g.commented_count | string) }}</span>
             {% endif %}
         </div>
         {% endif %}
@@ -50,26 +50,54 @@
             <div class="bg-blue-600 h-1.5 rounded-full" style="width: {{ (g.selected_count / g.image_count * 100) | int }}%"></div>
         </div>
         {% endif %}
+        {% if g.gallery.expires_at %}
+        {% set now_ts = g.gallery.updated_at.timestamp() %}
+        {% set exp_ts = g.gallery.expires_at.timestamp() %}
+        {% set diff_days = ((exp_ts - now_ts) / 86400) | int %}
+        {% if diff_days < 0 %}
+        <div class="flex items-center gap-1">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300">
+                {{ t('expiry.expired') }}
+            </span>
+        </div>
+        {% elif diff_days == 0 %}
+        <div class="flex items-center gap-1">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300">
+                {{ t('expiry.expires_today') }}
+            </span>
+        </div>
+        {% elif diff_days <= 7 %}
+        <div class="flex items-center gap-1">
+            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
+                {{ t('expiry.expires_in_days').replace('{days}', diff_days | string).replace('{suffix}', 'en' if diff_days != 1 else '') }}
+            </span>
+        </div>
+        {% else %}
+        <div class="text-xs text-gray-500 dark:text-gray-500">
+            {{ t('expiry.expires_on').replace('{date}', g.gallery.expires_at.strftime('%d.%m.%Y')) }}
+        </div>
+        {% endif %}
+        {% endif %}
         {% if g.last_activity %}
         <div class="text-xs text-gray-500 dark:text-gray-500">
-            Letzter Zugriff: {{ g.last_activity.strftime('%d.%m.%Y %H:%M') }}
+            {{ t('gallery.last_access').replace('{date}', g.last_activity.strftime('%d.%m.%Y %H:%M')) }}
         </div>
         {% endif %}
     </div>
 
     <div class="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-700">
         <a href="/galleries/{{ g.gallery.id }}" class="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 font-medium">
-            Details
+            {{ t('gallery.details') }}
         </a>
         {% if g.gallery.share_token_hash %}
         <span class="text-gray-300 dark:text-gray-600">|</span>
         <a href="/galleries/{{ g.gallery.id }}#share" class="text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300">
-            Teilen
+            {{ t('gallery.share') }}
         </a>
         {% endif %}
         <span class="text-gray-300 dark:text-gray-600">|</span>
         <a href="/api/v1/galleries/{{ g.gallery.id }}/export?format=csv" class="text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-300">
-            Export
+            {{ t('gallery.export') }}
         </a>
     </div>
 </div>
