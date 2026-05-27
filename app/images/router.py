@@ -58,16 +58,12 @@ async def upload_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> ImageUploadResponse:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     gallery = result.scalar_one_or_none()
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    existing_count_result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery_id)
-    )
+    existing_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id))
     sort_offset = len(existing_count_result.scalars().all())
 
     uploaded_images: list[ImageResponse] = []
@@ -113,15 +109,11 @@ async def upload_images(
             file_buf.seek(0)
 
             if variant_name == "preview":
-                preview_buf, pw, ph = generate_preview_with_watermark(
-                    file_buf, max_width, watermark_text
-                )
+                preview_buf, pw, ph = generate_preview_with_watermark(file_buf, max_width, watermark_text)
             else:
                 preview_buf, pw, ph = generate_thumbnail(file_buf, max_width)
 
-            preview_key = storage_key(
-                str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp"
-            )
+            preview_key = storage_key(str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp")
             await storage.upload(preview_key, preview_buf, "image/webp")
 
             preview = ImagePreview(
@@ -136,9 +128,7 @@ async def upload_images(
 
         await db.flush()
 
-        result = await db.execute(
-            select(Image).where(Image.id == image_uuid).options(selectinload(Image.previews))
-        )
+        result = await db.execute(select(Image).where(Image.id == image_uuid).options(selectinload(Image.previews)))
         loaded_image = result.scalar_one()
         uploaded_images.append(_image_to_response(loaded_image, storage))
 
@@ -154,9 +144,7 @@ async def list_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> list[ImageResponse]:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
@@ -179,16 +167,12 @@ async def delete_image(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> None:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     result = await db.execute(
-        select(Image)
-        .where(Image.id == image_id, Image.gallery_id == gallery_id)
-        .options(selectinload(Image.previews))
+        select(Image).where(Image.id == image_id, Image.gallery_id == gallery_id).options(selectinload(Image.previews))
     )
     image = result.scalar_one_or_none()
     if image is None:
@@ -219,9 +203,7 @@ async def bulk_delete_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> BulkDeleteResponse:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 

@@ -19,9 +19,7 @@ async def get_notification_config(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> NotificationConfig | None:
-    result = await db.execute(
-        select(NotificationConfig).where(NotificationConfig.user_id == user.id)
-    )
+    result = await db.execute(select(NotificationConfig).where(NotificationConfig.user_id == user.id))
     return result.scalar_one_or_none()
 
 
@@ -31,9 +29,7 @@ async def upsert_notification_config(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> NotificationConfig:
-    result = await db.execute(
-        select(NotificationConfig).where(NotificationConfig.user_id == user.id)
-    )
+    result = await db.execute(select(NotificationConfig).where(NotificationConfig.user_id == user.id))
     config = result.scalar_one_or_none()
 
     events_dict = {e: True for e in body.events}

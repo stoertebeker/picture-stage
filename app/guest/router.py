@@ -111,9 +111,7 @@ async def get_shared_gallery(
 
     _check_gallery_accessible(gallery)
 
-    image_count_result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id)
-    )
+    image_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery.id))
     image_count = len(image_count_result.scalars().all())
 
     requires_password = gallery.password_hash is not None
@@ -165,9 +163,7 @@ async def verify_gallery_password(
     await db.commit()
     await db.refresh(session)
 
-    image_count_result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id)
-    )
+    image_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery.id))
     image_count = len(image_count_result.scalars().all())
 
     return GuestGalleryResponse(
@@ -218,10 +214,7 @@ async def list_shared_images(
     order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
 
     result = await db.execute(
-        select(Image)
-        .where(Image.gallery_id == gallery.id)
-        .options(selectinload(Image.previews))
-        .order_by(order_clause)
+        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)).order_by(order_clause)
     )
     images = list(result.scalars().all())
 
@@ -242,9 +235,9 @@ async def list_shared_images(
             images = [img for img in images if sel_map.get(img.id) and sel_map[img.id].favorited]
         elif filter == ImageFilter.unrated:
             images = [
-                img for img in images
-                if not sel_map.get(img.id)
-                or (not sel_map[img.id].selected and not sel_map[img.id].favorited)
+                img
+                for img in images
+                if not sel_map.get(img.id) or (not sel_map[img.id].selected and not sel_map[img.id].favorited)
             ]
 
     guest_images = []
@@ -258,14 +251,16 @@ async def list_shared_images(
             elif preview.variant == PreviewVariant.preview:
                 preview_urls["preview"] = sign_url(f"/media/{preview.storage_key}", expires_in=900)
 
-        guest_images.append(GuestImageResponse(
-            id=img.id,
-            filename=img.filename,
-            sort_order=img.sort_order,
-            thumb_sm_url=preview_urls.get("thumb_sm", ""),
-            thumb_md_url=preview_urls.get("thumb_md", ""),
-            preview_url=preview_urls.get("preview", ""),
-        ))
+        guest_images.append(
+            GuestImageResponse(
+                id=img.id,
+                filename=img.filename,
+                sort_order=img.sort_order,
+                thumb_sm_url=preview_urls.get("thumb_sm", ""),
+                thumb_md_url=preview_urls.get("thumb_md", ""),
+                preview_url=preview_urls.get("preview", ""),
+            )
+        )
 
     return guest_images
 
@@ -281,9 +276,7 @@ async def create_selection_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     _check_gallery_accessible(gallery)
 
-    image_result = await db.execute(
-        select(Image).where(Image.id == body.image_id, Image.gallery_id == gallery.id)
-    )
+    image_result = await db.execute(select(Image).where(Image.id == body.image_id, Image.gallery_id == gallery.id))
     if image_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found in this gallery")
 
@@ -322,9 +315,7 @@ async def get_selections(
 
     selections = await get_current_selections(gallery.id, session_id, db)
 
-    image_count_result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id)
-    )
+    image_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery.id))
     total = len(image_count_result.scalars().all())
 
     return SelectionSummary(
@@ -369,9 +360,7 @@ async def complete_review(
     await db.refresh(gallery)
 
     try:
-        img_count = await db.execute(
-            select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
-        )
+        img_count = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
         total_images = img_count.scalar() or 0
 
         sel_counts = await db.execute(

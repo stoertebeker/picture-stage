@@ -17,16 +17,19 @@ class TestBulkDeleteSchema:
 
     def test_valid_request(self) -> None:
         from app.images.schemas import BulkDeleteRequest
+
         req = BulkDeleteRequest(image_ids=[uuid.uuid4(), uuid.uuid4()])
         assert len(req.image_ids) == 2
 
     def test_empty_ids_accepted(self) -> None:
         from app.images.schemas import BulkDeleteRequest
+
         req = BulkDeleteRequest(image_ids=[])
         assert req.image_ids == []
 
     def test_response_has_deleted_field(self) -> None:
         from app.images.schemas import BulkDeleteResponse
+
         resp = BulkDeleteResponse(deleted=5)
         assert resp.deleted == 5
 
@@ -53,7 +56,7 @@ class TestBulkDeleteEndpoint:
         with open("app/images/router.py") as f:
             source = f.read()
         idx = source.index("bulk_delete")
-        block = source[idx:idx + 1500]
+        block = source[idx : idx + 1500]
         assert "storage.delete" in block
 
     def test_returns_deleted_count(self) -> None:
@@ -67,11 +70,13 @@ class TestGalleryDuplicateSchema:
 
     def test_name_optional(self) -> None:
         from app.galleries.schemas import GalleryDuplicateRequest
+
         req = GalleryDuplicateRequest()
         assert req.name is None
 
     def test_custom_name(self) -> None:
         from app.galleries.schemas import GalleryDuplicateRequest
+
         req = GalleryDuplicateRequest(name="Meine Kopie")
         assert req.name == "Meine Kopie"
 
@@ -93,7 +98,7 @@ class TestGalleryDuplicateEndpoint:
         with open("app/galleries/router.py") as f:
             source = f.read()
         idx = source.index("duplicate_gallery")
-        block = source[idx:idx + 2000]
+        block = source[idx : idx + 2000]
         assert "Gallery(" in block
         assert "share_token" not in block.split("Gallery(")[1].split(")")[0]
 
@@ -101,14 +106,14 @@ class TestGalleryDuplicateEndpoint:
         with open("app/galleries/router.py") as f:
             source = f.read()
         idx = source.index("duplicate_gallery")
-        block = source[idx:idx + 2000]
+        block = source[idx : idx + 2000]
         assert "storage.copy" in block
 
     def test_generates_new_storage_keys(self) -> None:
         with open("app/galleries/router.py") as f:
             source = f.read()
         idx = source.index("duplicate_gallery")
-        block = source[idx:idx + 2000]
+        block = source[idx : idx + 2000]
         assert "new_original_key" in block
         assert "new_preview_key" in block
 
@@ -123,12 +128,15 @@ class TestStorageCopyMethod:
 
     def test_local_storage_has_copy(self) -> None:
         from app.storage.local import LocalStorage
+
         assert hasattr(LocalStorage, "copy")
 
     def test_s3_storage_has_copy(self) -> None:
         from app.storage.s3 import S3Storage
+
         assert hasattr(S3Storage, "copy")
 
     def test_base_storage_declares_copy(self) -> None:
         from app.storage.base import StorageBackend
+
         assert hasattr(StorageBackend, "copy")

@@ -167,9 +167,7 @@ class ShareSession(Base):
     gallery_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("galleries.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -227,9 +225,7 @@ class NotificationDelivery(Base):
     event: Mapped[str] = mapped_column(String(100), nullable=False)
     status: Mapped[str] = mapped_column(String(50), nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    attempted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    attempted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     config: Mapped["NotificationConfig"] = relationship(back_populates="deliveries")
 
@@ -242,6 +238,4 @@ class PendingSignup(Base):
     password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     verification_token_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     verification_token_salt: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
-    requested_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

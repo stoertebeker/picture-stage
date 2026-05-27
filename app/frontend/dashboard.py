@@ -96,11 +96,7 @@ async def create_gallery(
 
 async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict]:
     """Load galleries with image counts and selection progress for the dashboard."""
-    result = await db.execute(
-        select(Gallery)
-        .where(Gallery.owner_id == user.id)
-        .order_by(Gallery.updated_at.desc())
-    )
+    result = await db.execute(select(Gallery).where(Gallery.owner_id == user.id).order_by(Gallery.updated_at.desc()))
     galleries = result.scalars().all()
 
     gallery_data: list[dict] = []
@@ -132,19 +128,19 @@ async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict]:
 
         # Last activity
         last_access_result = await db.execute(
-            select(func.max(ShareSession.started_at)).where(
-                ShareSession.gallery_id == gallery.id
-            )
+            select(func.max(ShareSession.started_at)).where(ShareSession.gallery_id == gallery.id)
         )
         last_activity = last_access_result.scalar()
 
-        gallery_data.append({
-            "gallery": gallery,
-            "image_count": image_count,
-            "selected_count": selected_count,
-            "favorited_count": favorited_count,
-            "commented_count": commented_count,
-            "last_activity": last_activity,
-        })
+        gallery_data.append(
+            {
+                "gallery": gallery,
+                "image_count": image_count,
+                "selected_count": selected_count,
+                "favorited_count": favorited_count,
+                "commented_count": commented_count,
+                "last_activity": last_activity,
+            }
+        )
 
     return gallery_data

@@ -9,12 +9,12 @@ Verifies that:
 """
 
 
-
 class TestDashboardSchemas:
     """Verify dashboard response schemas."""
 
     def test_dashboard_gallery_has_progress_fields(self) -> None:
         from app.galleries.schemas import DashboardGalleryResponse
+
         fields = DashboardGalleryResponse.model_fields
         assert "selected_count" in fields
         assert "favorited_count" in fields
@@ -22,6 +22,7 @@ class TestDashboardSchemas:
 
     def test_dashboard_gallery_has_status_and_meta(self) -> None:
         from app.galleries.schemas import DashboardGalleryResponse
+
         fields = DashboardGalleryResponse.model_fields
         assert "status" in fields
         assert "image_count" in fields
@@ -30,25 +31,27 @@ class TestDashboardSchemas:
 
     def test_dashboard_response_has_galleries_and_count(self) -> None:
         from app.galleries.schemas import DashboardResponse
+
         fields = DashboardResponse.model_fields
         assert "galleries" in fields
         assert "total_galleries" in fields
 
     def test_dashboard_response_has_optional_pending_signups(self) -> None:
         from app.galleries.schemas import DashboardResponse
+
         field = DashboardResponse.model_fields["pending_signups_count"]
         assert field.default is None
 
     def test_dashboard_response_serializes_with_none_pending(self) -> None:
         from app.galleries.schemas import DashboardResponse
+
         resp = DashboardResponse(galleries=[], total_galleries=0)
         assert resp.pending_signups_count is None
 
     def test_dashboard_response_serializes_with_pending_count(self) -> None:
         from app.galleries.schemas import DashboardResponse
-        resp = DashboardResponse(
-            galleries=[], total_galleries=0, pending_signups_count=5
-        )
+
+        resp = DashboardResponse(galleries=[], total_galleries=0, pending_signups_count=5)
         assert resp.pending_signups_count == 5
 
 
@@ -64,7 +67,7 @@ class TestDashboardEndpointStructure:
         with open("app/galleries/router.py") as f:
             source = f.read()
         idx = source.index("dashboard")
-        endpoint_block = source[idx:idx + 800]
+        endpoint_block = source[idx : idx + 800]
         assert "require_active_user" in endpoint_block
         assert "require_admin" not in endpoint_block
 

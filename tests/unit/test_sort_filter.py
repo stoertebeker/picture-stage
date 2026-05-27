@@ -17,18 +17,22 @@ class TestSortByEnum:
 
     def test_has_sort_order(self) -> None:
         from app.guest.router import ImageSortBy
+
         assert ImageSortBy.sort_order.value == "sort_order"
 
     def test_has_filename(self) -> None:
         from app.guest.router import ImageSortBy
+
         assert ImageSortBy.filename.value == "filename"
 
     def test_has_exif_date(self) -> None:
         from app.guest.router import ImageSortBy
+
         assert ImageSortBy.exif_date.value == "exif_date"
 
     def test_is_string_enum(self) -> None:
         from app.guest.router import ImageSortBy
+
         assert issubclass(ImageSortBy, str)
         assert issubclass(ImageSortBy, enum.Enum)
 
@@ -38,10 +42,12 @@ class TestSortDirectionEnum:
 
     def test_has_asc(self) -> None:
         from app.guest.router import SortDirection
+
         assert SortDirection.asc.value == "asc"
 
     def test_has_desc(self) -> None:
         from app.guest.router import SortDirection
+
         assert SortDirection.desc.value == "desc"
 
 
@@ -50,18 +56,22 @@ class TestImageFilterEnum:
 
     def test_has_all(self) -> None:
         from app.guest.router import ImageFilter
+
         assert ImageFilter.all.value == "all"
 
     def test_has_selected(self) -> None:
         from app.guest.router import ImageFilter
+
         assert ImageFilter.selected.value == "selected"
 
     def test_has_favorited(self) -> None:
         from app.guest.router import ImageFilter
+
         assert ImageFilter.favorited.value == "favorited"
 
     def test_has_unrated(self) -> None:
         from app.guest.router import ImageFilter
+
         assert ImageFilter.unrated.value == "unrated"
 
 
@@ -70,28 +80,34 @@ class TestExifDateParsing:
 
     def test_valid_exif_date(self) -> None:
         from app.guest.router import _parse_exif_date
+
         result = _parse_exif_date({"DateTimeOriginal": "2024:06:15 14:30:00"})
         assert result == datetime(2024, 6, 15, 14, 30, 0)
 
     def test_datetime_fallback(self) -> None:
         from app.guest.router import _parse_exif_date
+
         result = _parse_exif_date({"DateTime": "2024:06:15 14:30:00"})
         assert result == datetime(2024, 6, 15, 14, 30, 0)
 
     def test_none_exif(self) -> None:
         from app.guest.router import _parse_exif_date
+
         assert _parse_exif_date(None) is None
 
     def test_empty_exif(self) -> None:
         from app.guest.router import _parse_exif_date
+
         assert _parse_exif_date({}) is None
 
     def test_invalid_format(self) -> None:
         from app.guest.router import _parse_exif_date
+
         assert _parse_exif_date({"DateTimeOriginal": "not-a-date"}) is None
 
     def test_non_string_value(self) -> None:
         from app.guest.router import _parse_exif_date
+
         assert _parse_exif_date({"DateTimeOriginal": 12345}) is None
 
 
@@ -117,7 +133,7 @@ class TestEndpointStructure:
         with open("app/guest/router.py") as f:
             source = f.read()
         idx = source.index("list_shared_images")
-        block = source[idx:idx + 500]
+        block = source[idx : idx + 500]
         assert "session_id" in block
 
     def test_filter_requires_session_id(self) -> None:

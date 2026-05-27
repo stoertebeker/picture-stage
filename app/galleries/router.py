@@ -54,12 +54,8 @@ def _gallery_to_response(gallery: Gallery, image_count: int) -> GalleryResponse:
     )
 
 
-async def _get_owned_gallery(
-    gallery_id: uuid.UUID, user: User, db: AsyncSession
-) -> Gallery:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     gallery = result.scalar_one_or_none()
     if gallery is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -67,9 +63,7 @@ async def _get_owned_gallery(
 
 
 async def _count_images(gallery_id: uuid.UUID, db: AsyncSession) -> int:
-    result = await db.execute(
-        select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
-    )
+    result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id))
     return result.scalar() or 0
 
 
@@ -109,9 +103,7 @@ async def get_dashboard(
         selected_count, favorited_count, commented_count = row[0], row[1], row[2]
 
         last_access_result = await db.execute(
-            select(func.max(ShareSession.started_at)).where(
-                ShareSession.gallery_id == gallery.id
-            )
+            select(func.max(ShareSession.started_at)).where(ShareSession.gallery_id == gallery.id)
         )
         last_activity = last_access_result.scalar()
 
@@ -132,9 +124,7 @@ async def get_dashboard(
 
     pending_signups_count = None
     if user.status == UserStatus.admin:
-        pending_result = await db.execute(
-            select(func.count()).select_from(PendingSignup)
-        )
+        pending_result = await db.execute(select(func.count()).select_from(PendingSignup))
         pending_signups_count = pending_result.scalar() or 0
 
     return DashboardResponse(

@@ -13,9 +13,7 @@ from app.frontend.deps import templates
 router = APIRouter(tags=["frontend-admin"])
 
 
-async def require_admin_page(
-    request: Request, db: AsyncSession = Depends(get_db)
-) -> User:
+async def require_admin_page(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     user = await get_user_from_cookie(request, db)
     if user is None:
         raise HTTPException(status_code=303, headers={"Location": "/login"})
@@ -30,9 +28,7 @@ async def admin_pending_signups(
     user: User = Depends(require_admin_page),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    result = await db.execute(
-        select(PendingSignup).order_by(PendingSignup.requested_at.desc())
-    )
+    result = await db.execute(select(PendingSignup).order_by(PendingSignup.requested_at.desc()))
     signups = list(result.scalars().all())
     csrf_token = request.cookies.get("csrf_token", "")
     return templates.TemplateResponse(
@@ -53,9 +49,7 @@ async def admin_approve_signup(
     _admin: User = Depends(require_admin_page),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    result = await db.execute(
-        select(PendingSignup).where(PendingSignup.id == signup_id)
-    )
+    result = await db.execute(select(PendingSignup).where(PendingSignup.id == signup_id))
     signup = result.scalar_one_or_none()
     if signup is None:
         raise HTTPException(status_code=404, detail="Pending signup not found")
@@ -64,9 +58,7 @@ async def admin_approve_signup(
     if existing.scalar_one_or_none() is not None:
         await db.delete(signup)
         await db.commit()
-        raise HTTPException(
-            status_code=409, detail="User with this email already exists"
-        )
+        raise HTTPException(status_code=409, detail="User with this email already exists")
 
     user = User(
         email=signup.email,
@@ -88,9 +80,7 @@ async def admin_reject_signup(
     _admin: User = Depends(require_admin_page),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    result = await db.execute(
-        select(PendingSignup).where(PendingSignup.id == signup_id)
-    )
+    result = await db.execute(select(PendingSignup).where(PendingSignup.id == signup_id))
     signup = result.scalar_one_or_none()
     if signup is None:
         raise HTTPException(status_code=404, detail="Pending signup not found")

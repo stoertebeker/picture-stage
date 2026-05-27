@@ -43,6 +43,7 @@ class TestGalleryIsolation:
         assert _get_owned_gallery is not None
         # Function signature requires both gallery_id AND user
         import inspect
+
         sig = inspect.signature(_get_owned_gallery)
         params = list(sig.parameters.keys())
         assert "gallery_id" in params
@@ -54,9 +55,7 @@ class TestGalleryIsolation:
         with open("app/galleries/router.py") as f:
             source = f.read()
 
-        assert "Gallery.owner_id == user.id" in source, (
-            "Gallery list query MUST filter by owner_id"
-        )
+        assert "Gallery.owner_id == user.id" in source, "Gallery list query MUST filter by owner_id"
 
     def test_gallery_detail_query_filters_owner(self) -> None:
         """get_gallery endpoint must filter by owner_id."""
@@ -76,17 +75,13 @@ class TestImageIsolation:
         with open("app/images/router.py") as f:
             source = f.read()
 
-        assert "Gallery.owner_id == user.id" in source, (
-            "Image upload MUST verify gallery ownership"
-        )
+        assert "Gallery.owner_id == user.id" in source, "Image upload MUST verify gallery ownership"
 
     def test_list_images_checks_gallery_owner(self) -> None:
         with open("app/images/router.py") as f:
             source = f.read()
 
-        assert source.count("Gallery.owner_id == user.id") >= 2, (
-            "Image list and delete MUST verify gallery ownership"
-        )
+        assert source.count("Gallery.owner_id == user.id") >= 2, "Image list and delete MUST verify gallery ownership"
 
 
 class TestExportIsolation:
@@ -96,9 +91,7 @@ class TestExportIsolation:
         with open("app/galleries/export.py") as f:
             source = f.read()
 
-        assert "Gallery.owner_id == user.id" in source, (
-            "Export MUST verify gallery ownership"
-        )
+        assert "Gallery.owner_id == user.id" in source, "Export MUST verify gallery ownership"
 
 
 class TestShareIsolation:
@@ -108,9 +101,7 @@ class TestShareIsolation:
         with open("app/galleries/sharing.py") as f:
             source = f.read()
 
-        assert "Gallery.owner_id == user.id" in source, (
-            "Share link creation MUST verify gallery ownership"
-        )
+        assert "Gallery.owner_id == user.id" in source, "Share link creation MUST verify gallery ownership"
 
     def test_share_revoke_checks_owner(self) -> None:
         with open("app/galleries/sharing.py") as f:
@@ -128,13 +119,9 @@ class TestAdminEndpoints:
         with open("app/admin/router.py") as f:
             source = f.read()
 
-        assert "require_admin" in source, (
-            "Admin endpoints MUST use require_admin dependency"
-        )
+        assert "require_admin" in source, "Admin endpoints MUST use require_admin dependency"
 
-        assert source.count("Depends(require_admin)") >= 3, (
-            "All admin endpoints MUST use require_admin"
-        )
+        assert source.count("Depends(require_admin)") >= 3, "All admin endpoints MUST use require_admin"
 
 
 class TestGuestApiIsolation:
@@ -144,12 +131,8 @@ class TestGuestApiIsolation:
         with open("app/guest/router.py") as f:
             source = f.read()
 
-        assert "require_admin" not in source, (
-            "Guest API must NOT reference admin dependencies"
-        )
-        assert "get_current_user" not in source, (
-            "Guest API must NOT use authenticated user context"
-        )
+        assert "require_admin" not in source, "Guest API must NOT reference admin dependencies"
+        assert "get_current_user" not in source, "Guest API must NOT use authenticated user context"
 
     def test_guest_router_never_serves_originals(self) -> None:
         with open("app/guest/router.py") as f:

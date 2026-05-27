@@ -98,10 +98,7 @@ async def _load_images(
     order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
 
     result = await db.execute(
-        select(Image)
-        .where(Image.gallery_id == gallery.id)
-        .options(selectinload(Image.previews))
-        .order_by(order_clause)
+        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)).order_by(order_clause)
     )
     images = list(result.scalars().all())
 
@@ -117,8 +114,7 @@ async def _load_images(
     if session_id is not None:
         selections = await get_current_selections(gallery.id, session_id, db)
         sel_map = {
-            s.image_id: {"selected": s.selected, "favorited": s.favorited, "comment": s.comment}
-            for s in selections
+            s.image_id: {"selected": s.selected, "favorited": s.favorited, "comment": s.comment} for s in selections
         }
 
     if filter_mode != ImageFilter.all and session_id is not None:
@@ -128,9 +124,9 @@ async def _load_images(
             images = [img for img in images if sel_map.get(img.id, {}).get("favorited")]
         elif filter_mode == ImageFilter.unrated:
             images = [
-                img for img in images
-                if not sel_map.get(img.id, {}).get("selected")
-                and not sel_map.get(img.id, {}).get("favorited")
+                img
+                for img in images
+                if not sel_map.get(img.id, {}).get("selected") and not sel_map.get(img.id, {}).get("favorited")
             ]
 
     image_list = []
@@ -145,17 +141,19 @@ async def _load_images(
                 preview_urls["preview"] = sign_url(f"/media/{preview.storage_key}", expires_in=900)
 
         sel = sel_map.get(img.id, {"selected": False, "favorited": False, "comment": None})
-        image_list.append({
-            "id": str(img.id),
-            "filename": img.filename,
-            "sort_order": img.sort_order,
-            "thumb_sm_url": preview_urls.get("thumb_sm", ""),
-            "thumb_md_url": preview_urls.get("thumb_md", ""),
-            "preview_url": preview_urls.get("preview", ""),
-            "selected": sel.get("selected", False),
-            "favorited": sel.get("favorited", False),
-            "comment": sel.get("comment"),
-        })
+        image_list.append(
+            {
+                "id": str(img.id),
+                "filename": img.filename,
+                "sort_order": img.sort_order,
+                "thumb_sm_url": preview_urls.get("thumb_sm", ""),
+                "thumb_md_url": preview_urls.get("thumb_md", ""),
+                "preview_url": preview_urls.get("preview", ""),
+                "selected": sel.get("selected", False),
+                "favorited": sel.get("favorited", False),
+                "comment": sel.get("comment"),
+            }
+        )
 
     return image_list
 

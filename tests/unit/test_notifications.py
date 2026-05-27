@@ -63,12 +63,15 @@ class TestNotificationSchemas:
 class TestSSRFProtection:
     """Verify webhook URL validation blocks internal addresses."""
 
-    @pytest.mark.parametrize("host", [
-        "https://localhost/hook",
-        "https://127.0.0.1/hook",
-        "https://0.0.0.0/hook",
-        "https://metadata.google.internal/hook",
-    ])
+    @pytest.mark.parametrize(
+        "host",
+        [
+            "https://localhost/hook",
+            "https://127.0.0.1/hook",
+            "https://0.0.0.0/hook",
+            "https://metadata.google.internal/hook",
+        ],
+    )
     def test_blocked_hosts_rejected(self, host: str) -> None:
         with pytest.raises(ValidationError, match="internal addresses"):
             NotificationConfigUpdate(
@@ -116,14 +119,17 @@ class TestNotificationService:
 
     def test_send_notification_exists(self) -> None:
         from app.notifications.service import send_notification
+
         assert callable(send_notification)
 
     def test_notify_all_admins_exists(self) -> None:
         from app.notifications.service import notify_all_admins
+
         assert callable(notify_all_admins)
 
     def test_subject_map_covers_all_events(self) -> None:
         from app.notifications.service import SUBJECT_MAP
+
         for event in VALID_EVENT_TYPES:
             assert event in SUBJECT_MAP, f"Missing subject template for {event}"
 
@@ -139,6 +145,7 @@ class TestNotificationRouter:
 
     def test_router_prefix(self) -> None:
         from app.notifications.router import router
+
         assert router.prefix == "/api/v1/notifications"
 
     def test_config_endpoint_uses_active_user(self) -> None:

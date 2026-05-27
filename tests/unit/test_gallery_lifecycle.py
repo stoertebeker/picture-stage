@@ -10,7 +10,6 @@ Verifies that:
 - Double-complete is rejected (409 idempotency guard)
 """
 
-
 import pytest
 
 from app.db.models import GalleryStatus
@@ -52,15 +51,11 @@ class TestAllowedTransitions:
 
     def test_all_statuses_have_transitions(self) -> None:
         for status in GalleryStatus:
-            assert status in ALLOWED_TRANSITIONS, (
-                f"Status '{status.value}' missing from ALLOWED_TRANSITIONS"
-            )
+            assert status in ALLOWED_TRANSITIONS, f"Status '{status.value}' missing from ALLOWED_TRANSITIONS"
 
     def test_no_self_transitions_in_map(self) -> None:
         for from_status, to_statuses in ALLOWED_TRANSITIONS.items():
-            assert from_status not in to_statuses, (
-                f"Self-transition for '{from_status.value}' should not be in the map"
-            )
+            assert from_status not in to_statuses, f"Self-transition for '{from_status.value}' should not be in the map"
 
 
 class TestStatusFieldRemovedFromUpdate:
@@ -68,6 +63,7 @@ class TestStatusFieldRemovedFromUpdate:
 
     def test_gallery_update_has_no_status_field(self) -> None:
         from app.galleries.schemas import GalleryUpdate
+
         assert "status" not in GalleryUpdate.model_fields
 
 
@@ -76,6 +72,7 @@ class TestStatusTransitionSchema:
 
     def test_valid_status(self) -> None:
         from app.galleries.schemas import GalleryStatusTransition
+
         t = GalleryStatusTransition(status=GalleryStatus.shared)
         assert t.status == GalleryStatus.shared
 
@@ -83,6 +80,7 @@ class TestStatusTransitionSchema:
         from pydantic import ValidationError
 
         from app.galleries.schemas import GalleryStatusTransition
+
         with pytest.raises(ValidationError):
             GalleryStatusTransition(status="nonexistent")
 
@@ -157,6 +155,7 @@ class TestCompleteReviewEndpoint:
 
     def test_complete_returns_structured_response(self) -> None:
         from app.guest.router import CompleteReviewResponse
+
         fields = CompleteReviewResponse.model_fields
         assert "message" in fields
         assert "gallery_status" in fields

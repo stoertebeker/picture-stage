@@ -29,9 +29,7 @@ async def send_notification(
     payload: dict,
     db: AsyncSession,
 ) -> None:
-    result = await db.execute(
-        select(NotificationConfig).where(NotificationConfig.user_id == user_id)
-    )
+    result = await db.execute(select(NotificationConfig).where(NotificationConfig.user_id == user_id))
     configs = result.scalars().all()
 
     for config in configs:
@@ -51,9 +49,7 @@ async def notify_all_admins(
     payload: dict,
     db: AsyncSession,
 ) -> None:
-    result = await db.execute(
-        select(User.id).where(User.status == UserStatus.admin)
-    )
+    result = await db.execute(select(User.id).where(User.status == UserStatus.admin))
     admin_ids = [row[0] for row in result.all()]
 
     for admin_id in admin_ids:

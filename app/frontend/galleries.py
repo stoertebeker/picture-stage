@@ -47,22 +47,16 @@ TRANSITION_LABELS: dict[GalleryStatus, str] = {
 }
 
 
-async def _get_owned_gallery(
-    gallery_id: uuid.UUID, user: User, db: AsyncSession
-) -> Gallery:
+async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
     """Load gallery with owner check. Raises 404 if not found or not owned."""
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     gallery = result.scalar_one_or_none()
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     return gallery
 
 
-async def _load_images_with_signed_urls(
-    gallery_id: uuid.UUID, db: AsyncSession
-) -> list[dict]:
+async def _load_images_with_signed_urls(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict]:
     """Load images with previews and generate signed URLs for thumbnails."""
     result = await db.execute(
         select(Image)
@@ -78,14 +72,16 @@ async def _load_images_with_signed_urls(
         for preview in img.previews:
             previews[preview.variant.value] = sign_url(f"/media/{preview.storage_key}", expires_in=3600)
 
-        image_list.append({
-            "id": str(img.id),
-            "filename": img.filename,
-            "sort_order": img.sort_order,
-            "width": img.width,
-            "height": img.height,
-            "previews": previews,
-        })
+        image_list.append(
+            {
+                "id": str(img.id),
+                "filename": img.filename,
+                "sort_order": img.sort_order,
+                "width": img.width,
+                "height": img.height,
+                "previews": previews,
+            }
+        )
 
     return image_list
 
@@ -104,10 +100,12 @@ def _build_context(
         # Cannot transition to shared without share token
         if target_status == GalleryStatus.shared and gallery.share_token_hash is None:
             continue
-        transitions.append({
-            "status": target_status.value,
-            "label": TRANSITION_LABELS.get(target_status, target_status.value),
-        })
+        transitions.append(
+            {
+                "status": target_status.value,
+                "label": TRANSITION_LABELS.get(target_status, target_status.value),
+            }
+        )
 
     ctx = {
         "request": request,
@@ -205,9 +203,7 @@ async def upload_images(
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
 
     # Get current image count for sort_order offset
-    existing_result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery_id)
-    )
+    existing_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id))
     sort_offset = len(existing_result.scalars().all())
 
     watermark_text = f"PREVIEW · {str(gallery.id)[:8].upper()}"
@@ -253,15 +249,11 @@ async def upload_images(
         for variant_name, max_width in PREVIEW_SIZES.items():
             file_buf.seek(0)
             if variant_name == "preview":
-                preview_buf, pw, ph = generate_preview_with_watermark(
-                    file_buf, max_width, watermark_text
-                )
+                preview_buf, pw, ph = generate_preview_with_watermark(file_buf, max_width, watermark_text)
             else:
                 preview_buf, pw, ph = generate_thumbnail(file_buf, max_width)
 
-            preview_key = storage_key(
-                str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp"
-            )
+            preview_key = storage_key(str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp")
             await storage.upload(preview_key, preview_buf, "image/webp")
 
             preview = ImagePreview(

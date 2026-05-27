@@ -42,8 +42,11 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
     if not email or not password:
         return templates.TemplateResponse(
             "auth/login.html",
-            {"request": request, "csrf_token": _csrf_from_request(request),
-             "error": "Email and password are required."},
+            {
+                "request": request,
+                "csrf_token": _csrf_from_request(request),
+                "error": "Email and password are required.",
+            },
             status_code=422,
         )
 
@@ -60,8 +63,11 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
     if user.status == UserStatus.pending:
         return templates.TemplateResponse(
             "auth/login.html",
-            {"request": request, "csrf_token": _csrf_from_request(request),
-             "error": "Account not yet approved by admin."},
+            {
+                "request": request,
+                "csrf_token": _csrf_from_request(request),
+                "error": "Account not yet approved by admin.",
+            },
             status_code=403,
         )
 

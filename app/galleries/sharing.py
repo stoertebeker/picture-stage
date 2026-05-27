@@ -30,9 +30,7 @@ async def create_share_link(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> ShareResponse:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     gallery = result.scalar_one_or_none()
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -66,9 +64,7 @@ async def revoke_share_link(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     gallery = result.scalar_one_or_none()
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")

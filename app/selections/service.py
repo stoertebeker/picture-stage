@@ -10,9 +10,7 @@ from app.selections.schemas import SelectionState
 async def get_current_selections(
     gallery_id: uuid.UUID, session_id: uuid.UUID, db: AsyncSession
 ) -> list[SelectionState]:
-    result = await db.execute(
-        select(Image.id).where(Image.gallery_id == gallery_id).order_by(Image.sort_order)
-    )
+    result = await db.execute(select(Image.id).where(Image.gallery_id == gallery_id).order_by(Image.sort_order))
     image_ids = [row[0] for row in result.all()]
 
     result = await db.execute(
@@ -26,8 +24,7 @@ async def get_current_selections(
     events = result.scalars().all()
 
     state: dict[uuid.UUID, dict] = {
-        img_id: {"selected": False, "favorited": False, "comment": None}
-        for img_id in image_ids
+        img_id: {"selected": False, "favorited": False, "comment": None} for img_id in image_ids
     }
 
     for event in events:
@@ -48,7 +45,4 @@ async def get_current_selections(
                 if event.comment is not None:
                     img["comment"] = event.comment
 
-    return [
-        SelectionState(image_id=img_id, **s)
-        for img_id, s in state.items()
-    ]
+    return [SelectionState(image_id=img_id, **s) for img_id, s in state.items()]

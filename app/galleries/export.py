@@ -15,12 +15,8 @@ from app.db.session import get_db
 router = APIRouter(prefix="/api/v1/galleries", tags=["export"])
 
 
-async def _get_materialized_selections(
-    gallery_id: uuid.UUID, db: AsyncSession
-) -> list[dict]:
-    result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery_id).order_by(Image.sort_order)
-    )
+async def _get_materialized_selections(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict]:
+    result = await db.execute(select(Image).where(Image.gallery_id == gallery_id).order_by(Image.sort_order))
     images = result.scalars().all()
 
     result = await db.execute(
@@ -67,9 +63,7 @@ async def export_selections(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
-    result = await db.execute(
-        select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id)
-    )
+    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     gallery = result.scalar_one_or_none()
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -88,12 +82,14 @@ async def export_selections(
         writer = csv.DictWriter(buf, fieldnames=["filename", "selected", "favorited", "comment"])
         writer.writeheader()
         for s in selections:
-            writer.writerow({
-                "filename": s["filename"],
-                "selected": s["selected"],
-                "favorited": s["favorited"],
-                "comment": s["comment"] or "",
-            })
+            writer.writerow(
+                {
+                    "filename": s["filename"],
+                    "selected": s["selected"],
+                    "favorited": s["favorited"],
+                    "comment": s["comment"] or "",
+                }
+            )
         buf.seek(0)
         return StreamingResponse(
             iter([buf.getvalue()]),
