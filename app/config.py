@@ -35,9 +35,6 @@ class Settings(BaseSettings):
 
     ratelimit_enabled: bool = True
 
-    admin_email: str = ""
-    admin_password: str = ""
-
     captcha_enabled: bool = True
     altcha_secret_key: str = ""
 

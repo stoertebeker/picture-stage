@@ -9,13 +9,13 @@ from slowapi.errors import RateLimitExceeded
 
 from app.admin.router import router as admin_router
 from app.auth.router import router as auth_router
-from app.auth.startup import create_initial_admin
 from app.config import settings
 from app.frontend.admin import router as frontend_admin_router
 from app.frontend.auth import router as frontend_auth_router
 from app.frontend.dashboard import router as frontend_dashboard_router
 from app.frontend.galleries import router as frontend_galleries_router
 from app.frontend.guest import router as frontend_guest_router
+from app.frontend.setup import router as frontend_setup_router
 from app.galleries.export import router as export_router
 from app.galleries.router import router as galleries_router
 from app.galleries.sharing import router as sharing_router
@@ -35,7 +35,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.hmac_secret_key == "CHANGE_ME":  # noqa: S105
         logger.warning("HMAC_SECRET_KEY is not set — using insecure default. Set it in .env before deploying.")
 
-    await create_initial_admin()
     yield
 
 
@@ -66,6 +65,7 @@ app.include_router(frontend_auth_router)
 app.include_router(frontend_dashboard_router)
 app.include_router(frontend_galleries_router)
 app.include_router(frontend_admin_router)
+app.include_router(frontend_setup_router)
 
 
 @app.get("/health")

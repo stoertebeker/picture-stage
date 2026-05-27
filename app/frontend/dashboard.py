@@ -30,7 +30,10 @@ async def root_redirect(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> RedirectResponse:
-    """Redirect / to /dashboard if authenticated, /login if not."""
+    """Redirect / to /setup if no users, /dashboard if authenticated, /login otherwise."""
+    user_count_result = await db.execute(select(func.count()).select_from(User))
+    if (user_count_result.scalar() or 0) == 0:
+        return RedirectResponse(url="/setup", status_code=302)
     user = await get_user_from_cookie(request, db)
     if user is not None:
         return RedirectResponse(url="/dashboard", status_code=302)

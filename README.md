@@ -31,14 +31,13 @@ cp .env.example .env
 # 3. .env anpassen — mindestens diese Werte setzen:
 #    SECRET_KEY         (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(64))")
 #    HMAC_SECRET_KEY    (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
-#    ADMIN_EMAIL        (E-Mail des ersten Admin-Accounts)
-#    ADMIN_PASSWORD     (Passwort des ersten Admin-Accounts, min. 8 Zeichen)
 
 # 4. Starten
 docker compose up -d
 
-# 5. Öffnen
+# 5. Öffnen — beim ersten Start erscheint der Setup-Assistent
 #    http://localhost:8000
+#    Erstelle dort den Admin-Account, danach ist die App einsatzbereit.
 #    API-Docs: http://localhost:8000/docs
 ```
 
@@ -135,7 +134,6 @@ Key variables:
 | `HMAC_SECRET_KEY` | Image URL signing key (must change from default) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `STORAGE_BACKEND` | `local` or `s3` |
-| `ADMIN_EMAIL` / `ADMIN_PASSWORD` | Initial admin account (created on first start) |
 
 ## Development
 
