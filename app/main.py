@@ -36,7 +36,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if settings.hmac_secret_key == "CHANGE_ME":  # noqa: S105
         logger.warning("HMAC_SECRET_KEY is not set — using insecure default. Set it in .env before deploying.")
 
-    import app.db.models  # noqa: F401
+    from app.db import models as _models  # noqa: F401
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
