@@ -4,7 +4,7 @@
 
 Picture-Stage lets photographers share image galleries with models for review. Models can select images for editing, mark favorites, and leave comments — all without creating an account. Self-hosted, open-source, and fully under your control.
 
-> **Status:** v0.1 API complete — frontend in development.
+> **Status:** v0.4 complete — API + browser frontend functional. Next: production hardening (v0.3).
 
 ## Features
 

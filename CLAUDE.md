@@ -116,38 +116,42 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-05-26
+**Datum:** 2026-05-27
 
 ### Was ist fertig
-- v0.1 API komplett: alle 12 Issues geschlossen, 27 Endpoints implementiert
-- v0.2 Lifecycle & Komfort: 6/7 Issues geschlossen (Tastatur-Shortcuts deferred bis Frontend steht)
+- v0.1 API komplett: 12/12 Issues, 27 Endpoints
+- v0.2 Lifecycle & Komfort: 6/7 Issues (Tastatur-Shortcuts deferred)
+- v0.4 Frontend komplett: 6/6 Issues, HTMX + Alpine.js + Tailwind CSS
+  - 5 Frontend-Router (auth, dashboard, galleries, guest, admin) in `app/frontend/`
+  - 20 Jinja2-Templates (inkl. HTMX-Partials) in `app/templates/`
+  - Cookie-Auth (HttpOnly JWT), CSRF Double-Submit, Dark-Mode
+  - Guest-Viewer mit Lightbox, Keyboard-Nav, Selections, Sort/Filter
+  - Gallery-Management mit Drag-Drop Upload, Share-Links, Status-Transitions
 - 10 DB-Tabellen, Pluggable Storage (Local + S3), Security-Middleware, Rate-Limiting
 - CI/CD Workflows (GitHub Actions), Multi-Arch Dockerfile
-- Frontend Foundation (Wave 1): StaticFiles, Cookie-Auth, CSRF, Dark-Mode Base-Templates
-- 134 Tests, alle gruen
+- 154 Tests, alle gruen
 
-### Aktive Arbeit: v0.4 Frontend (picture-stage-gza)
-- **Epic:** `picture-stage-gza` – 1/6 Issues closed (Foundation done)
-- **Plan:** `.schrammns_workflow/plans/2026-05-26-frontend-htmx-alpine-tailwind.md`
-- **Research:** `.schrammns_workflow/research/2026-05-26-frontend-architektur-htmx-alpine-tailwind.md`
-- **Progress:** `.schrammns_workflow/progress/picture-stage-gza.json` (Wave 1 done)
-- **Stack:** HTMX 2.x + Alpine.js 3.x + Tailwind CSS, Server-Side Rendering mit Jinja2 Partials
-- **Auth:** Cookie-basiert (HttpOnly JWT) fuer Fotografen, Token-in-URL fuer Gaeste
-- **Naechster Schritt:** `/make-it-so picture-stage-gza` startet Wave 2
+### Naechster Epic: v0.3 Produktion & Compliance (picture-stage-fbr)
+- **Epic:** `picture-stage-fbr` – 0/7 Issues closed
+- **Ready-Queue:** Alle 7 Issues unblocked, keine Dependencies untereinander
+- **Einstieg:** `bd ready` zeigt die Queue, `/make-it-so picture-stage-fbr` startet Ausfuehrung
 
-### Wave 2 Ready-Queue (4 Issues parallel)
-| Issue | Beads-ID | Beschreibung |
-|-------|----------|-------------|
-| Auth-UI | `picture-stage-gza.2` | Login, Signup, Verify-Email, Logout |
-| Dashboard | `picture-stage-gza.3` | Gallery-Liste mit Status/Fortschritt |
-| Guest-Viewer | `picture-stage-gza.5` | Image-Grid, Lightbox, Selections |
-| Admin-UI | `picture-stage-gza.6` | Pending-Signups Approve/Reject |
+| Issue | Beads-ID | Prio | Beschreibung |
+|-------|----------|------|-------------|
+| Ablaufdatum | `picture-stage-fbr.1` | P2 | Optionales Ablaufdatum pro Galerie |
+| Audit-Log | `picture-stage-fbr.2` | P1 | Audit-Log pro Galerie |
+| DSGVO | `picture-stage-fbr.3` | P1 | DSGVO-Seiten & Compliance |
+| Galerie-Loesch | `picture-stage-fbr.4` | P1 | Galerie-Loesch-Workflow |
+| Backup/Restore | `picture-stage-fbr.5` | P1 | Backup/Restore-CLI im Container |
+| i18n | `picture-stage-fbr.6` | P2 | Deutsch + Englisch |
+| Wasserzeichen | `picture-stage-fbr.7` | P3 | Erweiterte Wasserzeichen-Konfig |
 
 ### Was fehlt fuer Produktivnutzung
-- **Frontend Wave 2+3** (4+1 Issues offen)
+- **v0.3 Produktion & Compliance** (7 Issues offen)
 - **Alembic initiale Migration** (braucht laufende Postgres)
 - **Docker-Build testen** (lokal oder via CI)
 - **Vendored JS** (HTMX + Alpine.js .min.js ersetzen – aktuell Platzhalter)
+- **Tailwind CSS Build** (styles.css via Tailwind CLI generieren)
 
 ### Epics
 | Epic | Beads-ID | Status |
@@ -155,4 +159,4 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 | v0.1 Minimal Viable Picdrop | `picture-stage-ebm` | 12/12 closed |
 | v0.2 Lifecycle & Komfort | `picture-stage-9q3` | 6/7 closed (1 deferred) |
 | v0.3 Produktion & Compliance | `picture-stage-fbr` | 0/7 open |
-| v0.4 Frontend | `picture-stage-gza` | 1/6 closed |
+| v0.4 Frontend | `picture-stage-gza` | 6/6 closed |
