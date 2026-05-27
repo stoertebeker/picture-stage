@@ -2,6 +2,7 @@ import logging
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
+from typing import Any
 
 import aiosmtplib
 import httpx
@@ -26,7 +27,7 @@ SUBJECT_MAP = {
 async def send_notification(
     event_type: str,
     user_id: str,
-    payload: dict,
+    payload: dict[str, Any],
     db: AsyncSession,
 ) -> None:
     result = await db.execute(select(NotificationConfig).where(NotificationConfig.user_id == user_id))
@@ -46,7 +47,7 @@ async def send_notification(
 
 async def notify_all_admins(
     event_type: str,
-    payload: dict,
+    payload: dict[str, Any],
     db: AsyncSession,
 ) -> None:
     result = await db.execute(select(User.id).where(User.status == UserStatus.admin))
@@ -59,7 +60,7 @@ async def notify_all_admins(
 async def _send_email(
     config: NotificationConfig,
     event_type: str,
-    payload: dict,
+    payload: dict[str, Any],
     db: AsyncSession,
 ) -> None:
     delivery = NotificationDelivery(
@@ -113,7 +114,7 @@ async def _send_email(
 async def _send_webhook(
     config: NotificationConfig,
     event_type: str,
-    payload: dict,
+    payload: dict[str, Any],
     db: AsyncSession,
 ) -> None:
     delivery = NotificationDelivery(
@@ -123,10 +124,13 @@ async def _send_webhook(
     )
     db.add(delivery)
 
+    webhook_url = config.webhook_url
+    if webhook_url is None:
+        return
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
             response = await client.post(
-                config.webhook_url,
+                webhook_url,
                 json={"event": event_type, "data": payload},
                 headers={"Content-Type": "application/json", "User-Agent": "Picture-Stage/0.1"},
             )

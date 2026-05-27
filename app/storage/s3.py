@@ -1,5 +1,5 @@
 from collections.abc import AsyncIterator
-from typing import BinaryIO
+from typing import Any, BinaryIO
 
 import aioboto3
 
@@ -11,7 +11,7 @@ class S3Storage(StorageBackend):
     def __init__(self) -> None:
         self.session = aioboto3.Session()
         self.bucket = settings.s3_bucket_name
-        self.client_kwargs: dict = {
+        self.client_kwargs: dict[str, Any] = {
             "service_name": "s3",
             "region_name": settings.s3_region or None,
             "aws_access_key_id": settings.s3_access_key_id,

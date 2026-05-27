@@ -3,8 +3,9 @@
 import logging
 import secrets
 import uuid
+from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,7 +57,7 @@ async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession
     return gallery
 
 
-async def _load_images_with_signed_urls(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict]:
+async def _load_images_with_signed_urls(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict[str, Any]]:
     """Load images with previews and generate signed URLs for thumbnails."""
     result = await db.execute(
         select(Image)
@@ -89,10 +90,10 @@ async def _load_images_with_signed_urls(gallery_id: uuid.UUID, db: AsyncSession)
 def _build_context(
     request: Request,
     gallery: Gallery,
-    images: list[dict],
+    images: list[dict[str, Any]],
     user: User,
     **extra: object,
-) -> dict:
+) -> dict[str, Any]:
     """Build common template context for gallery pages."""
     allowed = ALLOWED_TRANSITIONS.get(gallery.status, set())
     transitions = []
@@ -133,7 +134,7 @@ async def gallery_detail(
     gallery = await _get_owned_gallery(gallery_id, user, db)
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
-    return templates.TemplateResponse("galleries/detail.html", ctx)
+    return templates.TemplateResponse(request, "galleries/detail.html", ctx)
 
 
 @router.post("/galleries/{gallery_id}/rename", response_class=HTMLResponse)
@@ -154,7 +155,7 @@ async def rename_gallery(
     await db.refresh(gallery)
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
-    return templates.TemplateResponse("galleries/detail.html", ctx)
+    return templates.TemplateResponse(request, "galleries/detail.html", ctx)
 
 
 @router.get("/galleries/{gallery_id}/images-grid", response_class=HTMLResponse)
@@ -168,7 +169,7 @@ async def gallery_images_grid(
     gallery = await _get_owned_gallery(gallery_id, user, db)
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
-    return templates.TemplateResponse("galleries/_image_grid.html", ctx)
+    return templates.TemplateResponse(request, "galleries/_image_grid.html", ctx)
 
 
 @router.post("/galleries/{gallery_id}/upload", response_class=HTMLResponse)
@@ -208,9 +209,10 @@ async def upload_images(
 
     watermark_text = f"PREVIEW · {str(gallery.id)[:8].upper()}"
 
-    for idx, file in enumerate(files):
-        if not hasattr(file, "read"):
+    for idx, raw_file in enumerate(files):
+        if not isinstance(raw_file, UploadFile):
             continue
+        file: UploadFile = raw_file
         if file.content_type not in allowed_types:
             raise HTTPException(
                 status_code=422,
@@ -273,7 +275,7 @@ async def upload_images(
     # Return refreshed image grid
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
-    return templates.TemplateResponse("galleries/_image_grid.html", ctx)
+    return templates.TemplateResponse(request, "galleries/_image_grid.html", ctx)
 
 
 @router.post("/galleries/{gallery_id}/share", response_class=HTMLResponse)
@@ -311,7 +313,7 @@ async def create_share_link(
 
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user, share_url=share_url)
-    return templates.TemplateResponse("galleries/_share_modal.html", ctx)
+    return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
 
 
 @router.delete("/galleries/{gallery_id}/share", response_class=HTMLResponse)
@@ -336,7 +338,7 @@ async def revoke_share_link(
 
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
-    return templates.TemplateResponse("galleries/_share_modal.html", ctx)
+    return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
 
 
 @router.post("/galleries/{gallery_id}/status", response_class=HTMLResponse)
@@ -377,7 +379,7 @@ async def transition_status(
 
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
-    return templates.TemplateResponse("galleries/detail.html", ctx)
+    return templates.TemplateResponse(request, "galleries/detail.html", ctx)
 
 
 @router.post("/galleries/{gallery_id}/bulk-delete", response_class=HTMLResponse)
@@ -398,7 +400,7 @@ async def bulk_delete_images(
         # Return grid as-is
         images = await _load_images_with_signed_urls(gallery_id, db)
         ctx = _build_context(request, gallery, images, user)
-        return templates.TemplateResponse("galleries/_image_grid.html", ctx)
+        return templates.TemplateResponse(request, "galleries/_image_grid.html", ctx)
 
     # Parse and validate UUIDs
     image_uuids = []
@@ -432,7 +434,7 @@ async def bulk_delete_images(
 
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
-    return templates.TemplateResponse("galleries/_image_grid.html", ctx)
+    return templates.TemplateResponse(request, "galleries/_image_grid.html", ctx)
 
 
 @router.get("/galleries/{gallery_id}/export")

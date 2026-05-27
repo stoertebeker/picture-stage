@@ -9,7 +9,7 @@ class StorageBackend(ABC):
         """Upload file, return the canonical storage key."""
 
     @abstractmethod
-    async def download_stream(self, key: str, chunk_size: int = 65536) -> AsyncIterator[bytes]:
+    def download_stream(self, key: str, chunk_size: int = 65536) -> AsyncIterator[bytes]:
         """Stream file content in chunks."""
 
     @abstractmethod

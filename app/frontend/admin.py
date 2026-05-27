@@ -32,6 +32,7 @@ async def admin_pending_signups(
     signups = list(result.scalars().all())
     csrf_token = request.cookies.get("csrf_token", "")
     return templates.TemplateResponse(
+        request,
         "admin/pending.html",
         {
             "request": request,

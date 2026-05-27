@@ -1,4 +1,5 @@
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,10 +11,10 @@ from app.selections.schemas import SelectionState
 async def get_current_selections(
     gallery_id: uuid.UUID, session_id: uuid.UUID, db: AsyncSession
 ) -> list[SelectionState]:
-    result = await db.execute(select(Image.id).where(Image.gallery_id == gallery_id).order_by(Image.sort_order))
-    image_ids = [row[0] for row in result.all()]
+    id_result = await db.execute(select(Image.id).where(Image.gallery_id == gallery_id).order_by(Image.sort_order))
+    image_ids = [row[0] for row in id_result.all()]
 
-    result = await db.execute(
+    evt_result = await db.execute(
         select(SelectionEvent)
         .where(
             SelectionEvent.share_session_id == session_id,
@@ -21,9 +22,9 @@ async def get_current_selections(
         )
         .order_by(SelectionEvent.created_at)
     )
-    events = result.scalars().all()
+    events = evt_result.scalars().all()
 
-    state: dict[uuid.UUID, dict] = {
+    state: dict[uuid.UUID, dict[str, Any]] = {
         img_id: {"selected": False, "favorited": False, "comment": None} for img_id in image_ids
     }
 

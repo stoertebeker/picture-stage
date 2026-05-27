@@ -3,6 +3,7 @@ import io
 from typing import BinaryIO
 
 from PIL import Image, ImageDraw, ImageFont
+from PIL.ImageFont import FreeTypeFont
 
 from app.config import settings
 
@@ -14,13 +15,12 @@ PREVIEW_SIZES = {
 
 
 def generate_thumbnail(image_data: BinaryIO, max_width: int) -> tuple[io.BytesIO, int, int]:
-    img = Image.open(image_data)
-    img = img.convert("RGB")
+    img = Image.open(image_data).convert("RGB")
 
     ratio = max_width / img.width
     if ratio < 1:
         new_height = int(img.height * ratio)
-        img = img.resize((max_width, new_height), Image.LANCZOS)
+        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
     buf = io.BytesIO()
     img.save(buf, format="WEBP", quality=85)
@@ -38,10 +38,11 @@ def apply_watermark(image_data: BinaryIO, text: str | None = None) -> io.BytesIO
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
+    font: FreeTypeFont
     try:
         font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=font_size)
     except OSError:
-        font = ImageFont.load_default(size=font_size)
+        font = ImageFont.load_default(size=font_size)  # type: ignore[assignment]
 
     bbox = draw.textbbox((0, 0), wm_text, font=font)
     text_width = bbox[2] - bbox[0]
@@ -66,24 +67,25 @@ def generate_preview_with_watermark(
     ratio = max_width / img.width
     if ratio < 1:
         new_height = int(img.height * ratio)
-        img = img.resize((max_width, new_height), Image.LANCZOS)
+        img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
     font_size = max(16, int(img.width * settings.watermark_font_size_ratio))
     overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
 
+    font2: FreeTypeFont
     try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=font_size)
+        font2 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=font_size)
     except OSError:
-        font = ImageFont.load_default(size=font_size)
+        font2 = ImageFont.load_default(size=font_size)  # type: ignore[assignment]
 
-    bbox = draw.textbbox((0, 0), watermark_text, font=font)
+    bbox = draw.textbbox((0, 0), watermark_text, font=font2)
     text_width = bbox[2] - bbox[0]
     text_height = bbox[3] - bbox[1]
     x = img.width - text_width - 20
     y = img.height - text_height - 20
 
-    draw.text((x, y), watermark_text, fill=(255, 255, 255, settings.watermark_opacity), font=font)
+    draw.text((x, y), watermark_text, fill=(255, 255, 255, settings.watermark_opacity), font=font2)
 
     composited = Image.alpha_composite(img, overlay).convert("RGB")
     buf = io.BytesIO()
@@ -92,7 +94,7 @@ def generate_preview_with_watermark(
     return buf, composited.width, composited.height
 
 
-def extract_exif(image_data: BinaryIO) -> dict:
+def extract_exif(image_data: BinaryIO) -> dict[str, str]:
     try:
         img = Image.open(image_data)
         exif_data = img.getexif()

@@ -58,8 +58,8 @@ async def upload_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> ImageUploadResponse:
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    gallery = result.scalar_one_or_none()
+    gal_result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
+    gallery = gal_result.scalar_one_or_none()
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
@@ -128,8 +128,8 @@ async def upload_images(
 
         await db.flush()
 
-        result = await db.execute(select(Image).where(Image.id == image_uuid).options(selectinload(Image.previews)))
-        loaded_image = result.scalar_one()
+        img_result = await db.execute(select(Image).where(Image.id == image_uuid).options(selectinload(Image.previews)))
+        loaded_image = img_result.scalar_one()
         uploaded_images.append(_image_to_response(loaded_image, storage))
 
     await db.commit()
@@ -144,17 +144,17 @@ async def list_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> list[ImageResponse]:
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    if result.scalar_one_or_none() is None:
+    gal_check = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
+    if gal_check.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    result = await db.execute(
+    img_result = await db.execute(
         select(Image)
         .where(Image.gallery_id == gallery_id)
         .options(selectinload(Image.previews))
         .order_by(Image.sort_order)
     )
-    images = result.scalars().all()
+    images = img_result.scalars().all()
 
     return [_image_to_response(img, storage) for img in images]
 
@@ -167,14 +167,14 @@ async def delete_image(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> None:
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    if result.scalar_one_or_none() is None:
+    gal_check = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
+    if gal_check.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    result = await db.execute(
+    img_result = await db.execute(
         select(Image).where(Image.id == image_id, Image.gallery_id == gallery_id).options(selectinload(Image.previews))
     )
-    image = result.scalar_one_or_none()
+    image = img_result.scalar_one_or_none()
     if image is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
@@ -203,19 +203,19 @@ async def bulk_delete_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> BulkDeleteResponse:
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    if result.scalar_one_or_none() is None:
+    gal_check = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
+    if gal_check.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     if not body.image_ids:
         return BulkDeleteResponse(deleted=0)
 
-    result = await db.execute(
+    img_result = await db.execute(
         select(Image)
         .where(Image.id.in_(body.image_ids), Image.gallery_id == gallery_id)
         .options(selectinload(Image.previews))
     )
-    images = result.scalars().all()
+    images = img_result.scalars().all()
 
     for image in images:
         try:

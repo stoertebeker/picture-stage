@@ -1,6 +1,6 @@
 """Frontend auth routes: login, signup, verify-email, logout."""
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,11 +22,12 @@ def _csrf_from_request(request: Request) -> str:
 
 
 @router.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
+async def login_page(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
     user = await get_user_from_cookie(request, db)
     if user is not None and user.status != UserStatus.pending:
         return RedirectResponse(url="/dashboard", status_code=303)
     return templates.TemplateResponse(
+        request,
         "auth/login.html",
         {"request": request, "csrf_token": _csrf_from_request(request), "error": None},
     )
@@ -34,13 +35,14 @@ async def login_page(request: Request, db: AsyncSession = Depends(get_db)) -> HT
 
 @router.post("/login", response_class=HTMLResponse)
 @limiter.limit("10/minute")
-async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
+async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
     form = await request.form()
     email = str(form.get("email", "")).strip()
     password = str(form.get("password", ""))
 
     if not email or not password:
         return templates.TemplateResponse(
+            request,
             "auth/login.html",
             {
                 "request": request,
@@ -55,6 +57,7 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
 
     if user is None or not verify_password(password, user.password_hash):
         return templates.TemplateResponse(
+            request,
             "auth/login.html",
             {"request": request, "csrf_token": _csrf_from_request(request), "error": "Invalid email or password."},
             status_code=401,
@@ -62,6 +65,7 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
 
     if user.status == UserStatus.pending:
         return templates.TemplateResponse(
+            request,
             "auth/login.html",
             {
                 "request": request,
@@ -88,6 +92,7 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
 @router.get("/signup", response_class=HTMLResponse)
 async def signup_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
+        request,
         "auth/signup.html",
         {"request": request, "csrf_token": _csrf_from_request(request), "error": None, "success": False},
     )
@@ -105,27 +110,27 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
 
     if not email or not password:
         ctx["error"] = "Email and password are required."
-        return templates.TemplateResponse("auth/signup.html", ctx, status_code=422)
+        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
     if password != password_confirm:
         ctx["error"] = "Passwords do not match."
-        return templates.TemplateResponse("auth/signup.html", ctx, status_code=422)
+        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
     if len(password) < 8:
         ctx["error"] = "Password must be at least 8 characters."
-        return templates.TemplateResponse("auth/signup.html", ctx, status_code=422)
+        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
     # Check for existing user
     existing_user = await db.execute(select(User).where(User.email == email))
     if existing_user.scalar_one_or_none() is not None:
         ctx["error"] = "Email already registered."
-        return templates.TemplateResponse("auth/signup.html", ctx, status_code=409)
+        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=409)
 
     # Check for existing pending signup
     existing_signup = await db.execute(select(PendingSignup).where(PendingSignup.email == email))
     if existing_signup.scalar_one_or_none() is not None:
         ctx["error"] = "Signup already pending."
-        return templates.TemplateResponse("auth/signup.html", ctx, status_code=409)
+        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=409)
 
     verification_token = generate_verification_token()
     token_hash, token_salt = hash_token(verification_token)
@@ -141,7 +146,7 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
 
     # TODO: send verification email via SMTP
     ctx["success"] = True
-    return templates.TemplateResponse("auth/signup.html", ctx)
+    return templates.TemplateResponse(request, "auth/signup.html", ctx)
 
 
 @router.post("/logout")
@@ -164,6 +169,7 @@ async def verify_email_page(request: Request, token: str, db: AsyncSession = Dep
 
     if matched_signup is None:
         return templates.TemplateResponse(
+            request,
             "auth/verify.html",
             {"request": request, "success": False, "error": "Invalid or expired verification token."},
             status_code=404,
@@ -175,6 +181,7 @@ async def verify_email_page(request: Request, token: str, db: AsyncSession = Dep
     await db.commit()
 
     return templates.TemplateResponse(
+        request,
         "auth/verify.html",
         {"request": request, "success": True, "error": None},
     )

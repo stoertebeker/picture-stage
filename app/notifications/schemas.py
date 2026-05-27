@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, HttpUrl, field_validator
 
@@ -38,7 +39,7 @@ class NotificationConfigResponse(BaseModel):
     id: int
     email_enabled: bool
     webhook_url: str | None
-    events: dict
+    events: dict[str, Any]
     created_at: datetime
     updated_at: datetime
 

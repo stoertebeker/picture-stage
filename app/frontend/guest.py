@@ -4,6 +4,7 @@ import enum
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -70,7 +71,7 @@ def _check_gallery_accessible(gallery: Gallery) -> None:
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gallery link has expired")
 
 
-def _parse_exif_date(exif: dict | None) -> datetime | None:
+def _parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:
     """Parse EXIF date from image metadata."""
     if not exif:
         return None
@@ -90,9 +91,9 @@ async def _load_images(
     sort_dir: SortDirection = SortDirection.asc,
     filter_mode: ImageFilter = ImageFilter.all,
     session_id: uuid.UUID | None = None,
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     """Load images for a gallery with sorting, filtering, and signed URLs."""
-    order_col = Image.sort_order
+    order_col: Any = Image.sort_order
     if sort_by == ImageSortBy.filename:
         order_col = Image.filename
     order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
@@ -110,7 +111,7 @@ async def _load_images(
         )
 
     # Build selection map for filtering
-    sel_map: dict[uuid.UUID, dict] = {}
+    sel_map: dict[uuid.UUID, dict[str, Any]] = {}
     if session_id is not None:
         selections = await get_current_selections(gallery.id, session_id, db)
         sel_map = {
@@ -194,6 +195,7 @@ async def guest_viewer(
     if requires_password:
         # Show password prompt — no session yet
         return templates.TemplateResponse(
+            request,
             "guest/viewer.html",
             {
                 "request": request,
@@ -227,6 +229,7 @@ async def guest_viewer(
     favorited_count = sum(1 for img in images if img["favorited"])
 
     return templates.TemplateResponse(
+        request,
         "guest/viewer.html",
         {
             "request": request,
@@ -268,6 +271,7 @@ async def guest_gallery_images(
     favorited_count = sum(1 for img in images if img["favorited"])
 
     return templates.TemplateResponse(
+        request,
         "guest/_image_grid.html",
         {
             "request": request,
@@ -300,6 +304,7 @@ async def guest_verify_password(
 
     if not gallery.password_hash or not verify_password(password, gallery.password_hash):
         return templates.TemplateResponse(
+            request,
             "guest/_password.html",
             {
                 "request": request,
@@ -323,6 +328,7 @@ async def guest_verify_password(
     favorited_count = sum(1 for img in images if img["favorited"])
 
     return templates.TemplateResponse(
+        request,
         "guest/_image_grid.html",
         {
             "request": request,

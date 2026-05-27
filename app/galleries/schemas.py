@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -8,12 +9,12 @@ from app.db.models import GalleryPhase, GalleryStatus
 
 class GalleryCreate(BaseModel):
     name: str
-    watermark_config: dict | None = None
+    watermark_config: dict[str, Any] | None = None
 
 
 class GalleryUpdate(BaseModel):
     name: str | None = None
-    watermark_config: dict | None = None
+    watermark_config: dict[str, Any] | None = None
     expires_at: datetime | None = None
 
 
@@ -26,7 +27,7 @@ class GalleryResponse(BaseModel):
     name: str
     phase: GalleryPhase
     status: GalleryStatus
-    watermark_config: dict | None
+    watermark_config: dict[str, Any] | None
     expires_at: datetime | None
     has_share_token: bool
     image_count: int

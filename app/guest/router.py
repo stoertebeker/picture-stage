@@ -2,6 +2,7 @@ import enum
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
@@ -175,7 +176,7 @@ async def verify_gallery_password(
     )
 
 
-def _parse_exif_date(exif: dict | None) -> datetime | None:
+def _parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:
     if not exif:
         return None
     raw = exif.get("DateTimeOriginal") or exif.get("DateTime")
@@ -208,7 +209,7 @@ async def list_shared_images(
             detail="session_id is required when using filters",
         )
 
-    order_col = Image.sort_order
+    order_col: Any = Image.sort_order
     if sort_by == ImageSortBy.filename:
         order_col = Image.filename
     order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()

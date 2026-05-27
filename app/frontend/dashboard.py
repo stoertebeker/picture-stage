@@ -1,6 +1,7 @@
 """Frontend dashboard: gallery list with status and progress."""
 
 import logging
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -47,6 +48,7 @@ async def dashboard(
 
     csrf_token = request.cookies.get("csrf_token", "")
     return templates.TemplateResponse(
+        request,
         "dashboard/index.html",
         {
             "request": request,
@@ -85,6 +87,7 @@ async def create_gallery(
 
     csrf_token = request.cookies.get("csrf_token", "")
     return templates.TemplateResponse(
+        request,
         "dashboard/_gallery_card.html",
         {
             "request": request,
@@ -94,12 +97,12 @@ async def create_gallery(
     )
 
 
-async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict]:
+async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict[str, Any]]:
     """Load galleries with image counts and selection progress for the dashboard."""
     result = await db.execute(select(Gallery).where(Gallery.owner_id == user.id).order_by(Gallery.updated_at.desc()))
     galleries = result.scalars().all()
 
-    gallery_data: list[dict] = []
+    gallery_data: list[dict[str, Any]] = []
     for gallery in galleries:
         # Image count
         img_count_result = await db.execute(

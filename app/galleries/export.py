@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import uuid
+from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from fastapi.responses import StreamingResponse
@@ -15,18 +16,18 @@ from app.db.session import get_db
 router = APIRouter(prefix="/api/v1/galleries", tags=["export"])
 
 
-async def _get_materialized_selections(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict]:
-    result = await db.execute(select(Image).where(Image.gallery_id == gallery_id).order_by(Image.sort_order))
-    images = result.scalars().all()
+async def _get_materialized_selections(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict[str, Any]]:
+    img_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id).order_by(Image.sort_order))
+    images = img_result.scalars().all()
 
-    result = await db.execute(
+    evt_result = await db.execute(
         select(SelectionEvent)
         .where(SelectionEvent.image_id.in_([img.id for img in images]))
         .order_by(SelectionEvent.created_at)
     )
-    events = result.scalars().all()
+    events = evt_result.scalars().all()
 
-    state: dict[uuid.UUID, dict] = {}
+    state: dict[uuid.UUID, dict[str, Any]] = {}
     for img in images:
         state[img.id] = {
             "filename": img.filename,

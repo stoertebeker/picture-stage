@@ -1,6 +1,7 @@
 import enum
 import uuid
 from datetime import datetime
+from typing import Any
 
 from sqlalchemy import (
     Boolean,
@@ -88,7 +89,7 @@ class Gallery(TimestampMixin, Base):
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
-    watermark_config: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    watermark_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
     owner: Mapped["User"] = relationship(back_populates="galleries")
     images: Mapped[list["Image"]] = relationship(back_populates="gallery", cascade="all, delete-orphan")
@@ -110,7 +111,7 @@ class Image(TimestampMixin, Base):
     height: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    exif: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    exif: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     gallery: Mapped["Gallery"] = relationship(back_populates="images")
@@ -190,7 +191,7 @@ class AuditLog(Base):
     actor_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
-    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
@@ -207,7 +208,7 @@ class NotificationConfig(TimestampMixin, Base):
     )
     email_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     webhook_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
-    events: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    events: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     user: Mapped["User"] = relationship(back_populates="notification_configs")
     deliveries: Mapped[list["NotificationDelivery"]] = relationship(
