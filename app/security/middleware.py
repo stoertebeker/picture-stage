@@ -30,8 +30,8 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 response.set_cookie(
                     key="csrf_token",
                     value=csrf_token,
-                    httponly=False,  # JS needs to read this
-                    secure=True,
+                    httponly=False,
+                    secure=request.url.scheme == "https",
                     samesite="lax",
                     path="/",
                 )

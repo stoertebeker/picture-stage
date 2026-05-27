@@ -113,7 +113,7 @@ async def login_form(request: Request, db: AsyncSession = Depends(get_db)) -> Re
         key="session",
         value=access_token,
         httponly=True,
-        secure=True,
+        secure=request.url.scheme == "https",
         samesite="lax",
         max_age=86400,
         path="/",
