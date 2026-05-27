@@ -1,5 +1,6 @@
 import secrets
 from typing import ClassVar
+from urllib.parse import parse_qs
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -42,17 +43,16 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if not cookie_token:
             return Response("CSRF token missing", status_code=403)
 
-        # Check form field first, then header
-        form_token = None
+        # Check header first, then form body (without consuming request.form())
         header_token = request.headers.get("X-CSRF-Token")
+        form_token = None
 
-        if request.headers.get("content-type", "").startswith(
-            "application/x-www-form-urlencoded"
-        ) or request.headers.get("content-type", "").startswith("multipart/form-data"):
-            form = await request.form()
-            form_token = form.get("csrf_token")
+        if not header_token and request.headers.get("content-type", "").startswith("application/x-www-form-urlencoded"):
+            body = await request.body()
+            params = parse_qs(body.decode("utf-8", errors="replace"))
+            form_token = params.get("csrf_token", [None])[0]
 
-        submitted_token = form_token or header_token
+        submitted_token = header_token or form_token
 
         if not submitted_token or submitted_token != cookie_token:
             return Response("CSRF token mismatch", status_code=403)
