@@ -54,9 +54,13 @@ def test_gallery_card_has_quick_actions():
 
 
 def test_dashboard_has_empty_state():
-    """Check that dashboard template has an empty state message."""
+    """Check that dashboard template has an empty state message (via i18n key)."""
+    import json
+
     index_html = (PROJECT_ROOT / "app" / "templates" / "dashboard" / "index.html").read_text()
-    assert "Noch keine Galerien" in index_html
+    assert "t('dashboard.no_galleries_title')" in index_html
+    de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())
+    assert de["dashboard"]["no_galleries_title"] == "Noch keine Galerien"
 
 
 def test_dashboard_router_registered():

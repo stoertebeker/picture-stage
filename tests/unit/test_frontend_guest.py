@@ -42,9 +42,13 @@ def test_guest_viewer_has_selection_toolbar():
 
 
 def test_guest_viewer_has_complete_button():
-    """Guest viewer has a 'Bewertung abschließen' button."""
+    """Guest viewer has a 'Bewertung abschließen' button (via i18n key)."""
+    import json
+
     viewer_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "viewer.html").read_text()
-    assert "abschließen" in viewer_html.lower() or "abschliessen" in viewer_html.lower()
+    assert "t('guest.complete_button')" in viewer_html
+    de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())
+    assert "abschließen" in de["guest"]["complete_button"].lower()
 
 
 def test_guest_password_template_exists():
