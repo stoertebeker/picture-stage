@@ -4,6 +4,7 @@ import logging
 import math
 import re
 import uuid
+from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
@@ -471,7 +472,7 @@ async def export_audit_log(
     result = await db.execute(stmt)
     entries = result.scalars().all()
 
-    def generate_csv():
+    def generate_csv() -> Iterator[str]:
         output = io.StringIO()
         writer = csv.writer(output)
         writer.writerow(

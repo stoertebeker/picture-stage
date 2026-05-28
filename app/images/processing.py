@@ -117,8 +117,8 @@ def apply_watermark(
         font = ImageFont.load_default(size=font_size)  # type: ignore[assignment]
 
     bbox = draw.textbbox((0, 0), wm_text, font=font)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
+    text_width = int(bbox[2] - bbox[0])
+    text_height = int(bbox[3] - bbox[1])
     x, y = _calculate_text_position(position, img.width, img.height, text_width, text_height)
 
     draw.text((x, y), wm_text, fill=(255, 255, 255, opacity_alpha), font=font)
@@ -160,8 +160,8 @@ def generate_preview_with_watermark(
         font2 = ImageFont.load_default(size=font_size)  # type: ignore[assignment]
 
     bbox = draw.textbbox((0, 0), wm_text, font=font2)
-    text_width = bbox[2] - bbox[0]
-    text_height = bbox[3] - bbox[1]
+    text_width = int(bbox[2] - bbox[0])
+    text_height = int(bbox[3] - bbox[1])
     x, y = _calculate_text_position(position, img.width, img.height, text_width, text_height)
 
     draw.text((x, y), wm_text, fill=(255, 255, 255, opacity_alpha), font=font2)

@@ -88,7 +88,7 @@ def detect_locale(request: Request) -> str:
     if user is not None:
         user_locale = getattr(user, "locale", None)
         if user_locale and user_locale in _SUPPORTED_LOCALES:
-            return user_locale
+            return str(user_locale)
 
     # 2. Check "lang" cookie
     lang_cookie = request.cookies.get("lang")

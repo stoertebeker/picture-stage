@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -489,7 +489,7 @@ async def delete_gallery(
     user: User = Depends(require_authenticated_page),
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
-) -> RedirectResponse:
+) -> Response:
     """Delete a gallery after name confirmation. Redirects to dashboard."""
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
