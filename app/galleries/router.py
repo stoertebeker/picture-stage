@@ -48,6 +48,13 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1/galleries", tags=["galleries"])
 
 
+def _sanitize_filename(name: str) -> str:
+    """Strip a user-supplied name down to chars safe for a Content-Disposition
+    filename. Allows word chars, plain space, and hyphen only — excludes CR/LF
+    and other whitespace to prevent header injection (\\s would keep newlines)."""
+    return re.sub(r"[^\w -]", "", name).strip()
+
+
 def _gallery_to_response(gallery: Gallery, image_count: int) -> GalleryResponse:
     return GalleryResponse(
         id=gallery.id,
@@ -508,7 +515,7 @@ async def export_audit_log(
             output.seek(0)
             output.truncate(0)
 
-    safe_name = re.sub(r"[^\w\s-]", "", gallery.name).strip()
+    safe_name = _sanitize_filename(gallery.name)
     return StreamingResponse(
         generate_csv(),
         media_type="text/csv",
