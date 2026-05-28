@@ -500,7 +500,10 @@ async def delete_gallery(
         # Name mismatch — re-render detail page with error
         images = await _load_images_with_signed_urls(gallery_id, db)
         ctx = _build_context(
-            request, gallery, images, user,
+            request,
+            gallery,
+            images,
+            user,
             delete_error="Der eingegebene Name stimmt nicht mit dem Galerienamen ueberein.",
         )
         return templates.TemplateResponse(request, "galleries/detail.html", ctx)
@@ -516,9 +519,7 @@ async def delete_gallery(
     await db.flush()
 
     # 2. Delete image files from storage (best-effort)
-    result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews))
-    )
+    result = await db.execute(select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)))
     images_to_delete = result.scalars().all()
     for image in images_to_delete:
         try:
@@ -534,9 +535,7 @@ async def delete_gallery(
     # 3. Delete DB records in dependency order
     # Delete image_previews
     await db.execute(
-        sa_delete(ImagePreview).where(
-            ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
-        )
+        sa_delete(ImagePreview).where(ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id)))
     )
     # Delete selection_events
     await db.execute(
@@ -548,14 +547,10 @@ async def delete_gallery(
     await db.execute(sa_delete(ShareSession).where(ShareSession.gallery_id == gallery.id))
     # Anonymize audit_log entries
     await db.execute(
-        sa_update(AuditLog)
-        .where(AuditLog.gallery_id == gallery.id)
-        .values(ip_address=None, user_agent=None)
+        sa_update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(ip_address=None, user_agent=None)
     )
     # Detach audit_log from gallery
-    await db.execute(
-        sa_update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None)
-    )
+    await db.execute(sa_update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None))
     # Delete images
     await db.execute(sa_delete(Image).where(Image.gallery_id == gallery.id))
     # Delete gallery
@@ -608,9 +603,7 @@ async def gallery_audit_log(
     # Total count
     from sqlalchemy import func as sa_func
 
-    count_result = await db.execute(
-        select(sa_func.count()).select_from(AuditLog).where(*conditions)
-    )
+    count_result = await db.execute(select(sa_func.count()).select_from(AuditLog).where(*conditions))
     total = count_result.scalar() or 0
     total_pages = max(1, math.ceil(total / per_page))
     page = max(1, min(page, total_pages))
@@ -618,20 +611,13 @@ async def gallery_audit_log(
     # Fetch entries
     offset = (page - 1) * per_page
     result = await db.execute(
-        select(AuditLog)
-        .where(*conditions)
-        .order_by(AuditLog.created_at.desc())
-        .offset(offset)
-        .limit(per_page)
+        select(AuditLog).where(*conditions).order_by(AuditLog.created_at.desc()).offset(offset).limit(per_page)
     )
     entries = result.scalars().all()
 
     # Get distinct event types for filter dropdown
     event_types_result = await db.execute(
-        select(AuditLog.event_type)
-        .where(AuditLog.gallery_id == gallery_id)
-        .distinct()
-        .order_by(AuditLog.event_type)
+        select(AuditLog.event_type).where(AuditLog.gallery_id == gallery_id).distinct().order_by(AuditLog.event_type)
     )
     event_types = [row[0] for row in event_types_result.all()]
 

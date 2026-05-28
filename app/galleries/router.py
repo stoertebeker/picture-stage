@@ -241,9 +241,7 @@ async def delete_gallery(
     await db.flush()
 
     # 2. Delete image files from storage (best-effort: log warnings on failure)
-    result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews))
-    )
+    result = await db.execute(select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)))
     images = result.scalars().all()
     for image in images:
         try:
@@ -259,9 +257,7 @@ async def delete_gallery(
     # 3. Delete DB records in dependency order
     # Delete image_previews
     await db.execute(
-        delete(ImagePreview).where(
-            ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
-        )
+        delete(ImagePreview).where(ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id)))
     )
     # Delete selection_events
     await db.execute(
@@ -272,15 +268,9 @@ async def delete_gallery(
     # Delete share_sessions (selection_events referencing sessions already deleted above)
     await db.execute(delete(ShareSession).where(ShareSession.gallery_id == gallery.id))
     # Anonymize audit_log entries: keep event_type + timestamps, remove PII
-    await db.execute(
-        update(AuditLog)
-        .where(AuditLog.gallery_id == gallery.id)
-        .values(ip_address=None, user_agent=None)
-    )
+    await db.execute(update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(ip_address=None, user_agent=None))
     # Detach audit_log from gallery (FK is SET NULL, but we do it explicitly before delete)
-    await db.execute(
-        update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None)
-    )
+    await db.execute(update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None))
     # Delete images
     await db.execute(delete(Image).where(Image.gallery_id == gallery.id))
     # Delete gallery
@@ -443,13 +433,7 @@ async def get_audit_log(
 
     # Fetch page
     offset = (page - 1) * per_page
-    stmt = (
-        select(AuditLog)
-        .where(*conditions)
-        .order_by(AuditLog.created_at.desc())
-        .offset(offset)
-        .limit(per_page)
-    )
+    stmt = select(AuditLog).where(*conditions).order_by(AuditLog.created_at.desc()).offset(offset).limit(per_page)
     result = await db.execute(stmt)
     entries = result.scalars().all()
 
@@ -483,41 +467,47 @@ async def export_audit_log(
     """Export all audit log entries for a gallery as CSV (owner only)."""
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
-    stmt = (
-        select(AuditLog)
-        .where(AuditLog.gallery_id == gallery_id)
-        .order_by(AuditLog.created_at.desc())
-    )
+    stmt = select(AuditLog).where(AuditLog.gallery_id == gallery_id).order_by(AuditLog.created_at.desc())
     result = await db.execute(stmt)
     entries = result.scalars().all()
 
     def generate_csv():
         output = io.StringIO()
         writer = csv.writer(output)
-        writer.writerow([
-            "id", "event_type", "actor_user_id", "actor_session_id",
-            "ip_address", "user_agent", "details", "created_at",
-        ])
+        writer.writerow(
+            [
+                "id",
+                "event_type",
+                "actor_user_id",
+                "actor_session_id",
+                "ip_address",
+                "user_agent",
+                "details",
+                "created_at",
+            ]
+        )
         yield output.getvalue()
         output.seek(0)
         output.truncate(0)
 
         for entry in entries:
-            writer.writerow([
-                entry.id,
-                entry.event_type,
-                str(entry.actor_user_id) if entry.actor_user_id else "",
-                str(entry.actor_session_id) if entry.actor_session_id else "",
-                entry.ip_address or "",
-                entry.user_agent or "",
-                str(entry.details) if entry.details else "",
-                entry.created_at.isoformat(),
-            ])
+            writer.writerow(
+                [
+                    entry.id,
+                    entry.event_type,
+                    str(entry.actor_user_id) if entry.actor_user_id else "",
+                    str(entry.actor_session_id) if entry.actor_session_id else "",
+                    entry.ip_address or "",
+                    entry.user_agent or "",
+                    str(entry.details) if entry.details else "",
+                    entry.created_at.isoformat(),
+                ]
+            )
             yield output.getvalue()
             output.seek(0)
             output.truncate(0)
 
-    safe_name = re.sub(r'[^\w\s-]', '', gallery.name).strip()
+    safe_name = re.sub(r"[^\w\s-]", "", gallery.name).strip()
     return StreamingResponse(
         generate_csv(),
         media_type="text/csv",

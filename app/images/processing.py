@@ -102,9 +102,7 @@ def apply_watermark(
 ) -> io.BytesIO:
     img = Image.open(image_data).convert("RGBA")
 
-    wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(
-        watermark_config, gallery_id, img.width
-    )
+    wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(watermark_config, gallery_id, img.width)
     # Legacy: explicit text parameter overrides config
     if text:
         wm_text = text
@@ -147,9 +145,7 @@ def generate_preview_with_watermark(
         new_height = int(img.height * ratio)
         img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
-    wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(
-        watermark_config, gallery_id, img.width
-    )
+    wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(watermark_config, gallery_id, img.width)
     # Legacy: explicit watermark_text parameter overrides config-resolved text
     if watermark_text:
         wm_text = watermark_text

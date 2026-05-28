@@ -30,20 +30,16 @@ def _minimal_md_to_html(text: str) -> str:
     """
     text = _HTML_TAG_RE.sub("", text)
     text = html.escape(text)
-    text = _HEADING_RE.sub(
-        lambda m: f"<h{len(m.group(1))}>{m.group(2)}</h{len(m.group(1))}>", text
-    )
+    text = _HEADING_RE.sub(lambda m: f"<h{len(m.group(1))}>{m.group(2)}</h{len(m.group(1))}>", text)
     text = _BOLD_RE.sub(r"<strong>\1</strong>", text)
     text = _ITALIC_RE.sub(r"<em>\1</em>", text)
+
     def _safe_link(m: re.Match[str]) -> str:
         label, url = m.group(1), m.group(2)
         url_lower = url.strip().lower()
         if url_lower.startswith(("javascript:", "data:", "vbscript:")):
             return label
-        if not (
-            url_lower.startswith(("http:", "https:", "mailto:", "tel:"))
-            or url.startswith(("/", "#", "?"))
-        ):
+        if not (url_lower.startswith(("http:", "https:", "mailto:", "tel:")) or url.startswith(("/", "#", "?"))):
             return label
         return f'<a href="{url}" rel="noopener noreferrer">{label}</a>'
 

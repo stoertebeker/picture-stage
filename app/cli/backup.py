@@ -34,6 +34,7 @@ APP_VERSION = "0.1.0"
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _parse_database_url(url: str) -> dict[str, str]:
     """Parse DATABASE_URL into pg connection params.
 
@@ -74,15 +75,14 @@ def _safe_tar_extract(tar: tarfile.TarFile, dest: Path) -> None:
     for member in tar.getmembers():
         member_path = (dest / member.name).resolve()
         if not str(member_path).startswith(str(dest_resolved)):
-            raise ValueError(
-                f"Refusing to extract {member.name!r}: path traversal detected"
-            )
+            raise ValueError(f"Refusing to extract {member.name!r}: path traversal detected")
     tar.extractall(dest, filter="data")
 
 
 # ---------------------------------------------------------------------------
 # Backup
 # ---------------------------------------------------------------------------
+
 
 def cmd_backup(args: argparse.Namespace) -> int:
     """Create a backup archive."""
@@ -105,12 +105,17 @@ def cmd_backup(args: argparse.Namespace) -> int:
 
     # --- Verify DB connectivity ---
     try:
-        subprocess.run(            [
+        subprocess.run(
+            [
                 "pg_isready",
-                "-h", db["host"],
-                "-p", db["port"],
-                "-U", db["user"],
-                "-d", db["dbname"],
+                "-h",
+                db["host"],
+                "-p",
+                db["port"],
+                "-U",
+                db["user"],
+                "-d",
+                db["dbname"],
             ],
             env=_pg_env(db),
             check=True,
@@ -129,15 +134,21 @@ def cmd_backup(args: argparse.Namespace) -> int:
         print("[backup] Dumping database …")
         dump_path = tmp / "db.sql"
         try:
-            subprocess.run(                [
+            subprocess.run(
+                [
                     "pg_dump",
-                    "-h", db["host"],
-                    "-p", db["port"],
-                    "-U", db["user"],
-                    "-d", db["dbname"],
+                    "-h",
+                    db["host"],
+                    "-p",
+                    db["port"],
+                    "-U",
+                    db["user"],
+                    "-d",
+                    db["dbname"],
                     "--no-owner",
                     "--no-acl",
-                    "-f", str(dump_path),
+                    "-f",
+                    str(dump_path),
                 ],
                 env=_pg_env(db),
                 check=True,
@@ -172,7 +183,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
                 "endpoint": settings.s3_endpoint_url,
                 "region": settings.s3_region,
                 "note": "Image files are stored in S3 and NOT included in this archive. "
-                        "Ensure the S3 bucket is backed up separately.",
+                "Ensure the S3 bucket is backed up separately.",
             }
             manifest_path = tmp / "manifest.json"
             manifest_path.write_text(json.dumps(manifest, indent=2))
@@ -209,6 +220,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
 # ---------------------------------------------------------------------------
 # Restore
 # ---------------------------------------------------------------------------
+
 
 def cmd_restore(args: argparse.Namespace) -> int:
     """Restore from a backup archive."""
@@ -250,8 +262,10 @@ def cmd_restore(args: argparse.Namespace) -> int:
             return 1
 
         metadata = json.loads(metadata_path.read_text())
-        print(f"[restore] Backup from {metadata.get('timestamp', 'unknown')} "
-              f"(app v{metadata.get('app_version', '?')}, storage: {metadata.get('storage_type', '?')})")
+        print(
+            f"[restore] Backup from {metadata.get('timestamp', 'unknown')} "
+            f"(app v{metadata.get('app_version', '?')}, storage: {metadata.get('storage_type', '?')})"
+        )
 
         dump_path = tmp / "db.sql"
         if not dump_path.exists():
@@ -260,15 +274,21 @@ def cmd_restore(args: argparse.Namespace) -> int:
 
         # --- Warn if DB is non-empty ---
         try:
-            result = subprocess.run(                [
+            result = subprocess.run(
+                [
                     "psql",
-                    "-h", db["host"],
-                    "-p", db["port"],
-                    "-U", db["user"],
-                    "-d", db["dbname"],
-                    "-t", "-A",
-                    "-c", "SELECT count(*) FROM information_schema.tables "
-                          "WHERE table_schema = 'public';",
+                    "-h",
+                    db["host"],
+                    "-p",
+                    db["port"],
+                    "-U",
+                    db["user"],
+                    "-d",
+                    db["dbname"],
+                    "-t",
+                    "-A",
+                    "-c",
+                    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';",
                 ],
                 env=_pg_env(db),
                 check=True,
@@ -277,21 +297,29 @@ def cmd_restore(args: argparse.Namespace) -> int:
             )
             table_count = int(result.stdout.strip())
             if table_count > 0:
-                print(f"[restore] WARNING: Target database has {table_count} existing table(s). "
-                      "Restore will overwrite data.")
+                print(
+                    f"[restore] WARNING: Target database has {table_count} existing table(s). "
+                    "Restore will overwrite data."
+                )
         except (FileNotFoundError, subprocess.CalledProcessError):
             print("[restore] WARNING: Could not check if database is empty (psql unavailable).")
 
         # --- Restore database ---
         print("[restore] Restoring database …")
         try:
-            subprocess.run(                [
+            subprocess.run(
+                [
                     "psql",
-                    "-h", db["host"],
-                    "-p", db["port"],
-                    "-U", db["user"],
-                    "-d", db["dbname"],
-                    "-f", str(dump_path),
+                    "-h",
+                    db["host"],
+                    "-p",
+                    db["port"],
+                    "-U",
+                    db["user"],
+                    "-d",
+                    db["dbname"],
+                    "-f",
+                    str(dump_path),
                 ],
                 env=_pg_env(db),
                 check=True,
@@ -346,6 +374,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
 # CLI entry point
 # ---------------------------------------------------------------------------
 
+
 def main() -> None:
     """CLI entry point for ``picture-stage`` console script."""
     parser = argparse.ArgumentParser(
@@ -357,14 +386,16 @@ def main() -> None:
     # -- backup --
     p_backup = sub.add_parser("backup", help="Create a backup archive")
     p_backup.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         help="Output path for the archive (default: picture-stage-backup-<timestamp>.tar.gz)",
     )
 
     # -- restore --
     p_restore = sub.add_parser("restore", help="Restore from a backup archive")
     p_restore.add_argument(
-        "--input", "-i",
+        "--input",
+        "-i",
         required=True,
         help="Path to the backup archive",
     )
