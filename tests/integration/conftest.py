@@ -60,6 +60,17 @@ async def db():
 
 
 @pytest_asyncio.fixture
+async def verify_db():
+    """A second, fresh session for post-request assertions.
+
+    Using a separate session avoids stale reads from the arrange-session's
+    identity map and avoids lazy-load surprises on expired ORM objects.
+    """
+    async with TestSession() as session:
+        yield session
+
+
+@pytest_asyncio.fixture
 async def client():
     """In-process HTTP client (no real network, no lifespan)."""
     transport = ASGITransport(app=app)

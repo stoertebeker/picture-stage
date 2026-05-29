@@ -19,19 +19,18 @@ async def _make_gallery(db, owner_id, name="Test-Galerie") -> Gallery:
     return gallery
 
 
-async def test_delete_removes_gallery_record(client, db, owner, auth_headers):
+async def test_delete_removes_gallery_record(client, db, owner, auth_headers, verify_db):
     gallery = await _make_gallery(db, owner.id)
-    gid = gallery.id  # capture before any expire/rollback to avoid a lazy reload
+    gid = gallery.id
 
     resp = await client.delete(f"/api/v1/galleries/{gid}", headers=auth_headers(owner))
     assert resp.status_code == 204
 
-    await db.rollback()  # drop our snapshot so the committed delete is visible
-    found = (await db.execute(select(Gallery).where(Gallery.id == gid))).scalar_one_or_none()
+    found = (await verify_db.execute(select(Gallery).where(Gallery.id == gid))).scalar_one_or_none()
     assert found is None, "Gallery row should be gone after deletion"
 
 
-async def test_delete_anonymizes_audit_log(client, db, owner, auth_headers):
+async def test_delete_anonymizes_audit_log(client, db, owner, auth_headers, verify_db):
     gallery = await _make_gallery(db, owner.id)
     # Pre-existing audit entry with PII
     entry = AuditLog(
@@ -46,8 +45,7 @@ async def test_delete_anonymizes_audit_log(client, db, owner, auth_headers):
     resp = await client.delete(f"/api/v1/galleries/{gallery.id}", headers=auth_headers(owner))
     assert resp.status_code == 204
 
-    await db.rollback()
-    rows = (await db.execute(select(AuditLog))).scalars().all()
+    rows = (await verify_db.execute(select(AuditLog))).scalars().all()
     # Audit rows survive deletion (compliance trail), but PII is stripped and
     # the gallery reference is detached.
     assert len(rows) >= 1, "Audit entries must survive gallery deletion"
@@ -61,7 +59,7 @@ async def test_delete_anonymizes_audit_log(client, db, owner, auth_headers):
     assert "gallery_deleted" in event_types
 
 
-async def test_delete_tenant_isolation(client, db, owner, other_user, auth_headers):
+async def test_delete_tenant_isolation(client, db, owner, other_user, auth_headers, verify_db):
     gallery = await _make_gallery(db, owner.id)
     gid = gallery.id
 
@@ -69,8 +67,7 @@ async def test_delete_tenant_isolation(client, db, owner, other_user, auth_heade
     resp = await client.delete(f"/api/v1/galleries/{gid}", headers=auth_headers(other_user))
     assert resp.status_code == 404
 
-    await db.rollback()
-    found = (await db.execute(select(Gallery).where(Gallery.id == gid))).scalar_one_or_none()
+    found = (await verify_db.execute(select(Gallery).where(Gallery.id == gid))).scalar_one_or_none()
     assert found is not None, "Gallery must still exist after a foreign deletion attempt"
 
 
