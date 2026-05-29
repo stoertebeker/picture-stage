@@ -185,8 +185,10 @@ else:
     bad("Override", f"text={text2!r} pos={pos2!r}")
 
 # Position-Berechnung: 5 Positionen liefern unterschiedliche Koordinaten
-positions = {p: _calculate_text_position(p, 1000, 800, 100, 50) for p in
-             ["top-left", "top-right", "bottom-left", "bottom-right", "center"]}
+positions = {
+    p: _calculate_text_position(p, 1000, 800, 100, 50)
+    for p in ["top-left", "top-right", "bottom-left", "bottom-right", "center"]
+}
 if len({v for v in positions.values()}) == 5:
     ok("5 Wasserzeichen-Positionen liefern distinkte Koordinaten")
 else:
@@ -240,6 +242,7 @@ with tempfile.TemporaryDirectory() as td:
         info = tarfile.TarInfo(name="../../etc/passwd_escape")
         data = b"x"
         import io as _io
+
         info.size = len(data)
         tar.addfile(info, _io.BytesIO(data))
     dest = tdp / "out"
