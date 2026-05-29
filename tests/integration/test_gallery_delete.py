@@ -21,12 +21,13 @@ async def _make_gallery(db, owner_id, name="Test-Galerie") -> Gallery:
 
 async def test_delete_removes_gallery_record(client, db, owner, auth_headers):
     gallery = await _make_gallery(db, owner.id)
+    gid = gallery.id  # capture before any expire/rollback to avoid a lazy reload
 
-    resp = await client.delete(f"/api/v1/galleries/{gallery.id}", headers=auth_headers(owner))
+    resp = await client.delete(f"/api/v1/galleries/{gid}", headers=auth_headers(owner))
     assert resp.status_code == 204
 
-    db.expire_all()
-    found = (await db.execute(select(Gallery).where(Gallery.id == gallery.id))).scalar_one_or_none()
+    await db.rollback()  # drop our snapshot so the committed delete is visible
+    found = (await db.execute(select(Gallery).where(Gallery.id == gid))).scalar_one_or_none()
     assert found is None, "Gallery row should be gone after deletion"
 
 
@@ -45,7 +46,7 @@ async def test_delete_anonymizes_audit_log(client, db, owner, auth_headers):
     resp = await client.delete(f"/api/v1/galleries/{gallery.id}", headers=auth_headers(owner))
     assert resp.status_code == 204
 
-    db.expire_all()
+    await db.rollback()
     rows = (await db.execute(select(AuditLog))).scalars().all()
     # Audit rows survive deletion (compliance trail), but PII is stripped and
     # the gallery reference is detached.
@@ -62,13 +63,14 @@ async def test_delete_anonymizes_audit_log(client, db, owner, auth_headers):
 
 async def test_delete_tenant_isolation(client, db, owner, other_user, auth_headers):
     gallery = await _make_gallery(db, owner.id)
+    gid = gallery.id
 
     # Intruder must not be able to delete a gallery they do not own.
-    resp = await client.delete(f"/api/v1/galleries/{gallery.id}", headers=auth_headers(other_user))
+    resp = await client.delete(f"/api/v1/galleries/{gid}", headers=auth_headers(other_user))
     assert resp.status_code == 404
 
-    db.expire_all()
-    found = (await db.execute(select(Gallery).where(Gallery.id == gallery.id))).scalar_one_or_none()
+    await db.rollback()
+    found = (await db.execute(select(Gallery).where(Gallery.id == gid))).scalar_one_or_none()
     assert found is not None, "Gallery must still exist after a foreign deletion attempt"
 
 
