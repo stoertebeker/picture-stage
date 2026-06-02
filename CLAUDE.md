@@ -116,47 +116,50 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-05-27
+**Datum:** 2026-06-02
+**Wachwechsel-Tag:** `handover-2026-06-02` (zeigt auf `c0b1fe4`, vor Übergabe-Commit)
 
 ### Was ist fertig
 - v0.1 API komplett: 12/12 Issues, 27 Endpoints
 - v0.2 Lifecycle & Komfort: 6/7 Issues (Tastatur-Shortcuts deferred)
-- v0.4 Frontend komplett: 6/6 Issues, HTMX + Alpine.js + Tailwind CSS
-  - 5 Frontend-Router (auth, dashboard, galleries, guest, admin) in `app/frontend/`
-  - 20 Jinja2-Templates (inkl. HTMX-Partials) in `app/templates/`
-  - Cookie-Auth (HttpOnly JWT), CSRF Double-Submit, Dark-Mode
-  - Guest-Viewer mit Lightbox, Keyboard-Nav, Selections, Sort/Filter
-  - Gallery-Management mit Drag-Drop Upload, Share-Links, Status-Transitions
-- 10 DB-Tabellen, Pluggable Storage (Local + S3), Security-Middleware, Rate-Limiting
-- CI/CD Workflows (GitHub Actions), Multi-Arch Dockerfile
-- 154 Tests, alle gruen
+- v0.3 Produktion & Compliance: 7/7 Issues — Audit-Log (Viewer + CSV-Export),
+  DSGVO-Seiten + Cookie-Banner, Backup/Restore-CLI im Container, Galerie-Lösch-
+  Workflow mit Audit-Anonymisierung, erweiterte Wasserzeichen-Konfig pro Galerie,
+  optionales Ablaufdatum mit Guest-Enforcement, i18n DE+EN (176 Keys)
+- v0.4 Frontend funktional: 6/6 Issues — Templates, Router, HTMX-Logik,
+  Cookie-Auth, CSRF, i18n im Template-Context
+- 181 Tests grün: 165 Unit/Security + 16 DB-Integration (CI gegen Postgres-Service)
+- Quality Gates: ruff (check+format), mypy strict, pytest — alle grün
+- CI/CD Workflows (GitHub Actions inkl. Postgres-Service), Multi-Arch Dockerfile
 
-### Naechster Epic: v0.3 Produktion & Compliance (picture-stage-fbr)
-- **Epic:** `picture-stage-fbr` – 0/7 Issues closed
-- **Ready-Queue:** Alle 7 Issues unblocked, keine Dependencies untereinander
-- **Einstieg:** `bd ready` zeigt die Queue, `/make-it-so picture-stage-fbr` startet Ausfuehrung
+### Nächste große Baustelle: Frontend-Redesign
+Das Frontend ist **funktional**, aber **optisch eine Baustelle**:
+- Templates nutzen Tailwind-Utility-Klassen, aber `app/static/css/styles.css` ist
+  nicht generiert (Tailwind-Build fehlt)
+- HTMX + Alpine.js liegen als **Platzhalter** unter `app/static/js/` (echte
+  `.min.js` müssen vendored werden — kein CDN möglich wegen CSP `script-src 'self'`)
 
-| Issue | Beads-ID | Prio | Beschreibung |
-|-------|----------|------|-------------|
-| Ablaufdatum | `picture-stage-fbr.1` | P2 | Optionales Ablaufdatum pro Galerie |
-| Audit-Log | `picture-stage-fbr.2` | P1 | Audit-Log pro Galerie |
-| DSGVO | `picture-stage-fbr.3` | P1 | DSGVO-Seiten & Compliance |
-| Galerie-Loesch | `picture-stage-fbr.4` | P1 | Galerie-Loesch-Workflow |
-| Backup/Restore | `picture-stage-fbr.5` | P1 | Backup/Restore-CLI im Container |
-| i18n | `picture-stage-fbr.6` | P2 | Deutsch + Englisch |
-| Wasserzeichen | `picture-stage-fbr.7` | P3 | Erweiterte Wasserzeichen-Konfig |
+**Empfohlener Einstieg:**
+1. `/frontend-design` Skill — kann komplett neue Designs entwerfen
+2. Research-Basis: `.schrammns_workflow/research/2026-05-26-frontend-architektur-htmx-alpine-tailwind.md`
+3. `/set-course` für einen neuen Beads-Epic mit Issues, dann `/make-it-so`
 
-### Was fehlt fuer Produktivnutzung
-- **v0.3 Produktion & Compliance** (7 Issues offen)
-- **Alembic initiale Migration** (braucht laufende Postgres)
-- **Docker-Build testen** (lokal oder via CI)
-- **Vendored JS** (HTMX + Alpine.js .min.js ersetzen – aktuell Platzhalter)
-- **Tailwind CSS Build** (styles.css via Tailwind CLI generieren)
+### Was sonst noch offen ist (kleinere Brocken)
+- Alembic initiale Migration (aktuell `create_all` beim Startup)
+- WATERMARK_OPACITY Breaking-Change-Migrationshinweis (int 0-255 → float 0.0-1.0)
+  in Release-Notes
+- Hardcoded Strings auf i18n ziehen: `app/frontend/guest.py:325` ("Falsches
+  Passwort"), `STATUS_LABELS` in `app/frontend/galleries.py`
+- Docker-Build verifizieren (oder via `docker-publish.yml`)
 
 ### Epics
 | Epic | Beads-ID | Status |
 |------|----------|--------|
-| v0.1 Minimal Viable Picdrop | `picture-stage-ebm` | 12/12 closed |
+| v0.1 Minimal Viable Picdrop | `picture-stage-ebm` | 12/12 closed (Epic closed) |
 | v0.2 Lifecycle & Komfort | `picture-stage-9q3` | 6/7 closed (1 deferred) |
-| v0.3 Produktion & Compliance | `picture-stage-fbr` | 0/7 open |
-| v0.4 Frontend | `picture-stage-gza` | 6/6 closed |
+| v0.3 Produktion & Compliance | `picture-stage-fbr` | 7/7 closed |
+| v0.4 Frontend (funktional) | `picture-stage-gza` | 6/6 closed |
+
+### Verifikation für neue Sessions
+`bash scripts/verify-handover.sh` prüft den Übergabe-Stand
+(clean tree, Tag vorhanden, Tools verfügbar, Tests grün).
