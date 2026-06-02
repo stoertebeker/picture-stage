@@ -132,17 +132,25 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 - Quality Gates: ruff (check+format), mypy strict, pytest — alle grün
 - CI/CD Workflows (GitHub Actions inkl. Postgres-Service), Multi-Arch Dockerfile
 
-### Nächste große Baustelle: Frontend-Redesign
-Das Frontend ist **funktional**, aber **optisch eine Baustelle**:
-- Templates nutzen Tailwind-Utility-Klassen, aber `app/static/css/styles.css` ist
-  nicht generiert (Tailwind-Build fehlt)
-- HTMX + Alpine.js liegen als **Platzhalter** unter `app/static/js/` (echte
-  `.min.js` müssen vendored werden — kein CDN möglich wegen CSP `script-src 'self'`)
+### Nächste große Baustelle: Frontend-UX-Redesign (Epic `picture-stage-3av`)
 
-**Empfohlener Einstieg:**
-1. `/frontend-design` Skill — kann komplett neue Designs entwerfen
-2. Research-Basis: `.schrammns_workflow/research/2026-05-26-frontend-architektur-htmx-alpine-tailwind.md`
-3. `/set-course` für einen neuen Beads-Epic mit Issues, dann `/make-it-so`
+Das Frontend ist **funktional und technisch vollständig** – aber **visuell
+noch ein Tailwind-Default**, was für eine Foto-Proofing-App ein Nachteil ist.
+Stand der Assets (alle real, nicht mehr Platzhalter):
+- `frontend/static/css/styles.css` ist via Tailwind Standalone-CLI generiert
+  (Self-Hosted, kein npm-Build nötig)
+- `frontend/static/js/htmx.min.js` (HTMX 2.x) und `alpine.min.js` (Alpine 3.x)
+  sind echt vendored – CSP `script-src 'self'` ist erfüllt
+- Web-Fonts: noch keine self-hosted Fonts (folgt in Welle 1 des Redesigns)
+
+**Epic v0.5 „UX-Redesign – Editorial Dark"** ist via `/set-course` angelegt:
+- Stil: Editorial Dark (fotofokussiert, zinc-basiert, Serif-Display + Sans-UI)
+- 40 Sub-Issues in 5 Wellen: 0 (Docs), 1 (Foundation/Tokens), 2 (Komponenten),
+  3 (Page-Redesigns je Mockup-Spike + Implementation), 4 (A11y/i18n/Mobile)
+- Plan: `.schrammns_workflow/plans/2026-06-02-v0.5-ux-redesign-editorial-dark.md`
+- Einstieg: `bd ready` → `picture-stage-ciw` (Design-Token-Spec) als erstes
+  fachliches Issue, davor optional `picture-stage-40y` (Doc-Fix) und parallel
+  `picture-stage-dtq` (Layout-Primitives)
 
 ### Was sonst noch offen ist (kleinere Brocken)
 - Alembic initiale Migration (aktuell `create_all` beim Startup)
@@ -159,6 +167,7 @@ Das Frontend ist **funktional**, aber **optisch eine Baustelle**:
 | v0.2 Lifecycle & Komfort | `picture-stage-9q3` | 6/7 closed (1 deferred) |
 | v0.3 Produktion & Compliance | `picture-stage-fbr` | 7/7 closed |
 | v0.4 Frontend (funktional) | `picture-stage-gza` | 6/6 closed |
+| v0.5 UX-Redesign – Editorial Dark | `picture-stage-3av` | 0/40 (in Planung gestartet 2026-06-02) |
 
 ### Verifikation für neue Sessions
 `bash scripts/verify-handover.sh` prüft den Übergabe-Stand
