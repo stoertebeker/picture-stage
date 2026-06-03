@@ -46,6 +46,8 @@
     <div class="p-6">
         <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ t('dashboard.create_modal_title') }}</h2>
         <form
+            method="post"
+            action="/dashboard/galleries"
             hx-post="/dashboard/galleries"
             hx-target="#gallery-grid"
             hx-swap="beforeend"

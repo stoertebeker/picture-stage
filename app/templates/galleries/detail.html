@@ -36,6 +36,8 @@
                 <button type="button" @click="editing = false; galleryName = '{{ gallery.name }}'" class="text-gray-500 hover:text-gray-700 text-sm">{{ t('gallery.cancel') }}</button>
             </div>
             <form x-ref="renameForm" style="display:none"
+                  method="post"
+                  action="/galleries/{{ gallery.id }}/rename"
                   hx-post="/galleries/{{ gallery.id }}/rename"
                   hx-target="body" hx-swap="innerHTML">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
@@ -66,7 +68,9 @@
         <!-- Action Buttons -->
         <div class="flex items-center gap-3">
             {% for t in transitions %}
-            <form hx-post="/galleries/{{ gallery.id }}/status"
+            <form method="post"
+                  action="/galleries/{{ gallery.id }}/status"
+                  hx-post="/galleries/{{ gallery.id }}/status"
                   hx-target="body"
                   hx-swap="innerHTML"
                   class="inline">
@@ -122,7 +126,9 @@
     <!-- Expiry Section -->
     <div class="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
         <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">{{ t('gallery.expiry_heading') }}</h3>
-        <form hx-post="/galleries/{{ gallery.id }}/expiry"
+        <form method="post"
+              action="/galleries/{{ gallery.id }}/expiry"
+              hx-post="/galleries/{{ gallery.id }}/expiry"
               hx-target="body"
               hx-swap="innerHTML"
               class="flex flex-wrap items-end gap-3">
@@ -165,7 +171,9 @@
          x-transition
          class="mb-4 flex items-center gap-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
         <span class="text-sm text-red-700 dark:text-red-300" x-text="'{{ t('gallery.images_selected') }}'.replace('{count}', selectedImages.length)"></span>
-        <form hx-post="/galleries/{{ gallery.id }}/bulk-delete"
+        <form method="post"
+              action="/galleries/{{ gallery.id }}/bulk-delete"
+              hx-post="/galleries/{{ gallery.id }}/bulk-delete"
               hx-target="#image-grid"
               hx-swap="innerHTML"
               hx-confirm="{{ t('gallery.bulk_delete_confirm') }}"

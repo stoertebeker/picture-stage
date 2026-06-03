@@ -1,5 +1,8 @@
 <div x-data="uploadZone()" class="relative">
-    <form hx-post="/galleries/{{ gallery.id }}/upload"
+    <form method="post"
+          action="/galleries/{{ gallery.id }}/upload"
+          enctype="multipart/form-data"
+          hx-post="/galleries/{{ gallery.id }}/upload"
           hx-target="#image-grid"
           hx-swap="innerHTML"
           hx-encoding="multipart/form-data"

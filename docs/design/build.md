@@ -143,6 +143,15 @@ beschert haben:
    Page-Reload (oft sichtbar als „etwas blitzt auf und ist weg").
    `requestSubmit()` triggert einen echten `SubmitEvent`, den HTMX sauber
    abfängt und mit `preventDefault()` behandelt.
+5. **Progressive-Enhancement-Fallback für mutierende Forms.** Jede Form mit
+   `hx-post`/`hx-put`/`hx-patch` trägt zusätzlich ein natives `method="post"`
+   und `action="<gleiche URL>"`. Bei gesundem HTMX greift der XHR-Pfad,
+   bei JS-Aus oder HTMX-Trigger-Quirks fängt die native Submission den
+   Klick auf — kein stiller GET-Reload an die aktuelle URL.
+   `hx-delete`-Forms können nicht nativ abgebildet werden (HTML kennt
+   nativ nur GET/POST); sie tragen einen HTML-Kommentar
+   `<!-- JS-required: ... -->` und akzeptieren, dass sie ohne JS untätig
+   bleiben (zulässig für bestätigungspflichtige destruktive Aktionen).
 
 ## TODO
 

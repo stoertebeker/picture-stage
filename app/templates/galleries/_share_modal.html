@@ -24,6 +24,9 @@
         {% endif %}
 
         <div class="flex items-center gap-3">
+            <!-- JS-required: HTML forms cannot natively issue DELETE.
+                 Without HTMX this form would do nothing — acceptable for a
+                 destructive admin action that requires confirmation. -->
             <form hx-delete="/galleries/{{ gallery.id }}/share"
                   hx-target="#share-section"
                   hx-swap="innerHTML"
@@ -42,7 +45,9 @@
         <p class="text-sm text-gray-600 dark:text-gray-400 mb-4">
             {{ t('gallery.share_create_text') }}
         </p>
-        <form hx-post="/galleries/{{ gallery.id }}/share"
+        <form method="post"
+              action="/galleries/{{ gallery.id }}/share"
+              hx-post="/galleries/{{ gallery.id }}/share"
               hx-target="#share-section"
               hx-swap="innerHTML">
             <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
