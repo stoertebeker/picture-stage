@@ -32,7 +32,11 @@ window.uploadZone = function () {
         startUpload() {
             this.uploading = true;
             this.uploadProgress = 0;
-            htmx.trigger(this.$refs.uploadForm, 'submit');
+            // requestSubmit() triggers a real SubmitEvent that HTMX can
+            // intercept and preventDefault. htmx.trigger(form, 'submit')
+            // dispatches a CustomEvent, which races against the browser's
+            // native form submission and causes a page reload.
+            this.$refs.uploadForm.requestSubmit();
         },
     };
 };
@@ -177,7 +181,8 @@ window.galleryManager = function () {
 
         submitName() {
             this.$refs.renameForm.querySelector('[name=name]').value = this.galleryName;
-            htmx.trigger(this.$refs.renameForm, 'submit');
+            // requestSubmit() — see note in uploadZone.startUpload().
+            this.$refs.renameForm.requestSubmit();
         },
     };
 };

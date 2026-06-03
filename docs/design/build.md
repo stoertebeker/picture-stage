@@ -136,6 +136,13 @@ beschert haben:
    `components.js` wird in `base.html` und `guest_base.html` **vor**
    `alpine.min.js` geladen, damit die globalen Funktionen bei
    Alpine-Initialisierung verfügbar sind.
+4. **Programmatisches Form-Submit** in einer Komponente immer mit
+   `form.requestSubmit()`, niemals mit `htmx.trigger(form, 'submit')`.
+   `htmx.trigger` dispatched ein `CustomEvent`, das HTMX nicht zuverlässig
+   abfängt – parallel läuft die native Form-Submission und führt zu einem
+   Page-Reload (oft sichtbar als „etwas blitzt auf und ist weg").
+   `requestSubmit()` triggert einen echten `SubmitEvent`, den HTMX sauber
+   abfängt und mit `preventDefault()` behandelt.
 
 ## TODO
 
