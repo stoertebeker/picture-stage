@@ -84,6 +84,32 @@ curl -fsSL -o frontend/static/fonts/inter-variable.woff2 \
   geladen. Falls eine separate `font-src`-Direktive in der CSP eingeführt
   wird (PS-UX-04), muss sie `'self'` enthalten.
 
+## Frontend-Interaktions-Hygiene (CSP-konform)
+
+Die CSP erlaubt `script-src 'self' 'unsafe-eval'` – aber bewusst **kein**
+`'unsafe-inline'`. Daraus folgt eine harte Regel für Templates:
+
+| Mechanismus | Erlaubt? | Wofür |
+|-------------|----------|-------|
+| `onclick="…"`, `onchange="…"`, `onsubmit="…"`, `onload="…"` (Inline-DOM-Handler) | **NEIN** – wird von CSP blockiert | – |
+| Alpine `@click="…"`, `@change="…"`, `@submit="…"` (Inline-HTML-Attribute) | **JA** – via standard Alpine eval | UI-Reaktionen, lokaler State |
+| Alpine `x-data="…"`, `x-show="…"`, `:class="…"` | **JA** | Lokaler State, conditional rendering |
+| HTMX `hx-post`, `hx-get`, `hx-target`, `hx-swap`, `hx-trigger` | **JA** | Server-Roundtrips |
+| HTMX `hx-on::after-request="…"`, `hx-on::before-send="…"` | **JA** | HTMX-Lifecycle-Hooks |
+| `<form method="post" action="…">` (klassisch) | **JA** | Auth, Setup, Sprach-Switch |
+| `<script>` inline im Template | **NEIN** | – |
+| Externes JS in `<script src="…">` aus `/static/` | **JA** | Globaler App-Code (`app.js`) |
+
+**Hinzu kommen zwei Rule-of-Thumb-Hinweise**, die uns in v0.5 bereits Bugs
+beschert haben:
+
+1. **HTMX-Targets müssen IMMER im DOM existieren** – auch im Empty-State.
+   Ein `<div id="grid">` darf nicht conditional gerendert werden, wenn ein
+   HTMX-Swap dorthin zielt. Conditional ist nur der Inhalt (Cards vs. Empty-State).
+2. **Buttons in `<form>` immer `type="button"` setzen**, wenn sie nicht
+   Submit auslösen sollen. Default ist `submit`, was unbeabsichtigte
+   Form-Submissions verursacht.
+
 ## TODO
 
 - [ ] SRI-Hashes für HTMX/Alpine-Downloads im `Dockerfile` ergänzen

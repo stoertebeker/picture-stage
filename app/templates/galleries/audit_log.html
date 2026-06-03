@@ -21,7 +21,7 @@
         <div class="flex items-center gap-3">
             <!-- Event Type Filter -->
             <div class="relative">
-                <select onchange="window.location.href='/galleries/{{ gallery.id }}/audit-log' + (this.value ? '?event_type=' + this.value : '')"
+                <select @change="window.location.href='/galleries/{{ gallery.id }}/audit-log' + ($el.value ? '?event_type=' + $el.value : '')"
                         class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
                     <option value="">{{ t('audit.filter_all') }}</option>
                     {% for et in event_types %}
