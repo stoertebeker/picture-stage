@@ -35,10 +35,22 @@ def test_guest_viewer_has_dark_mode():
 
 
 def test_guest_viewer_has_selection_toolbar():
-    """Guest viewer has select/favorite buttons."""
-    viewer_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "viewer.html").read_text()
-    assert "toggleSelect" in viewer_html
-    assert "toggleFavorite" in viewer_html
+    """Guest viewer has select/favorite buttons wired to the guestViewer component.
+
+    After the inline-script extraction (ps-ux-02 hardening), the component
+    methods live in frontend/static/js/components.js while the buttons that
+    call them live in the image-grid / lightbox partials.
+    """
+    image_grid = (PROJECT_ROOT / "app" / "templates" / "guest" / "_image_grid.html").read_text()
+    lightbox = (PROJECT_ROOT / "app" / "templates" / "guest" / "_lightbox.html").read_text()
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+
+    assert "toggleSelect" in image_grid
+    assert "toggleFavorite" in image_grid
+    assert "toggleSelect" in lightbox
+    assert "toggleFavorite" in lightbox
+    assert "toggleSelect" in components_js
+    assert "toggleFavorite" in components_js
 
 
 def test_guest_viewer_has_complete_button():

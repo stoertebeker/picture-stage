@@ -4,7 +4,14 @@
 {% block gallery_name %}{{ gallery_name }}{% endblock %}
 
 {% block content %}
-<div x-data="guestViewer()" class="min-h-screen">
+<div x-data="guestViewer()"
+     data-token="{{ token }}"
+     data-session-id="{{ session_id }}"
+     data-images="{{ images | tojson | e }}"
+     data-total-images="{{ total_images }}"
+     data-selected-count="{{ selected_count }}"
+     data-favorited-count="{{ favorited_count }}"
+     class="min-h-screen">
 
     {% if requires_password %}
     <div id="password-section" class="flex items-center justify-center py-20 px-4">
@@ -87,93 +94,4 @@
     {% endif %}
 </div>
 
-<script>
-function guestViewer() {
-    return {
-        token: '{{ token }}',
-        sessionId: '{{ session_id }}',
-        images: {{ images | tojson }},
-        totalImages: {{ total_images }},
-        selectedCount: {{ selected_count }},
-        favoritedCount: {{ favorited_count }},
-        lightboxOpen: false,
-        lightboxIndex: 0,
-        showCompleteModal: false,
-
-        get currentImage() {
-            return this.images[this.lightboxIndex] || null;
-        },
-
-        openLightbox(index) {
-            this.lightboxIndex = index;
-            this.lightboxOpen = true;
-        },
-
-        closeLightbox() {
-            this.lightboxOpen = false;
-        },
-
-        nextImage() {
-            if (this.lightboxIndex < this.images.length - 1) this.lightboxIndex++;
-        },
-
-        prevImage() {
-            if (this.lightboxIndex > 0) this.lightboxIndex--;
-        },
-
-        async toggleSelect(imageId) {
-            const img = this.images.find(i => i.id === imageId);
-            if (!img) return;
-            const action = img.selected ? 'deselect' : 'select';
-            img.selected = !img.selected;
-            this.selectedCount += img.selected ? 1 : -1;
-            await this._postSelection(imageId, action);
-        },
-
-        async toggleFavorite(imageId) {
-            const img = this.images.find(i => i.id === imageId);
-            if (!img) return;
-            const action = img.favorited ? 'unfavorite' : 'favorite';
-            img.favorited = !img.favorited;
-            this.favoritedCount += img.favorited ? 1 : -1;
-            await this._postSelection(imageId, action);
-        },
-
-        async submitComment(imageId, comment) {
-            await this._postSelection(imageId, 'comment', comment);
-        },
-
-        async _postSelection(imageId, action, comment) {
-            const body = {
-                image_id: imageId,
-                action: action,
-                session_id: this.sessionId,
-            };
-            if (comment !== undefined) body.comment = comment;
-            await fetch(`/g/${this.token}/selections`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify(body),
-            });
-        },
-
-        async completeReview() {
-            await fetch(`/g/${this.token}/complete`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({session_id: this.sessionId}),
-            });
-            this.showCompleteModal = false;
-            window.location.reload();
-        },
-
-        handleKeydown(e) {
-            if (!this.lightboxOpen) return;
-            if (e.key === 'ArrowRight') this.nextImage();
-            else if (e.key === 'ArrowLeft') this.prevImage();
-            else if (e.key === 'Escape') this.closeLightbox();
-        },
-    };
-}
-</script>
 {% endblock %}

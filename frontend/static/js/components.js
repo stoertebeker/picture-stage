@@ -1,0 +1,183 @@
+/* Alpine.js component registry for picture-stage.
+ *
+ * Components are exposed as global functions so existing templates can keep
+ * the `x-data="componentName()"` syntax. Initial state that depends on
+ * server-rendered values is read from data-* attributes on the x-data root
+ * element during init(). Never put a `<script>` block inside a Jinja template
+ * (CSP blocks it). See docs/design/build.md.
+ */
+
+// Upload zone for gallery detail. No server-rendered initial state.
+window.uploadZone = function () {
+    return {
+        dragOver: false,
+        uploading: false,
+        uploadProgress: 0,
+
+        handleDrop(event) {
+            this.dragOver = false;
+            const files = event.dataTransfer.files;
+            if (files.length > 0) {
+                this.$refs.fileInput.files = files;
+                this.startUpload();
+            }
+        },
+
+        handleFiles(event) {
+            if (event.target.files.length > 0) {
+                this.startUpload();
+            }
+        },
+
+        startUpload() {
+            this.uploading = true;
+            this.uploadProgress = 0;
+            htmx.trigger(this.$refs.uploadForm, 'submit');
+        },
+    };
+};
+
+// Guest viewer: image grid, lightbox, selection/favorite toggling, complete flow.
+// Initial state read from data-* attributes on the root <div x-data="guestViewer()">.
+window.guestViewer = function () {
+    return {
+        token: '',
+        sessionId: '',
+        images: [],
+        totalImages: 0,
+        selectedCount: 0,
+        favoritedCount: 0,
+        lightboxOpen: false,
+        lightboxIndex: 0,
+        showCompleteModal: false,
+
+        init() {
+            const root = this.$root;
+            this.token = root.dataset.token || '';
+            this.sessionId = root.dataset.sessionId || '';
+            this.images = JSON.parse(root.dataset.images || '[]');
+            this.totalImages = parseInt(root.dataset.totalImages || '0', 10);
+            this.selectedCount = parseInt(root.dataset.selectedCount || '0', 10);
+            this.favoritedCount = parseInt(root.dataset.favoritedCount || '0', 10);
+        },
+
+        get currentImage() {
+            return this.images[this.lightboxIndex] || null;
+        },
+
+        openLightbox(index) {
+            this.lightboxIndex = index;
+            this.lightboxOpen = true;
+        },
+
+        closeLightbox() {
+            this.lightboxOpen = false;
+        },
+
+        nextImage() {
+            if (this.lightboxIndex < this.images.length - 1) this.lightboxIndex++;
+        },
+
+        prevImage() {
+            if (this.lightboxIndex > 0) this.lightboxIndex--;
+        },
+
+        async toggleSelect(imageId) {
+            const img = this.images.find((i) => i.id === imageId);
+            if (!img) return;
+            const action = img.selected ? 'deselect' : 'select';
+            img.selected = !img.selected;
+            this.selectedCount += img.selected ? 1 : -1;
+            await this._postSelection(imageId, action);
+        },
+
+        async toggleFavorite(imageId) {
+            const img = this.images.find((i) => i.id === imageId);
+            if (!img) return;
+            const action = img.favorited ? 'unfavorite' : 'favorite';
+            img.favorited = !img.favorited;
+            this.favoritedCount += img.favorited ? 1 : -1;
+            await this._postSelection(imageId, action);
+        },
+
+        async submitComment(imageId, comment) {
+            await this._postSelection(imageId, 'comment', comment);
+        },
+
+        async _postSelection(imageId, action, comment) {
+            const body = {
+                image_id: imageId,
+                action: action,
+                session_id: this.sessionId,
+            };
+            if (comment !== undefined) body.comment = comment;
+            await fetch(`/g/${this.token}/selections`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body),
+            });
+        },
+
+        async completeReview() {
+            await fetch(`/g/${this.token}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: this.sessionId }),
+            });
+            this.showCompleteModal = false;
+            window.location.reload();
+        },
+
+        handleKeydown(e) {
+            if (!this.lightboxOpen) return;
+            if (e.key === 'ArrowRight') this.nextImage();
+            else if (e.key === 'ArrowLeft') this.prevImage();
+            else if (e.key === 'Escape') this.closeLightbox();
+        },
+    };
+};
+
+// Gallery manager: rename, bulk selection, image preview modal.
+// Initial state read from data-gallery-name on root.
+window.galleryManager = function () {
+    return {
+        editing: false,
+        galleryName: '',
+        selectedImages: [],
+        previewSrc: '',
+        previewFilename: '',
+
+        init() {
+            this.galleryName = this.$root.dataset.galleryName || '';
+        },
+
+        toggleImage(imageId) {
+            const idx = this.selectedImages.indexOf(imageId);
+            if (idx === -1) {
+                this.selectedImages.push(imageId);
+            } else {
+                this.selectedImages.splice(idx, 1);
+            }
+        },
+
+        isSelected(imageId) {
+            return this.selectedImages.includes(imageId);
+        },
+
+        selectAll() {
+            const checkboxes = document.querySelectorAll('[data-image-id]');
+            this.selectedImages = Array.from(checkboxes).map((el) => el.dataset.imageId);
+        },
+
+        openPreview(src, filename) {
+            this.previewSrc = src;
+            this.previewFilename = filename;
+            this.$refs.previewModal.showModal();
+        },
+
+        submitName() {
+            this.$refs.renameForm.querySelector('[name=name]').value = this.galleryName;
+            htmx.trigger(this.$refs.renameForm, 'submit');
+        },
+    };
+};

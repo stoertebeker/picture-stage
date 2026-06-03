@@ -97,8 +97,8 @@ Die CSP erlaubt `script-src 'self' 'unsafe-eval'` – aber bewusst **kein**
 | HTMX `hx-post`, `hx-get`, `hx-target`, `hx-swap`, `hx-trigger` | **JA** | Server-Roundtrips |
 | HTMX `hx-on::after-request="…"`, `hx-on::before-send="…"` | **JA** | HTMX-Lifecycle-Hooks |
 | `<form method="post" action="…">` (klassisch) | **JA** | Auth, Setup, Sprach-Switch |
-| `<script>` inline im Template | **NEIN** | – |
-| Externes JS in `<script src="…">` aus `/static/` | **JA** | Globaler App-Code (`app.js`) |
+| `<script>` inline im Template | **NEIN** – wird von CSP blockiert | – |
+| Externes JS in `<script src="…">` aus `/static/` | **JA** | Globaler App-Code (`app.js`, `components.js`) |
 
 **Hinzu kommen zwei Rule-of-Thumb-Hinweise**, die uns in v0.5 bereits Bugs
 beschert haben:
@@ -109,6 +109,33 @@ beschert haben:
 2. **Buttons in `<form>` immer `type="button"` setzen**, wenn sie nicht
    Submit auslösen sollen. Default ist `submit`, was unbeabsichtigte
    Form-Submissions verursacht.
+3. **Alpine-Komponenten-Code gehört in `frontend/static/js/components.js`**,
+   niemals als `<script>`-Block im Template. Server-gerenderte Initialwerte
+   wandern als `data-*`-Attribute aufs `x-data`-Wurzelelement, JavaScript liest
+   sie in der `init()`-Methode aus `this.$root.dataset`. Beispiel:
+
+   ```html
+   <div x-data="myComponent()"
+        data-token="{{ token }}"
+        data-items="{{ items | tojson | e }}">
+   ```
+
+   ```js
+   window.myComponent = function () {
+       return {
+           token: '',
+           items: [],
+           init() {
+               this.token = this.$root.dataset.token || '';
+               this.items = JSON.parse(this.$root.dataset.items || '[]');
+           },
+       };
+   };
+   ```
+
+   `components.js` wird in `base.html` und `guest_base.html` **vor**
+   `alpine.min.js` geladen, damit die globalen Funktionen bei
+   Alpine-Initialisierung verfügbar sind.
 
 ## TODO
 

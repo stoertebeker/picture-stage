@@ -3,7 +3,9 @@
 {% block title %}{{ gallery.name }} – Picture-Stage{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8" x-data="galleryManager()">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+     x-data="galleryManager()"
+     data-gallery-name="{{ gallery.name }}">
 
     <!-- Breadcrumb -->
     <nav class="mb-6 text-sm text-gray-500 dark:text-gray-400">
@@ -205,44 +207,4 @@
     </dialog>
 </div>
 
-<script>
-function galleryManager() {
-    return {
-        editing: false,
-        galleryName: '{{ gallery.name }}',
-        selectedImages: [],
-        previewSrc: '',
-        previewFilename: '',
-
-        toggleImage(imageId) {
-            const idx = this.selectedImages.indexOf(imageId);
-            if (idx === -1) {
-                this.selectedImages.push(imageId);
-            } else {
-                this.selectedImages.splice(idx, 1);
-            }
-        },
-
-        isSelected(imageId) {
-            return this.selectedImages.includes(imageId);
-        },
-
-        selectAll() {
-            const checkboxes = document.querySelectorAll('[data-image-id]');
-            this.selectedImages = Array.from(checkboxes).map(el => el.dataset.imageId);
-        },
-
-        openPreview(src, filename) {
-            this.previewSrc = src;
-            this.previewFilename = filename;
-            this.$refs.previewModal.showModal();
-        },
-
-        submitName() {
-            this.$refs.renameForm.querySelector('[name=name]').value = this.galleryName;
-            htmx.trigger(this.$refs.renameForm, 'submit');
-        }
-    };
-}
-</script>
 {% endblock %}

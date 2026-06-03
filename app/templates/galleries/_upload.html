@@ -49,34 +49,3 @@
         </div>
     </div>
 </div>
-
-<script>
-function uploadZone() {
-    return {
-        dragOver: false,
-        uploading: false,
-        uploadProgress: 0,
-
-        handleDrop(event) {
-            this.dragOver = false;
-            const files = event.dataTransfer.files;
-            if (files.length > 0) {
-                this.$refs.fileInput.files = files;
-                this.startUpload();
-            }
-        },
-
-        handleFiles(event) {
-            if (event.target.files.length > 0) {
-                this.startUpload();
-            }
-        },
-
-        startUpload() {
-            this.uploading = true;
-            this.uploadProgress = 0;
-            htmx.trigger(this.$refs.uploadForm, 'submit');
-        }
-    };
-}
-</script>
