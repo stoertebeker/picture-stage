@@ -8,6 +8,39 @@ RUN python -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --no-cache-dir .
 
+FROM alpine:3.20 AS assets
+
+# Vendor HTMX, Alpine.js (CSP build) and Fraunces/Inter web fonts.
+# Pinned versions; integrity is implicit via HTTPS to known CDNs.
+RUN apk add --no-cache curl ca-certificates
+
+WORKDIR /vendor
+
+ARG HTMX_VERSION=2.0.4
+ARG ALPINE_VERSION=3.14.8
+
+RUN mkdir -p js fonts && \
+    curl -fsSL -o js/htmx.min.js \
+        "https://unpkg.com/htmx.org@${HTMX_VERSION}/dist/htmx.min.js" && \
+    curl -fsSL -o js/alpine.min.js \
+        "https://cdn.jsdelivr.net/npm/@alpinejs/csp@${ALPINE_VERSION}/dist/cdn.min.js"
+
+# Web fonts via Fontsource (WOFF2, self-hostable, OFL-licensed).
+RUN curl -fsSL -o fonts/fraunces-variable.woff2 \
+        "https://cdn.jsdelivr.net/fontsource/fonts/fraunces:vf@latest/latin-wght-normal.woff2" && \
+    curl -fsSL -o fonts/inter-variable.woff2 \
+        "https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@latest/latin-wght-normal.woff2"
+
+FROM node:20-alpine AS css-builder
+
+WORKDIR /css
+COPY tailwind.config.js ./
+COPY frontend/static/css/input.css ./input.css
+COPY app/templates/ ./app/templates/
+
+RUN npm install --no-save --no-audit --no-fund tailwindcss@3.4.17 \
+    && npx tailwindcss -c tailwind.config.js -i ./input.css -o ./styles.css --minify
+
 FROM python:3.12-slim
 
 RUN apt-get update && \
@@ -20,6 +53,10 @@ WORKDIR /app
 
 COPY --from=builder /opt/venv /opt/venv
 COPY . .
+COPY --from=css-builder /css/styles.css /app/frontend/static/css/styles.css
+COPY --from=assets /vendor/js/htmx.min.js /app/frontend/static/js/htmx.min.js
+COPY --from=assets /vendor/js/alpine.min.js /app/frontend/static/js/alpine.min.js
+COPY --from=assets /vendor/fonts/ /app/frontend/static/fonts/
 
 RUN mkdir -p /app/uploads && chown -R app:app /app
 

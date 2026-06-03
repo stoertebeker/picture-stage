@@ -1,0 +1,88 @@
+# Frontend-Assets bauen
+
+Picture-Stage hat ein dünnes Frontend-Asset-Setup: keine Node-Toolchain im Repo,
+kein npm-Lock. Alle Build-Schritte laufen **im Docker-Image** (Multi-Stage):
+
+- **Stage `assets`** (Alpine + curl) – lädt HTMX 2.0.4, Alpine.js 3.14.8 (CSP-Build)
+  und die Variable-Fonts Fraunces + Inter (Fontsource WOFF2).
+- **Stage `css-builder`** (Node 20 Alpine) – `npx tailwindcss` baut
+  `frontend/static/css/styles.css` aus `tailwind.config.js` + `input.css`.
+- **Stage 3 (final)** – Python-Slim mit App; übernimmt alle Asset-Artefakte
+  per `COPY --from=…`.
+
+## Schneller Weg (Docker)
+
+```bash
+docker compose build --pull
+docker compose up -d
+# → http://localhost:8000
+```
+
+Bei Änderungen an `tailwind.config.js`, `input.css` oder an Templates muss das
+Image neu gebaut werden, damit `styles.css` regeneriert wird:
+
+```bash
+docker compose build app && docker compose up -d --force-recreate app
+```
+
+## Lokal ohne Docker bauen
+
+Die ins Repo eingecheckte `frontend/static/css/styles.css` ist nur ein
+Sicherheits-Stub (siehe Kommentar in der Datei). Für ein vollständiges Frontend
+ohne Docker brauchst du die Tailwind-CLI. Schnellweg via Docker-Run als
+Einmal-Builder:
+
+```bash
+docker run --rm -v "$PWD":/work -w /work node:20-alpine sh -c "\
+  npm install --no-save tailwindcss@3.4.17 && \
+  npx tailwindcss -c tailwind.config.js \
+    -i ./frontend/static/css/input.css \
+    -o ./frontend/static/css/styles.css --minify"
+```
+
+HTMX, Alpine.js und die Fonts kannst du analog herunterladen (Versionen siehe
+`Dockerfile`, Stage `assets`):
+
+```bash
+curl -fsSL -o frontend/static/js/htmx.min.js \
+  "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"
+curl -fsSL -o frontend/static/js/alpine.min.js \
+  "https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.14.8/dist/cdn.min.js"
+mkdir -p frontend/static/fonts
+curl -fsSL -o frontend/static/fonts/fraunces-variable.woff2 \
+  "https://cdn.jsdelivr.net/fontsource/fonts/fraunces:vf@latest/latin-wght-normal.woff2"
+curl -fsSL -o frontend/static/fonts/inter-variable.woff2 \
+  "https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@latest/latin-wght-normal.woff2"
+```
+
+## Was im Repo bleibt, was nicht
+
+- **Versioniert:** `tailwind.config.js`, `input.css`, der Stub `styles.css`,
+  die Stub-`htmx.min.js`/`alpine.min.js` (mit `TODO:`-Header), keine Fonts.
+- **Build-Artefakt (regeneriert):** `styles.css` (im Docker-Image), die echten
+  HTMX/Alpine-Bundles und die Fonts (alle im Docker-Image).
+- **Lieferketten-Pins** (im `Dockerfile`):
+  - `tailwindcss@3.4.17`
+  - `htmx.org@2.0.4`
+  - `@alpinejs/csp@3.14.8` (CSP-konform, kein `eval`)
+  - Fonts: Fontsource latest VF (OFL)
+
+## Sicherheits-Hinweise
+
+- HTMX/Alpine werden via HTTPS von etablierten CDNs (unpkg, jsDelivr) gezogen.
+  Das ist eine Lieferketten-Vertrauensentscheidung; Pin-Versionen mindern,
+  ersetzen aber keine SRI-Prüfung.
+- Alpine wird in der **CSP-Variante** verwendet (`@alpinejs/csp`) – keine
+  Inline-Skript-Ausführung via `x-data="…"` Expressions, sondern explizit
+  registrierte Funktionen. Das passt zur CSP `script-src 'self'` ohne
+  `'unsafe-eval'`.
+- Fonts liegen unter `/static/fonts/` und werden über `default-src 'self'`
+  geladen. Falls eine separate `font-src`-Direktive in der CSP eingeführt
+  wird (PS-UX-04), muss sie `'self'` enthalten.
+
+## TODO
+
+- [ ] SRI-Hashes für HTMX/Alpine-Downloads im `Dockerfile` ergänzen
+  (verifiziert die Integrität der CDN-Antwort).
+- [ ] Font-Subset auf tatsächlich genutzte Glyphen reduzieren (PS-UX-03).
+- [ ] CI-Stufe: `docker build` als Quality-Gate (verhindert kaputte Configs).
