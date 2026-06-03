@@ -64,7 +64,7 @@ curl -fsSL -o frontend/static/fonts/inter-variable.woff2 \
 - **Lieferketten-Pins** (im `Dockerfile`):
   - `tailwindcss@3.4.17`
   - `htmx.org@2.0.4`
-  - `@alpinejs/csp@3.14.8` (CSP-konform, kein `eval`)
+  - `alpinejs@3.14.8` (standard build; requires `'unsafe-eval'` in CSP — see security notes)
   - Fonts: Fontsource latest VF (OFL)
 
 ## Sicherheits-Hinweise
@@ -72,10 +72,14 @@ curl -fsSL -o frontend/static/fonts/inter-variable.woff2 \
 - HTMX/Alpine werden via HTTPS von etablierten CDNs (unpkg, jsDelivr) gezogen.
   Das ist eine Lieferketten-Vertrauensentscheidung; Pin-Versionen mindern,
   ersetzen aber keine SRI-Prüfung.
-- Alpine wird in der **CSP-Variante** verwendet (`@alpinejs/csp`) – keine
-  Inline-Skript-Ausführung via `x-data="…"` Expressions, sondern explizit
-  registrierte Funktionen. Das passt zur CSP `script-src 'self'` ohne
-  `'unsafe-eval'`.
+- Alpine wird im **Standard-Build** verwendet, weil die Templates flächendeckend
+  Inline-Expressions nutzen (`x-data="…"`, `@click="…"`, `:class="…"`).
+  Standard-Alpine baut diese Expressions zur Laufzeit via `new Function(...)`,
+  was eine CSP mit `script-src 'self' 'unsafe-eval'` voraussetzt. Die restliche
+  Härtung bleibt scharf: kein `'unsafe-inline'`, kein Remote-JS, kein `eval`
+  aus User-Input. **TODO (`picture-stage-p07` / PS-UX-40):** Migration auf
+  `@alpinejs/csp`-Build + `Alpine.data()`-Registrierungen, dann
+  `'unsafe-eval'` wieder aus der CSP entfernen.
 - Fonts liegen unter `/static/fonts/` und werden über `default-src 'self'`
   geladen. Falls eine separate `font-src`-Direktive in der CSP eingeführt
   wird (PS-UX-04), muss sie `'self'` enthalten.
