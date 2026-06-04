@@ -152,6 +152,28 @@ beschert haben:
    nativ nur GET/POST); sie tragen einen HTML-Kommentar
    `<!-- JS-required: ... -->` und akzeptieren, dass sie ohne JS untätig
    bleiben (zulässig für bestätigungspflichtige destruktive Aktionen).
+6. **CSRF muss über einen vom Server tatsächlich gelesenen Kanal kommen.**
+   Die CSRF-Middleware (`app/security/middleware.py`) liest den Token aus
+   dem `X-CSRF-Token`-Header **oder** aus dem Form-Body **nur** wenn
+   `Content-Type: application/x-www-form-urlencoded`. Bei `multipart/form-data`
+   (z.B. Datei-Upload) wird der Body **nicht** geparst → der Header ist
+   dann der einzige funktionierende Kanal.
+
+   Lösung im Frontend: `base.html` setzt global
+
+   ```html
+   <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+   ```
+
+   – HTMX vererbt diesen Header an jede Anfrage. Der Hidden-Input
+   `<input type="hidden" name="csrf_token" …>` in jeder mutierenden Form
+   bleibt zusätzlich erhalten als Fallback für JS-aus + urlencoded.
+   `guest_base.html` braucht das nicht, weil `/g/`-Routen CSRF-exempt sind
+   (Token-in-URL-Auth).
+
+   Konsequenz: einzelne Elemente sollten **kein** eigenes `hx-headers`
+   mehr für CSRF setzen — der Global-Header reicht und Redundanz schadet
+   nur der Wartbarkeit.
 
 ## TODO
 

@@ -6,7 +6,6 @@
             hx-post="/admin/approve/{{ signup.id }}"
             hx-target="closest tr"
             hx-swap="outerHTML"
-            hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'
             hx-confirm="{{ t('admin.approve_confirm').replace('{email}', signup.email) }}"
             class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 transition-colors">
             {{ t('admin.approve') }}
@@ -15,7 +14,6 @@
             hx-post="/admin/reject/{{ signup.id }}"
             hx-target="closest tr"
             hx-swap="outerHTML"
-            hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'
             hx-confirm="{{ t('admin.reject_confirm').replace('{email}', signup.email) }}"
             class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 transition-colors">
             {{ t('admin.reject') }}
