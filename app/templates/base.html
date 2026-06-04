@@ -1,7 +1,5 @@
 <!DOCTYPE html>
-<html lang="de"
-      x-data="{ darkMode: localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches) }"
-      :class="{ 'dark': darkMode }">
+<html lang="de" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -17,9 +15,9 @@
         </div>
         <div>
             <a href="/dashboard">Dashboard</a>
-            <button @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')" type="button">
-                <span x-show="!darkMode">Dark</span>
-                <span x-show="darkMode">Light</span>
+            <button type="button" data-theme-toggle>
+                <span data-theme-label="dark">{{ t('nav.dark_mode') }}</span>
+                <span data-theme-label="light">{{ t('nav.light_mode') }}</span>
             </button>
             <!-- Language Switcher -->
             <div x-data="{ currentLang: document.cookie.match(/lang=(\w+)/)?.[1] || 'de' }" class="inline-flex items-center gap-1 text-sm">

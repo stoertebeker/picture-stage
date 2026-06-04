@@ -34,10 +34,16 @@ def test_login_template_has_csrf():
 
 
 def test_login_template_has_dark_mode():
-    """Login template has dark: classes for dark mode support."""
+    """Login template uses dark: utility classes and the data-theme toggle widget.
+
+    After ps-ux-04 the per-template Alpine `darkMode` variable was removed in
+    favour of a global [data-theme] attribute managed by app.js. The visible
+    contract is: tailwind dark: utilities are present, and the toggle button
+    carries the data-theme-toggle attribute.
+    """
     login_html = (PROJECT_ROOT / "app" / "templates" / "auth" / "login.html").read_text()
     assert "dark:" in login_html
-    assert "darkMode" in login_html
+    assert "data-theme-toggle" in login_html
 
 
 def test_signup_template_has_password_confirm():

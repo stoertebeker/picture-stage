@@ -53,9 +53,15 @@ def test_guest_base_template_exists():
 
 
 def test_app_js_has_dark_mode():
-    """Check that app.js has toggleDarkMode function."""
+    """app.js owns the theme bootstrap + toggle.
+
+    After ps-ux-04 the function was renamed `toggleTheme` and operates on a
+    [data-theme] attribute on <html>. The IIFE at the top sets the initial
+    value (default = 'dark') before any pixel paints.
+    """
     app_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "app.js").read_text()
-    assert "toggleDarkMode" in app_js
+    assert "toggleTheme" in app_js
+    assert "data-theme" in app_js
 
 
 def test_tailwind_config_exists():

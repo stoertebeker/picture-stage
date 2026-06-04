@@ -1,7 +1,7 @@
 /** @type {import('tailwindcss').Config} */
 // Tokens mirror docs/design/tokens.md (Single Source of Truth for v0.5).
 module.exports = {
-  darkMode: ['selector', '[data-theme="dark"], .dark'],
+  darkMode: ['selector', '[data-theme="dark"]'],
   content: ['./app/templates/**/*.html'],
   theme: {
     extend: {

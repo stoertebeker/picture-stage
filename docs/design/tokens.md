@@ -61,6 +61,17 @@ ideal für Editorial Dark, weil sie Bilder farblich nicht stört.
 
 ### 2.2 Semantic-Layer (Dark-Mode = Default)
 
+> **Theme-Mechanik (ps-ux-04):** `<html data-theme="dark">` ist Server-Default
+> (jedes Layout setzt es). `frontend/static/js/app.js` bootstrappt in einer
+> sofortigen IIFE: liest `localStorage.theme`, setzt entweder den persistierten
+> Wert oder fällt auf `"dark"` zurück. Toggle erfolgt über
+> `<button data-theme-toggle>` mit zwei Kind-Spans `data-theme-label="dark"`
+> und `data-theme-label="light"`; CSS in `input.css` blendet das jeweils
+> nicht-zutreffende Label aus. Tailwind nutzt `[data-theme="dark"]` als
+> einzigen Dark-Selektor (`tailwind.config.js`). Der Guest-Viewer ist
+> hartcodiert auf `data-theme="dark"`, ohne Toggle – Bilder sollen auf
+> dunkler Bühne stehen.
+
 | Token | Hex (Dark) | Rolle |
 |-------|------------|-------|
 | `surface-base`    | `#09090b` (`zinc-950`) | Body-Background, hinterste Ebene |

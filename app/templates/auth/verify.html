@@ -1,7 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ locale }}"
-      x-data="{ darkMode: localStorage.getItem('theme') === 'dark' || (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches) }"
-      :class="{ 'dark': darkMode }">
+<html lang="{{ locale }}" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,11 +11,11 @@
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
             <div class="flex items-center justify-between mb-6">
                 <h1 class="text-2xl font-bold">{{ t('nav.brand') }}</h1>
-                <button @click="darkMode = !darkMode; localStorage.setItem('theme', darkMode ? 'dark' : 'light')"
-                        type="button"
+                <button type="button"
+                        data-theme-toggle
                         class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                    <span x-show="!darkMode">{{ t('nav.dark_mode') }}</span>
-                    <span x-show="darkMode">{{ t('nav.light_mode') }}</span>
+                    <span data-theme-label="dark">{{ t('nav.dark_mode') }}</span>
+                    <span data-theme-label="light">{{ t('nav.light_mode') }}</span>
                 </button>
             </div>
 
