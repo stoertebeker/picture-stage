@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -189,6 +189,7 @@ async def gallery_images_grid(
 async def upload_images(
     gallery_id: uuid.UUID,
     request: Request,
+    files: list[UploadFile] = File(default_factory=list),
     user: User = Depends(require_authenticated_page),
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
@@ -208,10 +209,18 @@ async def upload_images(
 
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
-    form = await request.form()
-    files = form.getlist("files")
+    logger.info(
+        "Upload to gallery %s: received %d files (types: %s)",
+        gallery_id,
+        len(files),
+        [getattr(f, "content_type", "?") for f in files],
+    )
+
+    # Filter out empty form parts (browsers can submit empty file fields).
+    files = [f for f in files if f and f.filename]
 
     if not files:
+        logger.warning("Upload to gallery %s: no usable files in form", gallery_id)
         raise HTTPException(status_code=422, detail="No files provided")
 
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
@@ -222,10 +231,7 @@ async def upload_images(
 
     watermark_text = f"PREVIEW · {str(gallery.id)[:8].upper()}"
 
-    for idx, raw_file in enumerate(files):
-        if not isinstance(raw_file, UploadFile):
-            continue
-        file: UploadFile = raw_file
+    for idx, file in enumerate(files):
         if file.content_type not in allowed_types:
             raise HTTPException(
                 status_code=422,
