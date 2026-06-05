@@ -320,7 +320,7 @@ async def guest_verify_password(
             {
                 "request": request,
                 "token": token,
-                "error": "Falsches Passwort",
+                "error_key": "guest.password_error",
             },
         )
 

@@ -171,6 +171,7 @@
     "password_text": "Bitte gib das Passwort ein, um die Bilder zu sehen.",
     "password_placeholder": "Passwort",
     "password_submit": "Galerie öffnen",
+    "password_error": "Falsches Passwort",
     "expired_title": "Galerie abgelaufen",
     "expired_text": "Der Zugangslink für diese Galerie ist leider nicht mehr gültig.",
     "expired_contact": "Bitte wenden Sie sich an den Fotografen, um einen neuen Link zu erhalten.",

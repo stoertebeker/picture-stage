@@ -171,6 +171,7 @@
     "password_text": "Please enter the password to view the images.",
     "password_placeholder": "Password",
     "password_submit": "Open Gallery",
+    "password_error": "Wrong password",
     "expired_title": "Gallery Expired",
     "expired_text": "The access link for this gallery is no longer valid.",
     "expired_contact": "Please contact the photographer to get a new link.",

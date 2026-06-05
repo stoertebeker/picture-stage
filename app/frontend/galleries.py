@@ -45,20 +45,6 @@ ALLOWED_TRANSITIONS: dict[GalleryStatus, set[GalleryStatus]] = {
     GalleryStatus.archived: {GalleryStatus.shared},
 }
 
-# Human-readable status labels
-STATUS_LABELS: dict[GalleryStatus, str] = {
-    GalleryStatus.draft: "Entwurf",
-    GalleryStatus.shared: "Geteilt",
-    GalleryStatus.completed: "Abgeschlossen",
-    GalleryStatus.archived: "Archiviert",
-}
-
-# Human-readable transition action labels
-TRANSITION_LABELS: dict[GalleryStatus, str] = {
-    GalleryStatus.shared: "Teilen",
-    GalleryStatus.completed: "Abschliessen",
-    GalleryStatus.archived: "Archivieren",
-}
 
 
 async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
@@ -117,7 +103,6 @@ def _build_context(
         transitions.append(
             {
                 "status": target_status.value,
-                "label": TRANSITION_LABELS.get(target_status, target_status.value),
             }
         )
 
@@ -127,7 +112,6 @@ def _build_context(
         "gallery": gallery,
         "images": images,
         "image_count": len(images),
-        "status_label": STATUS_LABELS.get(gallery.status, gallery.status.value),
         "transitions": transitions,
         "has_share_token": gallery.share_token_hash is not None,
         "csrf_token": request.cookies.get("csrf_token", ""),
