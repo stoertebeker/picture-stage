@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_user_from_cookie
 from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
 from app.auth.tokens import create_access_token, generate_verification_token
-from app.db.models import PendingSignup, User, UserStatus
+from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.security.rate_limit import limiter
@@ -24,7 +24,7 @@ def _csrf_from_request(request: Request) -> str:
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
     user = await get_user_from_cookie(request, db)
-    if user is not None and user.status != UserStatus.pending:
+    if user is not None and user.status in LOGIN_ALLOWED_STATUSES:
         return RedirectResponse(url="/dashboard", status_code=303)
     return templates.TemplateResponse(
         request,
@@ -63,14 +63,15 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
             status_code=401,
         )
 
-    if user.status == UserStatus.pending:
+    if user.status not in LOGIN_ALLOWED_STATUSES:
+        error = "auth.account_disabled" if user.status == UserStatus.disabled else "auth.not_approved"
         return templates.TemplateResponse(
             request,
             "auth/login.html",
             {
                 "request": request,
                 "csrf_token": _csrf_from_request(request),
-                "error": "auth.not_approved",
+                "error": error,
             },
             status_code=403,
         )

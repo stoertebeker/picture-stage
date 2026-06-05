@@ -33,6 +33,7 @@
     "email_password_required": "Email and password are required.",
     "invalid_credentials": "Invalid email address or password.",
     "not_approved": "Account not yet approved by admin.",
+    "account_disabled": "This account has been disabled. Please contact an administrator.",
     "passwords_mismatch": "Passwords do not match.",
     "password_too_short": "Password must be at least 8 characters.",
     "email_registered": "Email address already registered.",

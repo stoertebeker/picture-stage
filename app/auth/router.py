@@ -7,7 +7,7 @@ from app.auth.dependencies import get_current_user
 from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
 from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRequest, SignupResponse, UserResponse
 from app.auth.tokens import create_access_token, generate_verification_token
-from app.db.models import PendingSignup, User
+from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.security.rate_limit import limiter
 
@@ -81,8 +81,13 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     if user is None or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
-    if user.status == "pending":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not yet approved by admin")
+    if user.status not in LOGIN_ALLOWED_STATUSES:
+        detail = (
+            "Account is disabled"
+            if user.status == UserStatus.disabled
+            else "Account not yet approved by admin"
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
     access_token = create_access_token(str(user.id))
     return LoginResponse(access_token=access_token)
@@ -104,8 +109,13 @@ async def login_form(request: Request, db: AsyncSession = Depends(get_db)) -> Re
     if user is None or not verify_password(str(password), user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
-    if user.status == "pending":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not yet approved by admin")
+    if user.status not in LOGIN_ALLOWED_STATUSES:
+        detail = (
+            "Account is disabled"
+            if user.status == UserStatus.disabled
+            else "Account not yet approved by admin"
+        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
     access_token = create_access_token(str(user.id))
     response = RedirectResponse(url="/dashboard", status_code=303)

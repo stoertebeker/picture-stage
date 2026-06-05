@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.tokens import decode_access_token
-from app.db.models import User, UserStatus
+from app.db.models import LOGIN_ALLOWED_STATUSES, User, UserStatus
 from app.db.session import get_db
 
 bearer_scheme = HTTPBearer()
@@ -36,8 +36,9 @@ async def get_current_user(
 
 
 async def require_active_user(user: User = Depends(get_current_user)) -> User:
-    if user.status == UserStatus.pending:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account not yet approved")
+    if user.status not in LOGIN_ALLOWED_STATUSES:
+        detail = "Account is disabled" if user.status == UserStatus.disabled else "Account not yet approved"
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
     return user
 
 
@@ -64,8 +65,6 @@ async def get_user_from_cookie(request: Request, db: AsyncSession = Depends(get_
 
 async def require_authenticated_page(request: Request, db: AsyncSession = Depends(get_db)) -> User:
     user = await get_user_from_cookie(request, db)
-    if user is None:
-        raise HTTPException(status_code=303, headers={"Location": "/login"})
-    if user.status == UserStatus.pending:
+    if user is None or user.status not in LOGIN_ALLOWED_STATUSES:
         raise HTTPException(status_code=303, headers={"Location": "/login"})
     return user

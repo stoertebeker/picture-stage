@@ -27,6 +27,14 @@ class UserStatus(enum.StrEnum):
     pending = "pending"
     active = "active"
     admin = "admin"
+    disabled = "disabled"
+
+
+# Single source of truth for which user statuses may authenticate / hold a session.
+# Any status NOT in this set (pending, disabled) is denied access at login and on
+# every protected route. Centralised so a newly added status can never silently
+# "leak" access by being forgotten in one of the auth checks.
+LOGIN_ALLOWED_STATUSES = frozenset({UserStatus.active, UserStatus.admin})
 
 
 class GalleryPhase(enum.StrEnum):
