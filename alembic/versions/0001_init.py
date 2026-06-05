@@ -50,8 +50,9 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("email"),
     )
+    # Email uniqueness is enforced by the unique index (matches the ORM, which
+    # declares unique=True + index=True -> a single unique index, no constraint).
     op.create_index("ix_users_email", "users", ["email"], unique=True)
 
     # galleries
@@ -201,9 +202,8 @@ def upgrade() -> None:
         sa.Column("verification_token_salt", sa.LargeBinary(), nullable=False),
         sa.Column("requested_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("email"),
     )
-    op.create_index("ix_pending_signups_email", "pending_signups", ["email"])
+    op.create_index("ix_pending_signups_email", "pending_signups", ["email"], unique=True)
 
 
 def downgrade() -> None:
