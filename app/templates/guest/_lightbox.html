@@ -1,7 +1,9 @@
 <div x-show="lightboxOpen"
      x-transition
      @keydown.window="handleKeydown($event)"
-     class="fixed inset-0 z-50 bg-black flex items-center justify-center"
+     @touchstart="handleTouchStart($event)"
+     @touchend="handleTouchEnd($event)"
+     class="fixed inset-0 z-modal bg-surface-sunken flex items-center justify-center touch-pan-y"
      style="display: none;">
 
     <!-- Close button -->

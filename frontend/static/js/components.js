@@ -72,6 +72,7 @@ window.guestViewer = function () {
         openLightbox(index) {
             this.lightboxIndex = index;
             this.lightboxOpen = true;
+            this._preloadAdjacent();
         },
 
         closeLightbox() {
@@ -79,11 +80,57 @@ window.guestViewer = function () {
         },
 
         nextImage() {
-            if (this.lightboxIndex < this.images.length - 1) this.lightboxIndex++;
+            if (this.lightboxIndex < this.images.length - 1) {
+                this.lightboxIndex++;
+                this._preloadAdjacent();
+            }
         },
 
         prevImage() {
-            if (this.lightboxIndex > 0) this.lightboxIndex--;
+            if (this.lightboxIndex > 0) {
+                this.lightboxIndex--;
+                this._preloadAdjacent();
+            }
+        },
+
+        // Preload the adjacent images so navigation feels instant.
+        _preloadAdjacent() {
+            const targets = [this.lightboxIndex + 1, this.lightboxIndex - 1];
+            targets.forEach((idx) => {
+                const img = this.images[idx];
+                if (!img) return;
+                const url = img.preview_url || img.thumb_md_url;
+                if (!url) return;
+                const preload = new Image();
+                preload.src = url;
+            });
+        },
+
+        // Swipe gestures on mobile. Threshold = 50px horizontal,
+        // vertical movement must be smaller (otherwise it's a scroll).
+        _touchStartX: null,
+        _touchStartY: null,
+
+        handleTouchStart(e) {
+            if (!e.touches || e.touches.length !== 1) return;
+            this._touchStartX = e.touches[0].clientX;
+            this._touchStartY = e.touches[0].clientY;
+        },
+
+        handleTouchEnd(e) {
+            if (this._touchStartX === null) return;
+            const t = e.changedTouches && e.changedTouches[0];
+            if (!t) {
+                this._touchStartX = null;
+                return;
+            }
+            const dx = t.clientX - this._touchStartX;
+            const dy = t.clientY - this._touchStartY;
+            this._touchStartX = null;
+            this._touchStartY = null;
+            if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+            if (dx < 0) this.nextImage();
+            else this.prevImage();
         },
 
         async toggleSelect(imageId) {
