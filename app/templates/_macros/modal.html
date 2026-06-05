@@ -1,0 +1,85 @@
+{#- Modal macro (PS-UX-12).
+
+Usage:
+  {% from "_macros/modal.html" import modal, modal_footer %}
+  {% from "_macros/buttons.html" import button %}
+
+  {% call modal(ref='createModal', title=t('dashboard.create_modal_title'),
+                size='sm') %}
+    <form …>
+      …
+      {{ modal_footer() }}
+        {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
+          {{ t('common.cancel') }}
+        {% endcall %}
+        {% call button(variant='primary', type='submit') %}
+          {{ t('common.save') }}
+        {% endcall %}
+      {{ modal_footer(close=True) }}
+    </form>
+  {% endcall %}
+
+  Open from anywhere:
+  {% call button(attrs={'@click': '$refs.createModal.showModal()'}) %}…{% endcall %}
+
+Mechanics:
+- Built on the native <dialog> element. `dialog.showModal()` makes the rest
+  of the document inert and traps Tab focus inside the dialog automatically
+  (modern browsers, including Brave/Chromium 148 we test on).
+- ESC closes natively via the <dialog>'s native cancel event.
+- Backdrop-click close uses `@click.self="$el.close()"` — relies on the
+  <dialog> having no padding (p-0) while inner content is wrapped in a
+  div with its own padding, so the <dialog> element itself is only ever
+  hit by clicks on the backdrop region.
+
+Sizes:
+- sm  → max-w-md  (forms, confirms)
+- md  → max-w-lg  (default)
+- lg  → max-w-2xl (richer content)
+- xl  → max-w-4xl (image preview)
+
+A11y:
+- aria-labelledby points at the title <h2> via `{ref}-title` id.
+- Title is mandatory; pass title='' explicitly if you want to suppress it
+  (rare — provide an aria-label via attrs instead).
+-#}
+
+{%- set _size_class = {
+    'sm': 'max-w-md',
+    'md': 'max-w-lg',
+    'lg': 'max-w-2xl',
+    'xl': 'max-w-4xl',
+} -%}
+
+{%- macro modal(ref, title='', size='md', extra_class='', attrs={}) -%}
+  {%- set size_cls = _size_class.get(size, _size_class['md']) -%}
+  <dialog x-ref="{{ ref }}"
+          id="{{ ref }}"
+          @click.self="$el.close()"
+          aria-labelledby="{{ ref }}-title"
+          class="p-0 rounded-lg shadow-lg bg-surface-raised text-text-primary border border-border-subtle backdrop:bg-black/60 backdrop:backdrop-blur-sm w-full {{ size_cls }} {{ extra_class }}"
+          {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+    <div class="p-6 flex flex-col gap-4">
+      {%- if title %}
+      <header class="flex items-center justify-between gap-3">
+        <h2 id="{{ ref }}-title" class="text-lg font-semibold">{{ title }}</h2>
+        <button type="button"
+                @click="$el.closest('dialog').close()"
+                aria-label="{{ 'Schließen' }}"
+                class="text-text-muted hover:text-text-primary transition-colors p-1 -m-1 rounded focus:outline-none focus-visible:ring focus-visible:ring-focus">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+        </button>
+      </header>
+      {%- endif %}
+      {{ caller() }}
+    </div>
+  </dialog>
+{%- endmacro -%}
+
+{%- macro modal_footer() -%}
+  <footer class="flex flex-wrap items-center justify-end gap-3 pt-2">
+    {{ caller() }}
+  </footer>
+{%- endmacro -%}

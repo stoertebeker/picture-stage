@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "_macros/buttons.html" import button %}
 {% from "_macros/forms.html" import field, text_input, csrf_input %}
+{% from "_macros/modal.html" import modal, modal_footer %}
 
 {% block title %}{{ t('dashboard.title') }}{% endblock %}
 
@@ -35,35 +36,28 @@
     </div>
 </div>
 
-<!-- Create Gallery Modal -->
-<dialog x-ref="createModal" class="rounded-xl shadow-2xl p-0 backdrop:bg-black/50 dark:bg-gray-800 bg-white max-w-md w-full">
-    <div class="p-6">
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white mb-4">{{ t('dashboard.create_modal_title') }}</h2>
-        <form
-            method="post"
-            action="/dashboard/galleries"
-            hx-post="/dashboard/galleries"
-            hx-target="#gallery-grid"
-            hx-swap="beforeend"
-            hx-on::after-request="if (event.detail.successful) { document.getElementById('dashboard-empty-state')?.remove(); this.closest('dialog').close(); this.reset(); }"
-        >
-            {{ csrf_input(csrf_token) }}
-            <div class="mb-4">
-                {% call field(label=t('dashboard.gallery_name_label'), name='name', required=true) %}
-                    {{ text_input(name='name', required=true,
-                                  placeholder=t('dashboard.gallery_name_placeholder'),
-                                  autofocus=true) }}
-                {% endcall %}
-            </div>
-            <div class="flex justify-end gap-3">
-                {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
-                    {{ t('dashboard.cancel') }}
-                {% endcall %}
-                {% call button(variant='primary', type='submit') %}
-                    {{ t('dashboard.create') }}
-                {% endcall %}
-            </div>
-        </form>
-    </div>
-</dialog>
+{% call modal(ref='createModal', title=t('dashboard.create_modal_title'), size='sm') %}
+    <form method="post"
+          action="/dashboard/galleries"
+          hx-post="/dashboard/galleries"
+          hx-target="#gallery-grid"
+          hx-swap="beforeend"
+          hx-on::after-request="if (event.detail.successful) { document.getElementById('dashboard-empty-state')?.remove(); this.closest('dialog').close(); this.reset(); }"
+          class="flex flex-col gap-4">
+        {{ csrf_input(csrf_token) }}
+        {% call field(label=t('dashboard.gallery_name_label'), name='name', required=true) %}
+            {{ text_input(name='name', required=true,
+                          placeholder=t('dashboard.gallery_name_placeholder'),
+                          autofocus=true) }}
+        {% endcall %}
+        {% call modal_footer() %}
+            {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
+                {{ t('dashboard.cancel') }}
+            {% endcall %}
+            {% call button(variant='primary', type='submit') %}
+                {{ t('dashboard.create') }}
+            {% endcall %}
+        {% endcall %}
+    </form>
+{% endcall %}
 {% endblock %}
