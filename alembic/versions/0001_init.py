@@ -96,6 +96,22 @@ def upgrade() -> None:
     )
     op.create_index("ix_image_preview_image_id", "image_preview", ["image_id"])
 
+    # ShareSession table (must precede selection_event which FK-references it)
+    op.create_table(
+        "share_session",
+        sa.Column("id", sa.UUID(), nullable=False),
+        sa.Column("gallery_id", sa.UUID(), nullable=False),
+        sa.Column("ip_address", sa.String(), nullable=True),
+        sa.Column("user_agent", sa.String(), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
+        sa.ForeignKeyConstraint(
+            ["gallery_id"],
+            ["gallery.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+    op.create_index("ix_share_session_gallery_id", "share_session", ["gallery_id"])
+
     # SelectionEvent table (append-only)
     op.create_table(
         "selection_event",
@@ -122,22 +138,6 @@ def upgrade() -> None:
     op.create_index("ix_selection_event_gallery_id", "selection_event", ["gallery_id"])
     op.create_index("ix_selection_event_image_id", "selection_event", ["image_id"])
     op.create_index("ix_selection_event_session_id", "selection_event", ["session_id"])
-
-    # ShareSession table
-    op.create_table(
-        "share_session",
-        sa.Column("id", sa.UUID(), nullable=False),
-        sa.Column("gallery_id", sa.UUID(), nullable=False),
-        sa.Column("ip_address", sa.String(), nullable=True),
-        sa.Column("user_agent", sa.String(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["gallery_id"],
-            ["gallery.id"],
-        ),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_share_session_gallery_id", "share_session", ["gallery_id"])
 
     # AuditLog table
     op.create_table(
@@ -225,12 +225,12 @@ def downgrade() -> None:
     op.drop_index("ix_audit_log_created_at", table_name="audit_log")
     op.drop_index("ix_audit_log_gallery_id", table_name="audit_log")
     op.drop_table("audit_log")
-    op.drop_index("ix_share_session_gallery_id", table_name="share_session")
-    op.drop_table("share_session")
     op.drop_index("ix_selection_event_session_id", table_name="selection_event")
     op.drop_index("ix_selection_event_image_id", table_name="selection_event")
     op.drop_index("ix_selection_event_gallery_id", table_name="selection_event")
     op.drop_table("selection_event")
+    op.drop_index("ix_share_session_gallery_id", table_name="share_session")
+    op.drop_table("share_session")
     op.drop_index("ix_image_preview_image_id", table_name="image_preview")
     op.drop_table("image_preview")
     op.drop_index("ix_image_gallery_id", table_name="image")
