@@ -4,7 +4,10 @@ S2a (this file, read-only): GET /api/v1/admin/users + /pending-signups/count.
 Run against real PostgreSQL in CI (the sandbox cannot reach the DB).
 """
 
-from app.db.models import Gallery, PendingSignup, User, UserStatus
+from sqlalchemy import func, select
+
+from app.auth.passwords import verify_password
+from app.db.models import AuditLog, Gallery, PendingSignup, User, UserStatus
 from tests.integration.conftest import make_user
 
 
@@ -125,4 +128,173 @@ async def test_pending_signups_count_zero(client, db, auth_headers):
 async def test_pending_signups_count_requires_admin(client, db, auth_headers):
     non_admin = await make_user(db, "active@test.local", status=UserStatus.active)
     resp = await client.get("/api/v1/admin/pending-signups/count", headers=auth_headers(non_admin))
+    assert resp.status_code == 403
+
+
+# --- PATCH /api/v1/admin/users/{id}/status ---
+
+
+async def test_promote_user_to_admin(client, db, auth_headers, verify_db):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+
+    resp = await client.patch(
+        f"/api/v1/admin/users/{target.id}/status",
+        json={"status": "admin"},
+        headers=auth_headers(admin),
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "admin"
+    refreshed = await verify_db.get(User, target.id)
+    assert refreshed.status == UserStatus.admin
+
+
+async def test_disable_and_reenable_user(client, db, auth_headers, verify_db):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+
+    resp = await client.patch(
+        f"/api/v1/admin/users/{target.id}/status",
+        json={"status": "disabled"},
+        headers=auth_headers(admin),
+    )
+    assert resp.status_code == 200
+    assert (await verify_db.get(User, target.id)).status == UserStatus.disabled
+
+
+async def test_status_change_is_audited(client, db, auth_headers, verify_db):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+
+    await client.patch(
+        f"/api/v1/admin/users/{target.id}/status",
+        json={"status": "disabled"},
+        headers=auth_headers(admin),
+    )
+
+    rows = (
+        await verify_db.execute(select(AuditLog).where(AuditLog.event_type == "user_status_changed"))
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].actor_user_id == admin.id
+    assert rows[0].details["new_status"] == "disabled"
+
+
+async def test_cannot_change_own_status(client, db, auth_headers):  # S1
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    resp = await client.patch(
+        f"/api/v1/admin/users/{admin.id}/status",
+        json={"status": "disabled"},
+        headers=auth_headers(admin),
+    )
+    assert resp.status_code == 400
+
+
+async def test_status_pending_rejected(client, db, auth_headers):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    resp = await client.patch(
+        f"/api/v1/admin/users/{target.id}/status",
+        json={"status": "pending"},
+        headers=auth_headers(admin),
+    )
+    assert resp.status_code == 400
+
+
+async def test_status_change_requires_admin(client, db, auth_headers):
+    non_admin = await make_user(db, "active@test.local", status=UserStatus.active)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    resp = await client.patch(
+        f"/api/v1/admin/users/{target.id}/status",
+        json={"status": "admin"},
+        headers=auth_headers(non_admin),
+    )
+    assert resp.status_code == 403
+
+
+# --- DELETE /api/v1/admin/users/{id} ---
+
+
+async def test_delete_user_removes_account_and_galleries(client, db, auth_headers, verify_db):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    await _add_gallery(db, target, "G1")
+    await _add_gallery(db, target, "G2")
+
+    resp = await client.delete(f"/api/v1/admin/users/{target.id}", headers=auth_headers(admin))
+
+    assert resp.status_code == 204
+    assert await verify_db.get(User, target.id) is None
+    remaining = await verify_db.scalar(
+        select(func.count()).select_from(Gallery).where(Gallery.owner_id == target.id)
+    )
+    assert remaining == 0
+
+
+async def test_delete_user_is_audited(client, db, auth_headers, verify_db):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+
+    await client.delete(f"/api/v1/admin/users/{target.id}", headers=auth_headers(admin))
+
+    rows = (
+        await verify_db.execute(select(AuditLog).where(AuditLog.event_type == "user_deleted"))
+    ).scalars().all()
+    assert len(rows) == 1
+    assert rows[0].details["target_email"] == "u@test.local"
+
+
+async def test_cannot_delete_self(client, db, auth_headers, verify_db):  # S1
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    resp = await client.delete(f"/api/v1/admin/users/{admin.id}", headers=auth_headers(admin))
+    assert resp.status_code == 400
+    assert await verify_db.get(User, admin.id) is not None
+
+
+async def test_delete_requires_admin(client, db, auth_headers, verify_db):
+    non_admin = await make_user(db, "active@test.local", status=UserStatus.active)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    resp = await client.delete(f"/api/v1/admin/users/{target.id}", headers=auth_headers(non_admin))
+    assert resp.status_code == 403
+    assert await verify_db.get(User, target.id) is not None
+
+
+# --- POST /api/v1/admin/users/{id}/reset-password ---
+
+
+async def test_reset_password_sets_new_hash(client, db, auth_headers, verify_db):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+
+    resp = await client.post(
+        f"/api/v1/admin/users/{target.id}/reset-password",
+        json={"new_password": "brandnew-pw-123"},
+        headers=auth_headers(admin),
+    )
+
+    assert resp.status_code == 204
+    refreshed = await verify_db.get(User, target.id)
+    assert verify_password("brandnew-pw-123", refreshed.password_hash)
+
+
+async def test_reset_password_too_short_rejected(client, db, auth_headers):
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    resp = await client.post(
+        f"/api/v1/admin/users/{target.id}/reset-password",
+        json={"new_password": "short"},
+        headers=auth_headers(admin),
+    )
+    assert resp.status_code == 422
+
+
+async def test_reset_password_requires_admin(client, db, auth_headers):
+    non_admin = await make_user(db, "active@test.local", status=UserStatus.active)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    resp = await client.post(
+        f"/api/v1/admin/users/{target.id}/reset-password",
+        json={"new_password": "brandnew-pw-123"},
+        headers=auth_headers(non_admin),
+    )
     assert resp.status_code == 403

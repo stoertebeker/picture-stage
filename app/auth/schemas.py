@@ -1,7 +1,9 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
+
+from app.db.models import UserStatus
 
 
 class SignupRequest(BaseModel):
@@ -70,3 +72,13 @@ class AdminUserListResponse(BaseModel):
 
 class PendingSignupCountResponse(BaseModel):
     count: int
+
+
+class AdminUserStatusUpdate(BaseModel):
+    """Target status for an admin status change (pending is rejected in the router)."""
+
+    status: UserStatus
+
+
+class AdminPasswordResetRequest(BaseModel):
+    new_password: str = Field(min_length=8)
