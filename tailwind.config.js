@@ -2,7 +2,7 @@
 // Tokens mirror docs/design/tokens.md (Single Source of Truth for v0.5).
 module.exports = {
   darkMode: ['selector', '[data-theme="dark"]'],
-  content: ['./app/templates/**/*.html'],
+  content: ['./app/templates/**/*.html', './frontend/static/spikes/*.html'],
   theme: {
     extend: {
       colors: {

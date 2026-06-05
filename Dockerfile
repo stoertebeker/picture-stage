@@ -37,6 +37,7 @@ WORKDIR /css
 COPY tailwind.config.js ./
 COPY frontend/static/css/input.css ./input.css
 COPY app/templates/ ./app/templates/
+COPY frontend/static/spikes/ ./frontend/static/spikes/
 
 RUN npm install --no-save --no-audit --no-fund tailwindcss@3.4.17 \
     && npx tailwindcss -c tailwind.config.js -i ./input.css -o ./styles.css --minify
