@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>{% block title %}Picture-Stage{% endblock %}</title>
+    <link rel="preload" href="/static/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/fonts/fraunces-variable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="/static/css/styles.css">
 </head>
 <body x-data
