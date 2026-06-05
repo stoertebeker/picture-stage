@@ -49,16 +49,23 @@
 
 | Komponente | Status | Heute zu finden | Welle-2-Issue |
 |------------|--------|-----------------|---------------|
-| **Input (Text/Email/Password)** | teilweise | gleicher Klassen-Stack 6× in Login/Signup/Setup/Verify/Password/Rename | **PS-UX-11** |
-| **Textarea** | fehlt | keine Textarea im aktuellen Frontend (Comments sind API-only) | **PS-UX-11** |
-| **Select** | teilweise | Audit-Log-Filter, Guest-Viewer Sort/Filter | **PS-UX-11** |
-| **Checkbox / Toggle** | fehlt | nicht im Code, kommt mit Welle-2-Patterns | **PS-UX-11** |
-| **File-Upload (Drop-Zone)** | vorhanden | `galleries/_upload.html` mit Alpine-Komponente | – (Lift in Macro nur, wenn DRY-Wert) |
-| **Field-Wrapper** (Label + Input + Help + Error) | fehlt | jede Form formuliert Label/Input/Error individuell | **PS-UX-11** |
-| **CSRF Hidden Field** | konvention | `<input type="hidden" name="csrf_token">` in jeder mutierenden Form (Pattern, kein Macro nötig wegen globalem `hx-headers`) | – |
-| **Error-Anzeige** | teilweise | Login/Signup: `{% if error %}<div class="bg-red-100 …">{{ error }}</div>{% endif %}` repliziert | **PS-UX-11** (Field-Wrapper) |
+| **Field-Wrapper** (Label + Input + Help + Error) | vorhanden | `_macros/forms.html` `field(label, name, error, help, required)`; ARIA: `aria-describedby` über fixe `{name}-help`/`{name}-error` IDs | PS-UX-11 ✓ |
+| **Text-Input** | vorhanden | `text_input(name, value, type, placeholder, required, autofocus, autocomplete, attrs)` | PS-UX-11 ✓ |
+| **Password-Input** | vorhanden | `password_input(...)` (Default `autocomplete='current-password'`) | PS-UX-11 ✓ |
+| **Email-Input** | vorhanden | `email_input(...)` (Default `autocomplete='email'`) | PS-UX-11 ✓ |
+| **Textarea** | vorhanden | `textarea(name, value, placeholder, rows, attrs)` | PS-UX-11 ✓ |
+| **Select** | vorhanden | `select(name, options, selected, required, attrs)` (options als Liste von Tuples oder Dicts) | PS-UX-11 ✓ |
+| **Checkbox** | vorhanden | `checkbox(name, label, value, checked, attrs)` mit inline-Label | PS-UX-11 ✓ |
+| **CSRF Hidden Field** | vorhanden | `csrf_input(token)` (alias für das alte Hidden-Input-Pattern, klarere Aufruf-Stelle) | PS-UX-11 ✓ |
+| **Form-Error Banner** | vorhanden | `form_error(message)` (Page-Level-Alert, `role="alert"`) | PS-UX-11 ✓ |
+| **Toggle** | fehlt | – | (späterer Pass, wenn ein Toggle-Use-Case auftaucht) |
+| **File-Upload (Drop-Zone)** | vorhanden | `galleries/_upload.html` mit Alpine-Komponente `uploadZone()` aus `components.js` | – (Page-spezifisch, nicht in Macro lift-bar) |
 
-**Aktion Welle 2:** Macro `_macros/forms.html` mit Field-Wrapper-Pattern (Label, Input, Help, Error in einem Slot).
+**Verprobt in:** `auth/login.html` (Email + Password + Form-Error), `auth/signup.html` (Email + 2× Password + Form-Error), `dashboard/index.html` Create-Modal (Text-Input mit autofocus).
+
+**Migrations-Backlog:** Restliche Form-Stellen in `auth/verify.html`, `setup/index.html`, `guest/_password.html`, `galleries/audit_log.html` (Select), `galleries/detail.html` (Rename + Expiry), `galleries/_share_modal.html` (Passwort), `guest/viewer.html` (Sort/Filter-Selects) werden im jeweiligen Page-Redesign (Welle 3) migriert.
+
+**Bewusste Auslassung:** Tailwind opacity-modifier (`bg-status-danger/10`) funktioniert mit unseren CSS-Variable-Tokens **nicht** out-of-the-box (Tailwind erwartet RGB-Komponenten in der Variable, wir haben Hex). Das `form_error`-Macro nutzt deshalb temporär `bg-red-500/10` direkt. Sobald `tokens.md` auf RGB-Komponenten-Variablen migriert ist, kann der Macro auf semantic Token zurückwechseln — bis dahin als TODO-Kommentar im Macro vermerkt.
 
 ---
 

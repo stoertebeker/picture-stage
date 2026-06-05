@@ -1,0 +1,128 @@
+{#- Form macros (PS-UX-11).
+
+Usage:
+  {% from "_macros/forms.html" import field, text_input, password_input, email_input,
+                                       textarea, select, checkbox, csrf_input,
+                                       form_error %}
+
+  {% if error %}{{ form_error(error) }}{% endif %}
+
+  {% call field(label=t('auth.email_label'), name='email', required=true) %}
+    {{ email_input(name='email', value=email or '', required=true, autofocus=true,
+                   placeholder=t('auth.email_placeholder')) }}
+  {% endcall %}
+
+  {% call field(label=t('gallery.name_label'), name='gallery_name',
+                help=t('gallery.name_help'), error=field_error.gallery_name) %}
+    {{ text_input(name='gallery_name', value=gallery.name, required=true) }}
+  {% endcall %}
+
+Convention:
+- `name` parameter doubles as the input `id`, so the <label for> ties to it.
+- `field()` is a layout slot: label on top, input via {% call %}, then help (xs)
+  and error (xs, role="alert") below. ARIA: aria-describedby wires up help/error
+  via fixed id naming `{name}-help` / `{name}-error`.
+- `form_error(message)` is the page-level alert banner (e.g. "Falsches Passwort"),
+  separate from field-level errors which sit inside `field()`.
+- All inputs use the semantic tokens from tokens.md (border-subtle, border-focus,
+  surface-base, text-primary, accent-ring).
+
+Defaults:
+- type="text" for text_input, type="password" for password_input, type="email" for email_input
+- All inputs are NOT required by default — pass required=true explicitly.
+
+Sanitization note:
+- `error`, `help`, `label`, `value` are interpolated via Jinja's autoescape (on for
+  HTML templates), so user-controlled values land escaped. Do not pass raw HTML.
+-#}
+
+{%- set _input_class = 'w-full px-3 py-2 border border-border-subtle hover:border-border-strong rounded-md bg-surface-base text-text-primary placeholder:text-text-muted focus:outline-none focus-visible:ring focus-visible:ring-focus focus-visible:border-border-focus disabled:opacity-50' -%}
+
+{%- macro field(label, name, error='', help='', required=false) -%}
+  {%- set described_by_parts = [] -%}
+  {%- if help %}{% set _ = described_by_parts.append(name ~ '-help') %}{% endif -%}
+  {%- if error %}{% set _ = described_by_parts.append(name ~ '-error') %}{% endif -%}
+  <div class="flex flex-col gap-1">
+    <label for="{{ name }}" class="text-sm font-medium text-text-secondary">
+      {{ label }}{% if required %} <span aria-hidden="true" class="text-status-danger">*</span>{% endif %}
+    </label>
+    {{ caller() }}
+    {% if help %}<p id="{{ name }}-help" class="text-xs text-text-muted">{{ help }}</p>{% endif %}
+    {% if error %}<p id="{{ name }}-error" class="text-xs text-status-danger" role="alert">{{ error }}</p>{% endif %}
+  </div>
+{%- endmacro -%}
+
+{%- macro text_input(name, value='', type='text', placeholder='', required=false, autofocus=false, autocomplete='', attrs={}) -%}
+  <input type="{{ type }}"
+         id="{{ name }}"
+         name="{{ name }}"
+         {%- if value %} value="{{ value }}"{% endif %}
+         {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}
+         {%- if autocomplete %} autocomplete="{{ autocomplete }}"{% endif %}
+         {%- if required %} required{% endif %}
+         {%- if autofocus %} autofocus{% endif %}
+         class="{{ _input_class }}"
+         {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+{%- endmacro -%}
+
+{%- macro password_input(name='password', placeholder='', required=true, autofocus=false, autocomplete='current-password', attrs={}) -%}
+  {{ text_input(name=name, type='password', placeholder=placeholder, required=required, autofocus=autofocus, autocomplete=autocomplete, attrs=attrs) }}
+{%- endmacro -%}
+
+{%- macro email_input(name='email', value='', placeholder='', required=true, autofocus=false, autocomplete='email', attrs={}) -%}
+  {{ text_input(name=name, value=value, type='email', placeholder=placeholder, required=required, autofocus=autofocus, autocomplete=autocomplete, attrs=attrs) }}
+{%- endmacro -%}
+
+{%- macro textarea(name, value='', placeholder='', required=false, rows=4, attrs={}) -%}
+  <textarea id="{{ name }}"
+            name="{{ name }}"
+            rows="{{ rows }}"
+            {%- if placeholder %} placeholder="{{ placeholder }}"{% endif %}
+            {%- if required %} required{% endif %}
+            class="{{ _input_class }} resize-y"
+            {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>{{ value }}</textarea>
+{%- endmacro -%}
+
+{%- macro select(name, options, selected='', required=false, attrs={}) -%}
+  {#- options: list of (value, label) tuples OR list of dicts with 'value'/'label' keys -#}
+  <select id="{{ name }}"
+          name="{{ name }}"
+          {%- if required %} required{% endif %}
+          class="{{ _input_class }} pr-10"
+          {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+    {%- for opt in options %}
+      {%- if opt is mapping -%}
+        {%- set ov = opt.value -%}{%- set ol = opt.label -%}
+      {%- else -%}
+        {%- set ov = opt[0] -%}{%- set ol = opt[1] -%}
+      {%- endif %}
+      <option value="{{ ov }}"{% if ov == selected %} selected{% endif %}>{{ ol }}</option>
+    {%- endfor %}
+  </select>
+{%- endmacro -%}
+
+{%- macro checkbox(name, label, value='1', checked=false, attrs={}) -%}
+  <label class="inline-flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+    <input type="checkbox"
+           id="{{ name }}"
+           name="{{ name }}"
+           value="{{ value }}"
+           {%- if checked %} checked{% endif %}
+           class="rounded border-border-subtle bg-surface-base text-accent focus:ring focus:ring-focus"
+           {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+    <span>{{ label }}</span>
+  </label>
+{%- endmacro -%}
+
+{%- macro csrf_input(token) -%}
+  <input type="hidden" name="csrf_token" value="{{ token }}">
+{%- endmacro -%}
+
+{%- macro form_error(message) -%}
+  {#- Note: bg-red-* used directly here. Once tokens.md gets opacity-modifier
+      friendly RGB-component variables (e.g. --color-status-danger: 220 38 38),
+      this can switch to bg-status-danger/10. -#}
+  <div class="bg-red-500/10 border border-red-500/40 text-red-300 px-4 py-3 rounded-md text-sm" role="alert">
+    {{ message }}
+  </div>
+{%- endmacro -%}

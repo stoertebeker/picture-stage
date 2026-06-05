@@ -27,10 +27,12 @@ def test_logout_route_exists():
 
 
 def test_login_template_has_csrf():
-    """Login template includes CSRF token hidden input."""
+    """Login template includes the CSRF input — now via the csrf_input macro
+    (ps-ux-11). The macro emits a hidden input with name="csrf_token", so the
+    contract holds at render time. We assert here that the template invokes
+    the macro."""
     login_html = (PROJECT_ROOT / "app" / "templates" / "auth" / "login.html").read_text()
-    assert 'name="csrf_token"' in login_html
-    assert 'type="hidden"' in login_html
+    assert "csrf_input" in login_html
 
 
 def test_login_template_has_dark_mode():
@@ -47,16 +49,17 @@ def test_login_template_has_dark_mode():
 
 
 def test_signup_template_has_password_confirm():
-    """Signup template has password confirmation field."""
+    """Signup template has password confirmation field — now via the
+    password_input macro (ps-ux-11) with name='password_confirm'."""
     signup_html = (PROJECT_ROOT / "app" / "templates" / "auth" / "signup.html").read_text()
-    assert 'name="password_confirm"' in signup_html
+    assert "password_confirm" in signup_html
 
 
 def test_signup_template_has_csrf():
-    """Signup template includes CSRF token hidden input."""
+    """Signup template includes the CSRF input — now via the csrf_input macro
+    (ps-ux-11)."""
     signup_html = (PROJECT_ROOT / "app" / "templates" / "auth" / "signup.html").read_text()
-    assert 'name="csrf_token"' in signup_html
-    assert 'type="hidden"' in signup_html
+    assert "csrf_input" in signup_html
 
 
 def test_signup_template_has_dark_mode():

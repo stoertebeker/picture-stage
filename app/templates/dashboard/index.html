@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from "_macros/buttons.html" import button %}
+{% from "_macros/forms.html" import field, text_input, csrf_input %}
 
 {% block title %}{{ t('dashboard.title') }}{% endblock %}
 
@@ -46,17 +47,13 @@
             hx-swap="beforeend"
             hx-on::after-request="if (event.detail.successful) { document.getElementById('dashboard-empty-state')?.remove(); this.closest('dialog').close(); this.reset(); }"
         >
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {{ csrf_input(csrf_token) }}
             <div class="mb-4">
-                <label for="gallery-name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{{ t('dashboard.gallery_name_label') }}</label>
-                <input
-                    type="text"
-                    id="gallery-name"
-                    name="name"
-                    required
-                    placeholder="{{ t('dashboard.gallery_name_placeholder') }}"
-                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                >
+                {% call field(label=t('dashboard.gallery_name_label'), name='name', required=true) %}
+                    {{ text_input(name='name', required=true,
+                                  placeholder=t('dashboard.gallery_name_placeholder'),
+                                  autofocus=true) }}
+                {% endcall %}
             </div>
             <div class="flex justify-end gap-3">
                 {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
