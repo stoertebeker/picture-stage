@@ -11,7 +11,7 @@
      data-total-images="{{ total_images }}"
      data-selected-count="{{ selected_count }}"
      data-favorited-count="{{ favorited_count }}"
-     class="min-h-screen">
+     class="min-h-screen bg-surface-base text-text-primary">
 
     {% if requires_password %}
     <div id="password-section" class="flex items-center justify-center py-20 px-4">
@@ -19,70 +19,103 @@
     </div>
     {% else %}
 
-    <!-- Sort/Filter Toolbar -->
-    <div class="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur border-b border-gray-200 dark:border-gray-700 px-4 py-3">
-        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
-            <div class="flex items-center gap-2 text-sm">
-                <span class="text-gray-600 dark:text-gray-400">
-                    <span x-text="'{{ t('guest.selected_of_total') }}'.replace('{selected}', selectedCount).replace('{total}', totalImages).replace('{favorited}', favoritedCount)">{{ t('guest.selected_of_total').replace('{selected}', selected_count | string).replace('{total}', total_images | string).replace('{favorited}', favorited_count | string) }}</span>
-                </span>
+    <!-- Editorial Dark sticky header -->
+    <header class="sticky top-0 z-sticky bg-surface-base/85 backdrop-blur-md border-b border-border-subtle">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
+            <div class="flex flex-col gap-0.5 min-w-0">
+                <span class="text-xs uppercase tracking-widest text-text-muted">{{ t('guest.gallery_eyebrow') }}</span>
+                <h1 class="font-display text-xl sm:text-2xl text-text-primary leading-tight truncate">{{ gallery_name }}</h1>
             </div>
-            <div class="flex items-center gap-2">
-                <select
-                    hx-get="/g/{{ token }}/gallery-images"
-                    hx-target="#image-grid"
-                    hx-swap="innerHTML"
-                    hx-include="[name='sort_dir'],[name='filter'],[name='session_id']"
-                    name="sort_by"
-                    class="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    <option value="sort_order" {% if sort_by == "sort_order" %}selected{% endif %}>{{ t('guest.sort_order') }}</option>
-                    <option value="filename" {% if sort_by == "filename" %}selected{% endif %}>{{ t('guest.sort_filename') }}</option>
-                    <option value="exif_date" {% if sort_by == "exif_date" %}selected{% endif %}>{{ t('guest.sort_exif_date') }}</option>
-                </select>
-                <select
-                    hx-get="/g/{{ token }}/gallery-images"
-                    hx-target="#image-grid"
-                    hx-swap="innerHTML"
-                    hx-include="[name='sort_by'],[name='filter'],[name='session_id']"
-                    name="sort_dir"
-                    class="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    <option value="asc" {% if sort_dir == "asc" %}selected{% endif %}>{{ t('guest.sort_asc') }}</option>
-                    <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>{{ t('guest.sort_desc') }}</option>
-                </select>
-                <select
-                    hx-get="/g/{{ token }}/gallery-images"
-                    hx-target="#image-grid"
-                    hx-swap="innerHTML"
-                    hx-include="[name='sort_by'],[name='sort_dir'],[name='session_id']"
-                    name="filter"
-                    class="text-sm px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">
-                    <option value="all" {% if filter == "all" %}selected{% endif %}>{{ t('guest.filter_all') }}</option>
-                    <option value="selected" {% if filter == "selected" %}selected{% endif %}>{{ t('guest.filter_selected') }}</option>
-                    <option value="favorited" {% if filter == "favorited" %}selected{% endif %}>{{ t('guest.filter_favorited') }}</option>
-                    <option value="unrated" {% if filter == "unrated" %}selected{% endif %}>{{ t('guest.filter_unrated') }}</option>
-                </select>
+            <!-- Settings / sort toggle -->
+            <div class="flex items-center gap-2" x-data="{ showFilters: false }">
                 <input type="hidden" name="session_id" value="{{ session_id }}">
+                <!-- Sort dropdowns hidden in a compact pop, toggled by gear icon -->
+                <button type="button"
+                        @click="showFilters = !showFilters"
+                        :class="showFilters ? 'text-accent bg-accent/10' : 'text-text-muted hover:text-text-primary'"
+                        class="p-2 rounded-md transition-colors"
+                        aria-label="{{ t('guest.sort_label') }}">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7h18M6 12h12M10 17h4"/></svg>
+                </button>
+
+                <!-- Sort options (only shown when filter bar is open) -->
+                <div x-show="showFilters" x-transition class="hidden sm:flex items-center gap-2" style="display: none;">
+                    <select hx-get="/g/{{ token }}/gallery-images"
+                            hx-target="#image-grid"
+                            hx-swap="innerHTML"
+                            hx-include="[name='sort_dir'],[name='filter'],[name='session_id']"
+                            name="sort_by"
+                            class="text-xs px-3 py-1.5 border border-border-subtle hover:border-border-strong rounded-md bg-surface-base text-text-secondary focus:outline-none focus-visible:ring focus-visible:ring-focus">
+                        <option value="sort_order" {% if sort_by == "sort_order" %}selected{% endif %}>{{ t('guest.sort_order') }}</option>
+                        <option value="filename" {% if sort_by == "filename" %}selected{% endif %}>{{ t('guest.sort_filename') }}</option>
+                        <option value="exif_date" {% if sort_by == "exif_date" %}selected{% endif %}>{{ t('guest.sort_exif_date') }}</option>
+                    </select>
+                    <select hx-get="/g/{{ token }}/gallery-images"
+                            hx-target="#image-grid"
+                            hx-swap="innerHTML"
+                            hx-include="[name='sort_by'],[name='filter'],[name='session_id']"
+                            name="sort_dir"
+                            class="text-xs px-3 py-1.5 border border-border-subtle hover:border-border-strong rounded-md bg-surface-base text-text-secondary focus:outline-none focus-visible:ring focus-visible:ring-focus">
+                        <option value="asc" {% if sort_dir == "asc" %}selected{% endif %}>{{ t('guest.sort_asc') }}</option>
+                        <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>{{ t('guest.sort_desc') }}</option>
+                    </select>
+                </div>
             </div>
         </div>
-    </div>
 
-    <!-- Image Grid -->
-    <div id="image-grid" class="max-w-7xl mx-auto px-4 py-6">
-        {% include "guest/_image_grid.html" %}
-    </div>
+        <!-- Counter strip -->
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-3 flex items-center gap-3 sm:gap-4 text-xs text-text-muted">
+            <span>{{ t('guest.images_count').replace('{count}', total_images | string) }}</span>
+            <span class="text-border-subtle">·</span>
+            <span><span class="text-accent font-medium" x-text="selectedCount">{{ selected_count }}</span> {{ t('guest.counter_selected_word') }}</span>
+            <span class="text-border-subtle">·</span>
+            <span><span class="text-favorite" x-text="favoritedCount">{{ favorited_count }}</span> {{ t('guest.counter_favorited_word') }}</span>
+        </div>
 
-    <!-- Complete Review Button -->
-    <div class="fixed bottom-0 inset-x-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur border-t border-gray-200 dark:border-gray-700 px-4 py-3">
-        <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <div class="text-sm text-gray-600 dark:text-gray-400">
-                <span x-text="'{{ t('guest.rated_of_total') }}'.replace('{selected}', selectedCount).replace('{total}', totalImages)">{{ t('guest.rated_of_total').replace('{selected}', selected_count | string).replace('{total}', total_images | string) }}</span>
-            </div>
-            <button
-                @click="showCompleteModal = true"
-                class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg transition-colors text-sm">
-                {{ t('guest.complete_button') }}
+        <!-- Filter chips row -->
+        <nav class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pb-4 flex flex-wrap items-center gap-2">
+            <span class="text-xs uppercase tracking-widest text-text-muted mr-1">{{ t('guest.show_label') }}</span>
+            {% set _chips = [
+                ('all', t('guest.filter_all')),
+                ('selected', t('guest.filter_selected')),
+                ('favorited', t('guest.filter_favorited')),
+                ('unrated', t('guest.filter_unrated')),
+            ] %}
+            {% for value, label in _chips %}
+            <button type="button"
+                    hx-get="/g/{{ token }}/gallery-images?filter={{ value }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&session_id={{ session_id }}"
+                    hx-target="#image-grid"
+                    hx-swap="innerHTML"
+                    {% if filter == value %}
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-accent/15 border border-accent/40 text-accent"
+                    {% else %}
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-transparent border border-border-subtle text-text-secondary hover:border-border-strong"
+                    {% endif %}>
+                {{ label }}
             </button>
+            {% endfor %}
+        </nav>
+        <input type="hidden" name="filter" value="{{ filter }}">
+    </header>
+
+    <!-- Image grid -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-32">
+        <div id="image-grid">
+            {% include "guest/_image_grid.html" %}
         </div>
+    </main>
+
+    <!-- Floating complete pill -->
+    <div class="fixed bottom-6 right-6 z-sticky"
+         x-show="selectedCount > 0 || favoritedCount > 0"
+         x-transition>
+        <button type="button"
+                @click="showCompleteModal = true"
+                class="inline-flex items-center gap-2 rounded-full bg-accent text-text-on-accent px-5 py-3 shadow-lg hover:bg-accent-hover transition-colors font-medium">
+            <span>{{ t('guest.complete_pill') }}</span>
+            <span class="inline-flex items-center justify-center min-w-[1.5rem] h-6 px-1.5 rounded-full bg-black/20 text-xs"
+                  x-text="selectedCount">{{ selected_count }}</span>
+        </button>
     </div>
 
     <!-- Lightbox -->

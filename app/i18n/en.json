@@ -144,7 +144,15 @@
     "password_submit": "Open Gallery",
     "expired_title": "Gallery Expired",
     "expired_text": "The access link for this gallery is no longer valid.",
-    "expired_contact": "Please contact the photographer to get a new link."
+    "expired_contact": "Please contact the photographer to get a new link.",
+    "gallery_eyebrow": "Gallery",
+    "images_count": "{count} images",
+    "counter_selected_word": "selected",
+    "counter_favorited_word": "favorites",
+    "show_label": "Show",
+    "sort_label": "Sort by",
+    "complete_pill": "Finish selection",
+    "back_to_overview": "Back to overview"
   },
   "expiry": {
     "expired": "Expired",

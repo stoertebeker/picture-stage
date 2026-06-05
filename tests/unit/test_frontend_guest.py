@@ -29,9 +29,13 @@ def test_guest_viewer_has_lightbox():
 
 
 def test_guest_viewer_has_dark_mode():
-    """Guest viewer uses dark: Tailwind classes."""
+    """Guest viewer renders under data-theme='dark' and uses Editorial-Dark
+    semantic tokens (bg-surface-*, text-text-*). After ps-ux-20b the legacy
+    `dark:bg-gray-*` utility duplicates were removed in favour of the new
+    token classes."""
     viewer_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "viewer.html").read_text()
-    assert "dark:" in viewer_html
+    assert "bg-surface-base" in viewer_html
+    assert "text-text-primary" in viewer_html
 
 
 def test_guest_viewer_has_selection_toolbar():
@@ -54,12 +58,18 @@ def test_guest_viewer_has_selection_toolbar():
 
 
 def test_guest_viewer_has_complete_button():
-    """Guest viewer has a 'Bewertung abschließen' button (via i18n key)."""
+    """Guest viewer offers a complete-selection action (via i18n key).
+
+    The redesigned viewer (ps-ux-20b) uses the floating-pill phrasing
+    'Auswahl abschließen' (guest.complete_pill), while the modal still
+    confirms with the longer guest.complete_button. Both keys must say
+    'abschließen' in DE."""
     import json
 
     viewer_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "viewer.html").read_text()
-    assert "t('guest.complete_button')" in viewer_html
+    assert "t('guest.complete_pill')" in viewer_html
     de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())
+    assert "abschließen" in de["guest"]["complete_pill"].lower()
     assert "abschließen" in de["guest"]["complete_button"].lower()
 
 

@@ -144,7 +144,15 @@
     "password_submit": "Galerie öffnen",
     "expired_title": "Galerie abgelaufen",
     "expired_text": "Der Zugangslink für diese Galerie ist leider nicht mehr gültig.",
-    "expired_contact": "Bitte wenden Sie sich an den Fotografen, um einen neuen Link zu erhalten."
+    "expired_contact": "Bitte wenden Sie sich an den Fotografen, um einen neuen Link zu erhalten.",
+    "gallery_eyebrow": "Galerie",
+    "images_count": "{count} Bilder",
+    "counter_selected_word": "ausgewählt",
+    "counter_favorited_word": "markiert",
+    "show_label": "Anzeigen",
+    "sort_label": "Sortieren",
+    "complete_pill": "Auswahl abschließen",
+    "back_to_overview": "Zurück zur Übersicht"
   },
   "expiry": {
     "expired": "Abgelaufen",

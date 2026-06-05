@@ -1,40 +1,79 @@
-<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+{% if images %}
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
     {% for img in images %}
-    <div class="relative group cursor-pointer rounded-lg overflow-hidden bg-gray-200 dark:bg-gray-800 aspect-square"
-         @click="openLightbox({{ loop.index0 }})">
+    <button type="button"
+            @click="openLightbox({{ loop.index0 }})"
+            class="group relative aspect-[4/5] overflow-hidden rounded-md focus:outline-none focus-visible:ring focus-visible:ring-focus"
+            :class="images[{{ loop.index0 }}]?.selected ? 'ring-2 ring-inset ring-accent' : ''">
         <img src="{{ img.thumb_md_url or img.thumb_sm_url }}"
              alt="{{ img.filename }}"
              loading="lazy"
              class="w-full h-full object-cover">
 
-        <!-- Selection Overlay -->
-        <div class="absolute inset-0 flex items-end justify-between p-2 bg-gradient-to-t from-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
-             :class="{ 'opacity-100': images[{{ loop.index0 }}]?.selected || images[{{ loop.index0 }}]?.favorited }">
-            <button @click.stop="toggleSelect('{{ img.id }}')"
-                    class="w-7 h-7 rounded-full flex items-center justify-center text-white transition-colors"
-                    :class="images[{{ loop.index0 }}]?.selected ? 'bg-blue-500' : 'bg-black/50 hover:bg-blue-500'">
-                ✓
-            </button>
-            <button @click.stop="toggleFavorite('{{ img.id }}')"
-                    class="w-7 h-7 rounded-full flex items-center justify-center text-white transition-colors"
-                    :class="images[{{ loop.index0 }}]?.favorited ? 'bg-yellow-500' : 'bg-black/50 hover:bg-yellow-500'">
-                ★
-            </button>
-        </div>
+        <!-- Hover ring (when not selected) -->
+        <span class="absolute inset-0 ring-1 ring-inset ring-transparent group-hover:ring-text-primary/30 transition-all"
+              x-show="!images[{{ loop.index0 }}]?.selected"></span>
 
-        <!-- Selection indicator (always visible when selected) -->
+        <!-- Selected check badge (top-left, persistent) -->
         <template x-if="images[{{ loop.index0 }}]?.selected">
-            <div class="absolute top-2 left-2 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs">✓</div>
+            <span class="absolute top-2 left-2">
+                <span class="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-text-on-accent shadow">
+                    <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                    </svg>
+                </span>
+            </span>
         </template>
+
+        <!-- Selection toggle (bottom-left, only on hover when unselected) -->
+        <button type="button"
+                @click.stop="toggleSelect('{{ img.id }}')"
+                x-show="!images[{{ loop.index0 }}]?.selected"
+                class="absolute bottom-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 rounded-full bg-black/50 hover:bg-accent text-white flex items-center justify-center"
+                aria-label="{{ t('guest.lightbox_select') }}">
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+            </svg>
+        </button>
+
+        <!-- Deselect toggle (bottom-left, when selected) -->
+        <button type="button"
+                @click.stop="toggleSelect('{{ img.id }}')"
+                x-show="images[{{ loop.index0 }}]?.selected"
+                class="absolute bottom-2 left-2 h-7 w-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center"
+                aria-label="{{ t('guest.lightbox_selected') }}"
+                style="display: none;">
+            <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+
+        <!-- Favorite heart filled when set -->
         <template x-if="images[{{ loop.index0 }}]?.favorited">
-            <div class="absolute top-2 right-2 w-6 h-6 bg-yellow-500 rounded-full flex items-center justify-center text-white text-xs">★</div>
+            <button type="button"
+                    @click.stop="toggleFavorite('{{ img.id }}')"
+                    class="absolute top-2 right-2 text-favorite drop-shadow-md"
+                    aria-label="{{ t('guest.lightbox_favorited') }}">
+                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 21s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.5-7 10-7 10z"/>
+                </svg>
+            </button>
         </template>
-    </div>
+
+        <!-- Favorite outline only on hover (when not favourited) -->
+        <button type="button"
+                @click.stop="toggleFavorite('{{ img.id }}')"
+                x-show="!images[{{ loop.index0 }}]?.favorited"
+                class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity text-white drop-shadow-md hover:text-favorite"
+                aria-label="{{ t('guest.lightbox_favorite') }}">
+            <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
+            </svg>
+        </button>
+    </button>
     {% endfor %}
 </div>
-
-{% if not images %}
-<div class="text-center py-16 text-gray-500 dark:text-gray-400">
-    <p>{{ t('guest.no_images') }}</p>
-</div>
+{% else %}
+{% from "_macros/empty.html" import empty_state, icon_image %}
+{{ empty_state(icon=icon_image(), title=t('guest.no_images')) }}
 {% endif %}
