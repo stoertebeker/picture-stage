@@ -18,16 +18,33 @@ down_revision = None
 branch_labels = None
 depends_on = None
 
+# Native PostgreSQL ENUM types, mirroring the StrEnums in app/db/models.py.
+# create_type=False: we create/drop them explicitly (idempotent) so create_table
+# does not try to emit a second CREATE TYPE.
+user_status = postgresql.ENUM("pending", "active", "admin", name="userstatus", create_type=False)
+gallery_phase = postgresql.ENUM("review", name="galleryphase", create_type=False)
+gallery_status = postgresql.ENUM("draft", "shared", "completed", "archived", name="gallerystatus", create_type=False)
+preview_variant = postgresql.ENUM("thumb_sm", "thumb_md", "preview", name="previewvariant", create_type=False)
+selection_action = postgresql.ENUM(
+    "select", "deselect", "favorite", "unfavorite", "comment", name="selectionaction", create_type=False
+)
+
+_ENUM_TYPES = (user_status, gallery_phase, gallery_status, preview_variant, selection_action)
+
 
 def upgrade() -> None:
     """Create initial schema."""
+    bind = op.get_bind()
+    for enum_type in _ENUM_TYPES:
+        enum_type.create(bind, checkfirst=True)
+
     # users
     op.create_table(
         "users",
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("email", sa.String(320), nullable=False),
         sa.Column("password_hash", sa.String(128), nullable=False),
-        sa.Column("status", sa.String(), nullable=False, server_default="pending"),
+        sa.Column("status", user_status, nullable=False, server_default="pending"),
         sa.Column("email_verified_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("locale", sa.String(10), nullable=False, server_default="de"),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
@@ -43,8 +60,8 @@ def upgrade() -> None:
         sa.Column("id", sa.UUID(), nullable=False),
         sa.Column("owner_id", sa.UUID(), nullable=False),
         sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("phase", sa.String(), nullable=False, server_default="review"),
-        sa.Column("status", sa.String(), nullable=False, server_default="draft"),
+        sa.Column("phase", gallery_phase, nullable=False, server_default="review"),
+        sa.Column("status", gallery_status, nullable=False, server_default="draft"),
         sa.Column("share_token_hash", sa.LargeBinary(), nullable=True),
         sa.Column("share_token_salt", sa.LargeBinary(), nullable=True),
         sa.Column("share_token", sa.String(128), nullable=True),
@@ -84,7 +101,7 @@ def upgrade() -> None:
         "image_previews",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("image_id", sa.UUID(), nullable=False),
-        sa.Column("variant", sa.String(), nullable=False),
+        sa.Column("variant", preview_variant, nullable=False),
         sa.Column("storage_key", sa.String(1024), nullable=False),
         sa.Column("width", sa.Integer(), nullable=False),
         sa.Column("height", sa.Integer(), nullable=False),
@@ -115,7 +132,7 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("image_id", sa.UUID(), nullable=False),
         sa.Column("share_session_id", sa.UUID(), nullable=False),
-        sa.Column("action", sa.String(), nullable=False),
+        sa.Column("action", selection_action, nullable=False),
         sa.Column("comment", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.ForeignKeyConstraint(["image_id"], ["images.id"], ondelete="CASCADE"),
@@ -225,3 +242,8 @@ def downgrade() -> None:
 
     op.drop_index("ix_users_email", table_name="users")
     op.drop_table("users")
+
+    # Drop the ENUM types last — tables referencing them are already gone.
+    bind = op.get_bind()
+    for enum_type in reversed(_ENUM_TYPES):
+        enum_type.drop(bind, checkfirst=True)
