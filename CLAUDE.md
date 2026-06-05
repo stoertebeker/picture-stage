@@ -116,7 +116,7 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-02
+**Datum:** 2026-06-05
 **Wachwechsel-Tag:** `handover-2026-06-02` (zeigt auf `c0b1fe4`, vor Übergabe-Commit)
 
 ### Was ist fertig
@@ -132,25 +132,24 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 - Quality Gates: ruff (check+format), mypy strict, pytest — alle grün
 - CI/CD Workflows (GitHub Actions inkl. Postgres-Service), Multi-Arch Dockerfile
 
-### Nächste große Baustelle: Frontend-UX-Redesign (Epic `picture-stage-3av`)
+### Nächste große Baustelle: Frontend-UX-Redesign (Epic `picture-stage-qdz`) – REDUCED SCOPE
 
 Das Frontend ist **funktional und technisch vollständig** – aber **visuell
 noch ein Tailwind-Default**, was für eine Foto-Proofing-App ein Nachteil ist.
-Stand der Assets (alle real, nicht mehr Platzhalter):
-- `frontend/static/css/styles.css` ist via Tailwind Standalone-CLI generiert
-  (Self-Hosted, kein npm-Build nötig)
-- `frontend/static/js/htmx.min.js` (HTMX 2.x) und `alpine.min.js` (Alpine 3.x)
-  sind echt vendored – CSP `script-src 'self'` ist erfüllt
-- Web-Fonts: noch keine self-hosted Fonts (folgt in Welle 1 des Redesigns)
+Assets: `styles.css` (Tailwind Standalone), `htmx.min.js` + `alpine.min.js` (self-hosted, CSP ✅).
 
-**Epic v0.5 „UX-Redesign – Editorial Dark"** ist via `/set-course` angelegt:
-- Stil: Editorial Dark (fotofokussiert, zinc-basiert, Serif-Display + Sans-UI)
-- 40 Sub-Issues in 5 Wellen: 0 (Docs), 1 (Foundation/Tokens), 2 (Komponenten),
-  3 (Page-Redesigns je Mockup-Spike + Implementation), 4 (A11y/i18n/Mobile)
-- Plan: `.schrammns_workflow/plans/2026-06-02-v0.5-ux-redesign-editorial-dark.md`
-- Einstieg: `bd ready` → `picture-stage-ciw` (Design-Token-Spec) als erstes
-  fachliches Issue, davor optional `picture-stage-40y` (Doc-Fix) und parallel
-  `picture-stage-dtq` (Layout-Primitives)
+**Strategic Decision (2026-06-05):** Scope reduziert von 40 auf 18 Issues für schnelleren MVP-Launch.
+- ✅ **Foundation vollständig:** Design-Tokens, Tailwind-Config, Web-Fonts, Dark-Mode, Primitives
+- ✅ **Komponenten minimal:** Button, Form, Modal only (Toast/Cards → v0.6+)
+- ✅ **Guest-Pages nur:** Viewer, Lightbox, Password-Gate redesign (Außenkontakt, Konversion)
+- ❌ **Photographer-Pages deferred:** Dashboard, Galerie-Detail, Auth, Admin, Onboarding, Audit-Log, Legal → v0.6+
+- ❌ **A11y-Audit deferred** → v0.5.1+
+
+**Epic v0.5 „UX-Redesign – Editorial Dark (Guest-Focused)"** ist via `/set-course` angelegt:
+- ID: `picture-stage-qdz`
+- 18 Sub-Issues in 4 Wellen (Doc → Foundation → Komponenten → Guest-Pages → Querschnitt)
+- Plan: `.schrammns_workflow/plans/2026-06-02-v0.5-ux-redesign-editorial-dark.md` (reduced scope)
+- Einstieg: `bd ready` → `picture-stage-qdz.2` (PS-UX-01, Design-Token-Spec)
 
 ### Was sonst noch offen ist (kleinere Brocken)
 - Alembic initiale Migration (aktuell `create_all` beim Startup)
@@ -167,7 +166,7 @@ Stand der Assets (alle real, nicht mehr Platzhalter):
 | v0.2 Lifecycle & Komfort | `picture-stage-9q3` | 6/7 closed (1 deferred) |
 | v0.3 Produktion & Compliance | `picture-stage-fbr` | 7/7 closed |
 | v0.4 Frontend (funktional) | `picture-stage-gza` | 6/6 closed |
-| v0.5 UX-Redesign – Editorial Dark | `picture-stage-3av` | 0/40 (in Planung gestartet 2026-06-02) |
+| v0.5 UX-Redesign – Editorial Dark (Guest-Focused, Reduced Scope) | `picture-stage-qdz` | 0/18 (in Planung gestartet 2026-06-05) |
 
 ### Verifikation für neue Sessions
 `bash scripts/verify-handover.sh` prüft den Übergabe-Stand
