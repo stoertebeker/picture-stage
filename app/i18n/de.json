@@ -139,7 +139,8 @@
     "delete_button": "Galerie loeschen",
     "delete_title": "Galerie endgueltig loeschen",
     "delete_warning": "Diese Aktion kann nicht rueckgaengig gemacht werden. Alle Bilder, Vorschauen, Auswahlen und Share-Links werden unwiderruflich geloescht. Audit-Log-Eintraege werden anonymisiert und erhalten.",
-    "delete_confirm_text": "Gib den Galerienamen <strong>{name}</strong> ein, um die Loeschung zu bestaetigen:",
+    "delete_confirm_prefix": "Gib den Galerienamen ",
+    "delete_confirm_suffix": " ein, um die Loeschung zu bestaetigen:",
     "delete_confirm_placeholder": "Galeriename eingeben",
     "delete_confirm_button": "Endgueltig loeschen",
     "preview_alt": "Vorschau"

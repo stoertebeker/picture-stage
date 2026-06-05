@@ -18,7 +18,7 @@
             <h3 class="text-lg font-semibold text-status-danger">{{ t('gallery.delete_title') }}</h3>
             <p class="mt-2 text-sm text-text-muted">{{ t('gallery.delete_warning') }}</p>
             <p class="mt-4 text-sm text-text-secondary">
-                {{ t('gallery.delete_confirm_text').replace('{name}', gallery.name) | safe }}
+                {{ t('gallery.delete_confirm_prefix') }}<strong>{{ gallery.name }}</strong>{{ t('gallery.delete_confirm_suffix') }}
             </p>
 
             {% if delete_error is defined and delete_error %}

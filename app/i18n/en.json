@@ -139,7 +139,8 @@
     "delete_button": "Delete gallery",
     "delete_title": "Permanently delete gallery",
     "delete_warning": "This action cannot be undone. All images, previews, selections and share links will be permanently deleted. Audit log entries will be anonymized and preserved.",
-    "delete_confirm_text": "Enter the gallery name <strong>{name}</strong> to confirm deletion:",
+    "delete_confirm_prefix": "Enter the gallery name ",
+    "delete_confirm_suffix": " to confirm deletion:",
     "delete_confirm_placeholder": "Enter gallery name",
     "delete_confirm_button": "Delete permanently",
     "preview_alt": "Preview"

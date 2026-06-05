@@ -36,7 +36,7 @@ class WatermarkConfig(BaseModel):
 
 
 class GalleryCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=200)
     watermark_config: dict[str, Any] | None = None
     expires_at: datetime | None = None
 
@@ -55,7 +55,7 @@ class GalleryCreate(BaseModel):
 
 
 class GalleryUpdate(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
     watermark_config: dict[str, Any] | None = None
     expires_at: datetime | None = None
 
@@ -119,7 +119,7 @@ class DashboardResponse(BaseModel):
 
 
 class GalleryDuplicateRequest(BaseModel):
-    name: str | None = None
+    name: str | None = Field(default=None, min_length=1, max_length=200)
 
 
 # --- Audit Log ---
