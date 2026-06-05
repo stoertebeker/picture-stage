@@ -51,10 +51,10 @@
   "dashboard": {
     "title": "Dashboard – Picture-Stage",
     "my_galleries": "My Galleries",
-    "new_gallery": "+ New Gallery",
+    "new_gallery": "New Gallery",
     "no_galleries_title": "No galleries yet",
     "no_galleries_text": "Create your first gallery to share photos with your models.",
-    "new_gallery_create": "+ Create New Gallery",
+    "new_gallery_create": "Create New Gallery",
     "create_modal_title": "Create New Gallery",
     "gallery_name_label": "Name",
     "gallery_name_placeholder": "e.g. Hamburg Shoot 2026",

@@ -51,10 +51,10 @@
   "dashboard": {
     "title": "Dashboard – Picture-Stage",
     "my_galleries": "Meine Galerien",
-    "new_gallery": "+ Neue Galerie",
+    "new_gallery": "Neue Galerie",
     "no_galleries_title": "Noch keine Galerien",
     "no_galleries_text": "Erstelle deine erste Galerie, um Bilder mit deinen Models zu teilen.",
-    "new_gallery_create": "+ Neue Galerie erstellen",
+    "new_gallery_create": "Neue Galerie erstellen",
     "create_modal_title": "Neue Galerie erstellen",
     "gallery_name_label": "Name",
     "gallery_name_placeholder": "z.B. Shooting Hamburg 2026",
