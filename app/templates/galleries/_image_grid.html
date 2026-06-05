@@ -15,7 +15,7 @@
 
         <button type="button"
                 class="block aspect-square w-full cursor-pointer bg-surface-sunken"
-                @click="openPreview({{ img.previews.get('preview', img.previews.get('thumb_md', '')) | tojson }}, {{ img.filename | tojson }})">
+                @click="openPreview({{ img.previews.get('preview', img.previews.get('thumb_md', '')) | tojson | e }}, {{ img.filename | tojson | e }})">
             {% if img.previews.get('thumb_md') %}
             <img src="{{ img.previews['thumb_md'] }}"
                  alt="{{ img.filename }}"
