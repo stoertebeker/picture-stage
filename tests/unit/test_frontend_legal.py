@@ -1,9 +1,9 @@
 """Tests for frontend legal pages and Markdown rendering."""
 
+import json
 from pathlib import Path
 
 from app.frontend.legal import _minimal_md_to_html
-
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LEGAL_ROOT = PROJECT_ROOT / "app" / "templates" / "legal"
@@ -31,8 +31,6 @@ def test_legal_templates_keep_content_safe_only_after_renderer() -> None:
 
 
 def test_legal_templates_have_navigation_and_config_fallbacks() -> None:
-    import json
-
     impressum = _template("impressum.html")
     datenschutz = _template("datenschutz.html")
 
