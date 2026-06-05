@@ -34,7 +34,8 @@ async def run_migrations() -> None:
         poolclass=pool.NullPool,
     )
 
-    async with engine.connect() as conn:
+    # engine.begin() commits on clean exit, rolls back on exception.
+    async with engine.begin() as conn:
         await conn.run_sync(_run_sync, cfg)
 
     await engine.dispose()
@@ -55,12 +56,9 @@ def _run_sync(conn, cfg: Config) -> None:  # type: ignore[no-untyped-def]
     revisions = list(reversed(list(script.walk_revisions(head=target, base=current or "base"))))
     logger.info("Migrating %s → %s (%d step(s))", current or "base", target, len(revisions))
 
-    with mc.begin_transaction():
-        conn.execute(_ALEMBIC_VERSION_DDL)
-        with Operations.context(mc):
-            for rev in revisions:
-                logger.info("Applying %s", rev.revision)
-                rev.module.upgrade()
-        conn.execute(_STAMP_SQL, {"v": target})
-
-    logger.info("Stamped %s", target)
+    conn.execute(_ALEMBIC_VERSION_DDL)
+    with Operations.context(mc):
+        for rev in revisions:
+            logger.info("Applying %s", rev.revision)
+            rev.module.upgrade()
+    conn.execute(_STAMP_SQL, {"v": target})
