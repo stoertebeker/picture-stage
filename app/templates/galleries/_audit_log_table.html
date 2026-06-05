@@ -78,8 +78,7 @@
     {% endif %}
 
     {% else %}
-    <div class="text-center py-12 text-gray-500 dark:text-gray-400">
-        <p class="text-lg">{{ t('audit.no_entries') }}</p>
-    </div>
+    {% from "_macros/empty.html" import empty_state, icon_audit %}
+    {{ empty_state(icon=icon_audit(), title=t('audit.no_entries')) }}
     {% endif %}
 </div>

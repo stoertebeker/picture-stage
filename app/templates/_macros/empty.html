@@ -1,0 +1,65 @@
+{#- Empty-state macro (PS-UX-15).
+
+Usage:
+  {% from "_macros/empty.html" import empty_state, icon_image, icon_audit, icon_inbox %}
+
+  {{ empty_state(
+       icon=icon_image(),
+       title=t('gallery.no_images_title'),
+       text=t('gallery.no_images_text')) }}
+
+  {% call empty_state(icon=icon_inbox(),
+                       title=t('admin.no_pending_title'),
+                       text=t('admin.no_pending_text')) %}
+    {% call button(variant='primary') %}{{ t('admin.refresh') }}{% endcall %}
+  {% endcall %}
+
+The macro takes pre-rendered icon HTML (the icon_* helpers below produce a
+16px square SVG with currentColor), a title, an optional text, and an
+optional CTA-slot via {% call %} for buttons/links.
+
+Layout: centered, 4-rem vertical padding by default, max-width to keep
+copy readable. Inside a grid use `col_span_full=true` to span all columns.
+-#}
+
+{%- macro _svg(d) -%}
+  <svg class="mx-auto h-16 w-16 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="{{ d }}" />
+  </svg>
+{%- endmacro -%}
+
+{%- macro icon_image() -%}
+  {{ _svg("M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5A2.25 2.25 0 0022.5 18.75V5.25A2.25 2.25 0 0020.25 3H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z") }}
+{%- endmacro -%}
+
+{%- macro icon_audit() -%}
+  {{ _svg("M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4") }}
+{%- endmacro -%}
+
+{%- macro icon_inbox() -%}
+  {{ _svg("M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4") }}
+{%- endmacro -%}
+
+{%- macro icon_filter() -%}
+  {{ _svg("M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z") }}
+{%- endmacro -%}
+
+{%- macro empty_state(icon='', title='', text='', col_span_full=false, extra_class='') -%}
+  <div class="text-center py-16 px-4 {% if col_span_full %}col-span-full{% endif %} {{ extra_class }}">
+    {%- if icon %}
+    <div class="mb-4">{{ icon }}</div>
+    {%- endif %}
+    {%- if title %}
+    <h2 class="text-lg font-medium text-text-secondary mb-2">{{ title }}</h2>
+    {%- endif %}
+    {%- if text %}
+    <p class="text-text-muted max-w-md mx-auto mb-6">{{ text }}</p>
+    {%- endif %}
+    {# Optional CTA slot via {% call %}. Falls kein call: kein Footer. #}
+    {%- if caller is defined %}
+    <div class="flex flex-wrap items-center justify-center gap-3">
+      {{ caller() }}
+    </div>
+    {%- endif %}
+  </div>
+{%- endmacro -%}
