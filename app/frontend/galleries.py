@@ -46,7 +46,6 @@ ALLOWED_TRANSITIONS: dict[GalleryStatus, set[GalleryStatus]] = {
 }
 
 
-
 async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
     """Load gallery with owner check. Raises 404 if not found or not owned."""
     result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))

@@ -49,7 +49,10 @@ def upgrade() -> None:
         sa.Column("expiry_date", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["owner_id"], ["user.id"], ),
+        sa.ForeignKeyConstraint(
+            ["owner_id"],
+            ["user.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("share_token_hash"),
     )
@@ -68,7 +71,10 @@ def upgrade() -> None:
         sa.Column("sort_order", sa.Integer(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["gallery_id"], ["gallery.id"], ),
+        sa.ForeignKeyConstraint(
+            ["gallery_id"],
+            ["gallery.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_image_gallery_id", "image", ["gallery_id"])
@@ -82,7 +88,10 @@ def upgrade() -> None:
         sa.Column("storage_key", sa.String(), nullable=False),
         sa.Column("width", sa.Integer(), nullable=False),
         sa.Column("height", sa.Integer(), nullable=False),
-        sa.ForeignKeyConstraint(["image_id"], ["image.id"], ),
+        sa.ForeignKeyConstraint(
+            ["image_id"],
+            ["image.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_image_preview_image_id", "image_preview", ["image_id"])
@@ -96,9 +105,18 @@ def upgrade() -> None:
         sa.Column("session_id", sa.UUID(), nullable=False),
         sa.Column("action", sa.String(), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["gallery_id"], ["gallery.id"], ),
-        sa.ForeignKeyConstraint(["image_id"], ["image.id"], ),
-        sa.ForeignKeyConstraint(["session_id"], ["share_session.id"], ),
+        sa.ForeignKeyConstraint(
+            ["gallery_id"],
+            ["gallery.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["image_id"],
+            ["image.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["session_id"],
+            ["share_session.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_selection_event_gallery_id", "selection_event", ["gallery_id"])
@@ -113,7 +131,10 @@ def upgrade() -> None:
         sa.Column("ip_address", sa.String(), nullable=True),
         sa.Column("user_agent", sa.String(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["gallery_id"], ["gallery.id"], ),
+        sa.ForeignKeyConstraint(
+            ["gallery_id"],
+            ["gallery.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_share_session_gallery_id", "share_session", ["gallery_id"])
@@ -130,7 +151,10 @@ def upgrade() -> None:
         sa.Column("user_agent", sa.String(), nullable=True),
         sa.Column("details", postgresql.JSON(astext_type=sa.Text()), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["gallery_id"], ["gallery.id"], ),
+        sa.ForeignKeyConstraint(
+            ["gallery_id"],
+            ["gallery.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_audit_log_gallery_id", "audit_log", ["gallery_id"])
@@ -144,7 +168,10 @@ def upgrade() -> None:
         sa.Column("email_on_selection", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["user_id"], ["user.id"], ),
+        sa.ForeignKeyConstraint(
+            ["user_id"],
+            ["user.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("user_id"),
     )
@@ -158,8 +185,14 @@ def upgrade() -> None:
         sa.Column("gallery_id", sa.UUID(), nullable=False),
         sa.Column("recipient_email", sa.String(), nullable=False),
         sa.Column("sent_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(["config_id"], ["notification_config.id"], ),
-        sa.ForeignKeyConstraint(["gallery_id"], ["gallery.id"], ),
+        sa.ForeignKeyConstraint(
+            ["config_id"],
+            ["notification_config.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["gallery_id"],
+            ["gallery.id"],
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_notification_delivery_config_id", "notification_delivery", ["config_id"])

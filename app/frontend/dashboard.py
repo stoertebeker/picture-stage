@@ -109,9 +109,7 @@ async def create_gallery(
         message = f"Galerie {name!r} angelegt."
     else:
         message = f"Gallery {name!r} created."
-    response.headers["HX-Trigger"] = json.dumps(
-        {"showToast": {"kind": "success", "message": message}}
-    )
+    response.headers["HX-Trigger"] = json.dumps({"showToast": {"kind": "success", "message": message}})
     return response
 
 
