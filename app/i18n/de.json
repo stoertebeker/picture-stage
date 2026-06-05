@@ -213,7 +213,11 @@
     "impressum_heading": "Impressum",
     "datenschutz_title": "Datenschutz - Picture-Stage",
     "datenschutz_heading": "Datenschutzerklärung",
+    "eyebrow": "Rechtliche Angaben",
+    "nav_label": "Rechtliche Seiten",
     "config_missing": "Bitte konfigurieren Sie Ihre rechtlichen Texte.",
+    "config_label": "Konfiguration",
+    "config_security_note": "Keine personenbezogenen Daten oder Secrets werden angezeigt; der Fallback nennt nur Konfigurationspfade.",
     "impressum_config_hint": "Legen Sie eine Markdown-Datei unter <code>/data/legal/impressum.md</code> ab oder setzen Sie die Umgebungsvariable <code>LEGAL_IMPRESSUM_PATH</code>.",
     "datenschutz_config_hint": "Legen Sie eine Markdown-Datei unter <code>/data/legal/datenschutz.md</code> ab oder setzen Sie die Umgebungsvariable <code>LEGAL_DATENSCHUTZ_PATH</code>."
   },

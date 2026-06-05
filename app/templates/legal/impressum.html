@@ -3,21 +3,41 @@
 {% block title %}{{ t('legal.impressum_title') }}{% endblock %}
 
 {% block content %}
-<div class="max-w-3xl mx-auto px-4 py-8">
-    <h1 class="text-3xl font-bold mb-6">{{ t('legal.impressum_heading') }}</h1>
-    {% if has_content %}
-        <div class="prose dark:prose-invert max-w-none">
+<div class="min-h-screen bg-surface-base">
+    <header class="border-b border-border-subtle bg-surface-base/90">
+        <div class="mx-auto flex max-w-3xl items-center justify-between px-4 py-4 sm:px-6">
+            <a href="/dashboard" class="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary">
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
+                {{ t('nav.dashboard') }}
+            </a>
+            <nav class="flex items-center gap-4 text-sm text-text-muted" aria-label="{{ t('legal.nav_label') }}">
+                <a href="/legal/impressum" class="text-text-primary">{{ t('nav.impressum') }}</a>
+                <a href="/legal/datenschutz" class="hover:text-text-primary">{{ t('nav.datenschutz') }}</a>
+            </nav>
+        </div>
+    </header>
+
+    <main class="mx-auto max-w-3xl px-4 py-12 sm:px-6">
+        <p class="mb-3 text-xs uppercase text-text-muted">{{ t('legal.eyebrow') }}</p>
+        <h1 class="font-display text-4xl leading-tight text-text-primary">{{ t('legal.impressum_heading') }}</h1>
+        {% if has_content %}
+        <div class="mt-8 space-y-7 text-base leading-7 text-text-secondary [&_a]:text-accent [&_a:hover]:text-accent-hover [&_h1]:font-display [&_h1]:text-3xl [&_h1]:text-text-primary [&_h2]:text-sm [&_h2]:font-semibold [&_h2]:uppercase [&_h2]:text-text-muted [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-text-primary [&_p]:mb-4 [&_strong]:text-text-primary">
             {{ content | safe }}
         </div>
-    {% else %}
-        <div class="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-700 rounded-lg p-6">
-            <p class="text-yellow-800 dark:text-yellow-200">
-                {{ t('legal.config_missing') }}
-            </p>
-            <p class="text-sm text-yellow-600 dark:text-yellow-400 mt-2">
+        {% else %}
+        <div class="mt-8 rounded-md border border-status-warning bg-surface-raised p-6">
+            <p class="text-xs uppercase text-text-muted">{{ t('legal.config_label') }}</p>
+            <h2 class="mt-2 font-display text-3xl text-text-primary">{{ t('legal.config_missing') }}</h2>
+            <p class="mt-3 text-sm leading-6 text-text-muted">
                 {{ t('legal.impressum_config_hint') | safe }}
             </p>
+            <div class="mt-5 rounded-md border border-border-subtle bg-surface-base p-3 text-sm text-text-secondary">
+                {{ t('legal.config_security_note') }}
+            </div>
         </div>
-    {% endif %}
+        {% endif %}
+    </main>
 </div>
 {% endblock %}

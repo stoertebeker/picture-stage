@@ -213,7 +213,11 @@
     "impressum_heading": "Legal Notice",
     "datenschutz_title": "Privacy Policy - Picture-Stage",
     "datenschutz_heading": "Privacy Policy",
+    "eyebrow": "Legal information",
+    "nav_label": "Legal pages",
     "config_missing": "Please configure your legal texts.",
+    "config_label": "Configuration",
+    "config_security_note": "No personal data or secrets are displayed; the fallback only names configuration paths.",
     "impressum_config_hint": "Place a Markdown file at <code>/data/legal/impressum.md</code> or set the environment variable <code>LEGAL_IMPRESSUM_PATH</code>.",
     "datenschutz_config_hint": "Place a Markdown file at <code>/data/legal/datenschutz.md</code> or set the environment variable <code>LEGAL_DATENSCHUTZ_PATH</code>."
   },
