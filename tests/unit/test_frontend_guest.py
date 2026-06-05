@@ -57,6 +57,35 @@ def test_guest_viewer_has_selection_toolbar():
     assert "toggleFavorite" in components_js
 
 
+def test_guest_image_grid_does_not_nest_action_buttons_inside_lightbox_button():
+    """Selection/favorite controls must be siblings of the lightbox opener.
+
+    Nested buttons are invalid HTML and can make click handling browser
+    dependent, especially for the overlaid guest selection controls.
+    """
+    grid_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "_image_grid.html").read_text()
+    opener_start = grid_html.index('@click="openLightbox')
+    opener_end = grid_html.index("</button>", opener_start)
+    opener_block = grid_html[opener_start:opener_end]
+
+    assert "toggleSelect" not in opener_block
+    assert "toggleFavorite" not in opener_block
+    assert "z-10" in grid_html
+
+
+def test_guest_selection_api_requires_explicit_session_id():
+    """Guest selection events must bind to the caller's share session."""
+    schema_py = (PROJECT_ROOT / "app" / "selections" / "schemas.py").read_text()
+    router_py = (PROJECT_ROOT / "app" / "guest" / "router.py").read_text()
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+
+    assert "session_id: uuid.UUID" in schema_py
+    assert "ShareSession.id == body.session_id" in router_py
+    assert "ShareSession.gallery_id == gallery.id" in router_py
+    assert "ShareSession.completed_at.is_(None)" in router_py
+    assert "session_id: this.sessionId" in components_js
+
+
 def test_guest_viewer_has_complete_button():
     """Guest viewer offers a complete-selection action (via i18n key).
 

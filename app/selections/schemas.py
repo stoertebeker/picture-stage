@@ -7,6 +7,7 @@ from app.db.models import SelectionAction
 
 class SelectionEventCreate(BaseModel):
     image_id: uuid.UUID
+    session_id: uuid.UUID
     action: SelectionAction
     comment: str | None = None
 

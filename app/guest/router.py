@@ -281,13 +281,14 @@ async def create_selection_event(
     if image_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found in this gallery")
 
-    sessions_result = await db.execute(
-        select(ShareSession)
-        .where(ShareSession.gallery_id == gallery.id, ShareSession.completed_at.is_(None))
-        .order_by(ShareSession.started_at.desc())
-        .limit(1)
+    session_result = await db.execute(
+        select(ShareSession).where(
+            ShareSession.id == body.session_id,
+            ShareSession.gallery_id == gallery.id,
+            ShareSession.completed_at.is_(None),
+        )
     )
-    session = sessions_result.scalar_one_or_none()
+    session = session_result.scalar_one_or_none()
     if session is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
 
