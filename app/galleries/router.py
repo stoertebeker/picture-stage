@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi import status as http_status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -28,6 +28,7 @@ from app.db.models import (
     UserStatus,
 )
 from app.db.session import get_db
+from app.galleries.deletion import purge_gallery
 from app.galleries.schemas import (
     AuditLogEntry,
     AuditLogResponse,
@@ -238,7 +239,7 @@ async def delete_gallery(
 ) -> None:
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
-    # 1. Write audit log entry BEFORE deletion
+    # Write audit log entry BEFORE deletion; purge_gallery anonymises + detaches it.
     audit_entry = AuditLog(
         gallery_id=gallery.id,
         event_type="gallery_deleted",
@@ -248,42 +249,7 @@ async def delete_gallery(
     db.add(audit_entry)
     await db.flush()
 
-    # 2. Delete image files from storage (best-effort: log warnings on failure)
-    result = await db.execute(select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)))
-    images = result.scalars().all()
-    for image in images:
-        try:
-            await storage.delete(image.storage_key)
-        except Exception:
-            logger.warning("Failed to delete storage file %s during gallery deletion", image.storage_key)
-        for preview in image.previews:
-            try:
-                await storage.delete(preview.storage_key)
-            except Exception:
-                logger.warning("Failed to delete preview file %s during gallery deletion", preview.storage_key)
-
-    # 3. Delete DB records in dependency order
-    # Delete image_previews
-    await db.execute(
-        delete(ImagePreview).where(ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id)))
-    )
-    # Delete selection_events
-    await db.execute(
-        delete(SelectionEvent).where(
-            SelectionEvent.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
-        )
-    )
-    # Delete share_sessions (selection_events referencing sessions already deleted above)
-    await db.execute(delete(ShareSession).where(ShareSession.gallery_id == gallery.id))
-    # Anonymize audit_log entries: keep event_type + timestamps, remove PII
-    await db.execute(update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(ip_address=None, user_agent=None))
-    # Detach audit_log from gallery (FK is SET NULL, but we do it explicitly before delete)
-    await db.execute(update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None))
-    # Delete images
-    await db.execute(delete(Image).where(Image.gallery_id == gallery.id))
-    # Delete gallery
-    await db.execute(delete(Gallery).where(Gallery.id == gallery.id))
-
+    await purge_gallery(gallery, db, storage)
     await db.commit()
 
 
