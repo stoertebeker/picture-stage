@@ -1,6 +1,6 @@
 {% from "_macros/buttons.html" import button %}
 
-<div x-data="{ deleteConfirmName: '', galleryName: {{ gallery.name | tojson }} }"
+<div x-data='{ "deleteConfirmName": "", "galleryName": {{ gallery.name | tojson }} }'
      {% if delete_error is defined and delete_error %}x-init="$nextTick(() => $refs.deleteModal.showModal())"{% endif %}>
     <button type="button"
             @click="$refs.deleteModal.showModal(); deleteConfirmName = ''"
