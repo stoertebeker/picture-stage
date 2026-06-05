@@ -2,204 +2,244 @@
 {% from "_macros/buttons.html" import button %}
 {% from "_macros/modal.html" import modal %}
 
-{% block title %}{{ gallery.name }} – Picture-Stage{% endblock %}
+{% block title %}{{ gallery.name }} - Picture-Stage{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"
+<div class="min-h-screen"
      x-data="galleryManager()"
      data-gallery-name="{{ gallery.name }}">
 
-    <!-- Breadcrumb -->
-    <nav class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-        <a href="/dashboard" class="hover:text-blue-600 dark:hover:text-blue-400">{{ t('nav.dashboard') }}</a>
-        <span class="mx-2">/</span>
-        <span class="text-gray-900 dark:text-white">{{ gallery.name }}</span>
-    </nav>
-
-    <!-- Gallery Header -->
-    <div id="gallery-header" class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <div class="flex items-center gap-4">
-            <!-- Inline-editable name -->
-            <h1 class="text-2xl font-bold text-gray-900 dark:text-white"
-                x-show="!editing"
-                @dblclick="editing = true; $nextTick(() => $refs.nameInput.focus())">
-                {{ gallery.name }}
-            </h1>
-            <div x-show="editing" class="flex items-center gap-2">
-                <input
-                    x-ref="nameInput"
-                    type="text"
-                    x-model="galleryName"
-                    @keydown.escape="editing = false; galleryName = '{{ gallery.name }}'"
-                    @keydown.enter.prevent="submitName()"
-                    class="text-2xl font-bold px-2 py-1 border border-blue-500 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-blue-500"
-                >
-                <button type="button" @click="submitName()" class="text-blue-600 hover:text-blue-800 text-sm font-medium">{{ t('gallery.save') }}</button>
-                <button type="button" @click="editing = false; galleryName = '{{ gallery.name }}'" class="text-gray-500 hover:text-gray-700 text-sm">{{ t('gallery.cancel') }}</button>
-            </div>
-            <form x-ref="renameForm" style="display:none"
-                  method="post"
-                  action="/galleries/{{ gallery.id }}/rename"
-                  hx-post="/galleries/{{ gallery.id }}/rename"
-                  hx-target="body" hx-swap="innerHTML">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="name" value="">
-            </form>
-
-            <!-- Status Badge -->
-            {% set st = gallery.status.value %}
-            {% if st == "draft" %}
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300">
-                {{ status_label }}
-            </span>
-            {% elif st == "shared" %}
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
-                {{ status_label }}
-            </span>
-            {% elif st == "completed" %}
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">
-                {{ status_label }}
-            </span>
-            {% elif st == "archived" %}
-            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">
-                {{ status_label }}
-            </span>
-            {% endif %}
-        </div>
-
-        <!-- Action Buttons -->
-        <div class="flex items-center gap-3">
-            {% for t in transitions %}
-            <form method="post"
-                  action="/galleries/{{ gallery.id }}/status"
-                  hx-post="/galleries/{{ gallery.id }}/status"
-                  hx-target="body"
-                  hx-swap="innerHTML"
-                  class="inline">
-                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <input type="hidden" name="status" value="{{ t.status }}">
-                {% call button(variant='secondary', size='sm', type='submit') %}{{ t.label }}{% endcall %}
-            </form>
-            {% endfor %}
-
-            <!-- Audit Log -->
-            <a href="/galleries/{{ gallery.id }}/audit-log"
-               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                {{ t('gallery.audit_log') }}
-            </a>
-
-            <!-- Export -->
-            <div class="relative" x-data="{ exportOpen: false }">
-                <button @click="exportOpen = !exportOpen"
-                        class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                    {{ t('gallery.export') }}
-                </button>
-                <div x-show="exportOpen" @click.outside="exportOpen = false"
-                     class="absolute right-0 mt-2 w-32 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 z-10">
-                    <a href="/galleries/{{ gallery.id }}/export?format=csv"
-                       class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-t-lg">
-                        CSV
+    <header id="gallery-header" class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4">
+            <div class="flex items-center justify-between gap-4">
+                <a href="/dashboard" class="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                    </svg>
+                    {{ t('nav.dashboard') }}
+                </a>
+                <div class="flex items-center gap-2">
+                    <a href="/galleries/{{ gallery.id }}/audit-log"
+                       class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary"
+                       aria-label="{{ t('gallery.audit_log') }}">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 012-2z"/>
+                        </svg>
                     </a>
-                    <a href="/galleries/{{ gallery.id }}/export?format=json"
-                       class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-b-lg">
-                        JSON
+                    <div class="relative" x-data="{ exportOpen: false }">
+                        <button type="button"
+                                @click="exportOpen = !exportOpen"
+                                class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary"
+                                aria-label="{{ t('gallery.export') }}">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l4-4m-4 4l-4-4M5 19h14"/>
+                            </svg>
+                        </button>
+                        <div x-show="exportOpen"
+                             x-transition
+                             @click.outside="exportOpen = false"
+                             class="absolute right-0 mt-2 w-32 rounded-md border border-border-subtle bg-surface-raised shadow-md z-dropdown">
+                            <a href="/galleries/{{ gallery.id }}/export?format=csv"
+                               class="block px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken hover:text-text-primary rounded-t-md">CSV</a>
+                            <a href="/galleries/{{ gallery.id }}/export?format=json"
+                               class="block px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken hover:text-text-primary rounded-b-md">JSON</a>
+                        </div>
+                    </div>
+                    <a href="#gallery-upload"
+                       class="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-on-accent hover:bg-accent-hover">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        {{ t('gallery.upload_short') }}
                     </a>
                 </div>
             </div>
 
-            <!-- Delete Gallery -->
-            {% include "galleries/_delete_modal.html" %}
-        </div>
-    </div>
+            <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+                <div class="min-w-0">
+                    <div class="mb-2 flex flex-wrap items-center gap-2">
+                        {% set st = gallery.status.value %}
+                        <span class="inline-flex items-center gap-1.5 rounded-full border border-status-info bg-surface-raised px-2.5 py-1 text-xs font-medium text-status-info">
+                            <span class="h-1.5 w-1.5 rounded-full bg-status-info"></span>
+                            {{ t('gallery.status_' ~ st) }}
+                        </span>
+                        <span class="text-xs uppercase text-text-muted">{{ t('gallery.review_gallery') }}</span>
+                    </div>
 
-    <!-- Upload Section -->
-    <div class="mb-8">
-        {% include "galleries/_upload.html" %}
-    </div>
+                    <div class="flex min-w-0 items-center gap-3">
+                        <h1 class="truncate font-display text-3xl leading-tight text-text-primary sm:text-4xl"
+                            x-show="!editing"
+                            @dblclick="editing = true; $nextTick(() => $refs.nameInput.focus())">
+                            {{ gallery.name }}
+                        </h1>
+                        <div x-show="editing" class="flex min-w-0 flex-wrap items-center gap-2">
+                            <input
+                                x-ref="nameInput"
+                                type="text"
+                                x-model="galleryName"
+                                @keydown.escape="editing = false; galleryName = $root.dataset.galleryName"
+                                @keydown.enter.prevent="submitName()"
+                                class="min-w-0 rounded-md border border-border-strong bg-surface-raised px-3 py-2 font-display text-2xl text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus"
+                            >
+                            {% call button(variant='primary', size='sm', type='button', attrs={'@click': 'submitName()'}) %}{{ t('gallery.save') }}{% endcall %}
+                            {% call button(variant='ghost', size='sm', type='button', attrs={'@click': 'editing = false; galleryName = $root.dataset.galleryName'}) %}{{ t('gallery.cancel') }}{% endcall %}
+                        </div>
+                        <form x-ref="renameForm"
+                              class="hidden"
+                              method="post"
+                              action="/galleries/{{ gallery.id }}/rename"
+                              hx-post="/galleries/{{ gallery.id }}/rename"
+                              hx-target="body"
+                              hx-swap="innerHTML">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                            <input type="hidden" name="name" value="">
+                        </form>
+                    </div>
+                    <p class="mt-2 max-w-2xl text-sm text-text-muted">
+                        {% if image_count != 1 %}{{ t('gallery.image_count_label_plural').replace('{count}', image_count | string) }}{% else %}{{ t('gallery.image_count_label').replace('{count}', image_count | string) }}{% endif %}
+                    </p>
+                </div>
 
-    <!-- Share Section -->
-    <div id="share-section" class="mb-8">
-        {% include "galleries/_share_modal.html" %}
-    </div>
-
-    <!-- Expiry Section -->
-    <div class="mb-8 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5">
-        <h3 class="text-sm font-semibold text-gray-900 dark:text-white mb-3">{{ t('gallery.expiry_heading') }}</h3>
-        <form method="post"
-              action="/galleries/{{ gallery.id }}/expiry"
-              hx-post="/galleries/{{ gallery.id }}/expiry"
-              hx-target="body"
-              hx-swap="innerHTML"
-              class="flex flex-wrap items-end gap-3">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <div>
-                <label for="expires_at" class="block text-xs text-gray-500 dark:text-gray-400 mb-1">{{ t('gallery.expiry_label') }}</label>
-                <input type="datetime-local"
-                       id="expires_at"
-                       name="expires_at"
-                       value="{% if gallery.expires_at %}{{ gallery.expires_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
-                       class="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500">
+                <div class="flex flex-wrap items-center gap-2">
+                    {% for action in transitions %}
+                    <form method="post"
+                          action="/galleries/{{ gallery.id }}/status"
+                          hx-post="/galleries/{{ gallery.id }}/status"
+                          hx-target="body"
+                          hx-swap="innerHTML"
+                          class="inline">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <input type="hidden" name="status" value="{{ action.status }}">
+                        {% call button(variant='secondary', size='sm', type='submit') %}{{ t('gallery.transition_' ~ action.status) }}{% endcall %}
+                    </form>
+                    {% endfor %}
+                    {% include "galleries/_delete_modal.html" %}
+                </div>
             </div>
-            {% call button(variant='primary', size='sm', type='submit') %}{{ t('gallery.expiry_save') }}{% endcall %}
-            {% if gallery.expires_at %}
-            {% call button(variant='secondary', size='sm', type='submit',
-                           attrs={'name': 'clear_expiry', 'value': '1'}) %}{{ t('gallery.expiry_remove') }}{% endcall %}
-            {% endif %}
-        </form>
-        {% if gallery.expires_at %}
-        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            {% set now = gallery.updated_at %}
-            {{ t('gallery.expiry_current').replace('{date}', gallery.expires_at.strftime('%d.%m.%Y %H:%M')) }}
-        </p>
-        {% else %}
-        <p class="mt-2 text-xs text-gray-500 dark:text-gray-400">
-            {{ t('gallery.expiry_none') }}
-        </p>
-        {% endif %}
-    </div>
-
-    <!-- Bulk Delete Bar (visible when images selected) -->
-    <div x-show="selectedImages.length > 0"
-         x-transition
-         class="mb-4 flex items-center gap-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-3">
-        <span class="text-sm text-red-700 dark:text-red-300" x-text="'{{ t('gallery.images_selected') }}'.replace('{count}', selectedImages.length)"></span>
-        <form method="post"
-              action="/galleries/{{ gallery.id }}/bulk-delete"
-              hx-post="/galleries/{{ gallery.id }}/bulk-delete"
-              hx-target="#image-grid"
-              hx-swap="innerHTML"
-              hx-confirm="{{ t('gallery.bulk_delete_confirm') }}"
-              @htmx:after-request.window="selectedImages = []"
-              x-ref="bulkDeleteForm">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-            <template x-for="imgId in selectedImages" :key="imgId">
-                <input type="hidden" name="image_ids" :value="imgId">
-            </template>
-            <button type="submit"
-                    class="px-3 py-1.5 text-sm font-medium text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/40 hover:bg-red-200 dark:hover:bg-red-900/60 rounded-lg transition-colors">
-                {{ t('gallery.bulk_delete_button') }}
-            </button>
-        </form>
-        <button @click="selectedImages = []"
-                class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300">
-            {{ t('gallery.clear_selection') }}
-        </button>
-    </div>
-
-    <!-- Image Grid -->
-    <div id="image-grid">
-        {% include "galleries/_image_grid.html" %}
-    </div>
-
-    {% call modal(ref='previewModal', title='', size='xl', extra_class='bg-transparent border-0') %}
-        <div class="relative -m-6">
-            <img :src="previewSrc"
-                 class="max-w-full max-h-[80vh] mx-auto rounded-lg"
-                 alt="{{ t('gallery.preview_alt') }}">
-            <div class="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-sm px-4 py-2 rounded-b-lg"
-                 x-text="previewFilename"></div>
         </div>
-    {% endcall %}
-</div>
+    </header>
 
+    <main class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 lg:py-8">
+        <div class="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem]">
+            <div class="flex flex-col gap-6">
+                <section id="gallery-upload" class="rounded-md border border-border-subtle bg-surface-raised p-4 sm:p-5">
+                    <div class="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-text-primary">{{ t('gallery.upload_heading') }}</h2>
+                            <p class="text-sm text-text-muted">{{ t('gallery.upload_hint') }}</p>
+                        </div>
+                        <span class="text-xs text-text-muted">{{ t('gallery.upload_idle') }}</span>
+                    </div>
+                    {% include "galleries/_upload.html" %}
+                </section>
+
+                <section class="flex flex-col gap-4">
+                    <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                            <h2 class="text-lg font-semibold text-text-primary">{{ t('gallery.image_grid_heading') }}</h2>
+                            <p class="text-sm text-text-muted">{{ t('gallery.image_grid_hint') }}</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="rounded-full border border-accent bg-surface-raised px-3 py-1 text-xs font-medium text-accent">{{ t('guest.filter_all') }}</span>
+                            <span class="rounded-full border border-border-subtle px-3 py-1 text-xs font-medium text-text-secondary">{{ t('guest.filter_selected') }}</span>
+                            <span class="rounded-full border border-border-subtle px-3 py-1 text-xs font-medium text-text-secondary">{{ t('guest.filter_favorited') }}</span>
+                            {% if images %}
+                            <button type="button"
+                                    @click="selectAll()"
+                                    class="rounded-md border border-border-subtle px-3 py-1.5 text-xs font-medium text-text-secondary hover:border-border-strong hover:text-text-primary">
+                                {{ t('gallery.select_all') }}
+                            </button>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <div x-show="selectedImages.length > 0"
+                         x-transition
+                         class="flex flex-col gap-3 rounded-md border border-status-danger bg-surface-raised px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div class="text-sm text-text-secondary">
+                            <span class="font-semibold text-status-danger" x-text="'{{ t('gallery.images_selected') }}'.replace('{count}', selectedImages.length)"></span>
+                            {{ t('gallery.bulk_delete_hint') }}
+                        </div>
+                        <div class="flex items-center gap-2">
+                            {% call button(variant='secondary', size='sm', type='button', attrs={'@click': 'selectedImages = []'}) %}{{ t('gallery.clear_selection') }}{% endcall %}
+                            <form method="post"
+                                  action="/galleries/{{ gallery.id }}/bulk-delete"
+                                  hx-post="/galleries/{{ gallery.id }}/bulk-delete"
+                                  hx-target="#image-grid"
+                                  hx-swap="innerHTML"
+                                  hx-confirm="{{ t('gallery.bulk_delete_confirm') }}"
+                                  @htmx:after-request.window="selectedImages = []"
+                                  x-ref="bulkDeleteForm">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                                <template x-for="imgId in selectedImages" :key="imgId">
+                                    <input type="hidden" name="image_ids" :value="imgId">
+                                </template>
+                                {% call button(variant='danger', size='sm', type='submit') %}{{ t('gallery.bulk_delete_button') }}{% endcall %}
+                            </form>
+                        </div>
+                    </div>
+
+                    <div id="image-grid">
+                        {% include "galleries/_image_grid.html" %}
+                    </div>
+                </section>
+            </div>
+
+            <aside class="flex flex-col gap-4 lg:sticky lg:top-32 lg:self-start">
+                <section id="share-section">
+                    {% include "galleries/_share_modal.html" %}
+                </section>
+
+                <section class="rounded-md border border-border-subtle bg-surface-raised p-5">
+                    <h2 class="text-lg font-semibold text-text-primary">{{ t('gallery.expiry_heading') }}</h2>
+                    <p class="mt-1 text-sm text-text-muted">{{ t('gallery.expiry_hint') }}</p>
+                    <form method="post"
+                          action="/galleries/{{ gallery.id }}/expiry"
+                          hx-post="/galleries/{{ gallery.id }}/expiry"
+                          hx-target="body"
+                          hx-swap="innerHTML"
+                          class="mt-4 flex flex-col gap-3">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                        <label for="expires_at" class="text-xs text-text-muted">{{ t('gallery.expiry_label') }}</label>
+                        <input type="datetime-local"
+                               id="expires_at"
+                               name="expires_at"
+                               value="{% if gallery.expires_at %}{{ gallery.expires_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+                               class="w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-sm text-text-secondary focus:outline-none focus-visible:ring focus-visible:ring-focus">
+                        {% call button(variant='secondary', size='sm', type='submit', extra_class='w-full') %}{{ t('gallery.expiry_save') }}{% endcall %}
+                        {% if gallery.expires_at %}
+                        {% call button(variant='ghost', size='sm', type='submit', extra_class='w-full', attrs={'name': 'clear_expiry', 'value': '1'}) %}{{ t('gallery.expiry_remove') }}{% endcall %}
+                        {% endif %}
+                    </form>
+                    <p class="mt-3 text-xs text-text-muted">
+                        {% if gallery.expires_at %}
+                        {{ t('gallery.expiry_current').replace('{date}', gallery.expires_at.strftime('%d.%m.%Y %H:%M')) }}
+                        {% else %}
+                        {{ t('gallery.expiry_none') }}
+                        {% endif %}
+                    </p>
+                </section>
+
+                <section class="rounded-md border border-border-subtle bg-surface-raised p-5">
+                    <h2 class="text-lg font-semibold text-text-primary">{{ t('gallery.watermark_heading') }}</h2>
+                    <p class="mt-1 text-sm text-text-muted">{{ t('gallery.watermark_hint') }}</p>
+                    <div class="mt-4 grid grid-cols-2 gap-2 text-xs text-text-muted">
+                        <span class="rounded-md border border-border-subtle bg-surface-base px-2 py-1">{{ t('gallery.watermark_position') }}</span>
+                        <span class="rounded-md border border-border-subtle bg-surface-base px-2 py-1">{{ t('gallery.watermark_opacity') }}</span>
+                    </div>
+                </section>
+            </aside>
+        </div>
+
+        {% call modal(ref='previewModal', title='', size='xl', extra_class='bg-transparent border-0') %}
+            <div class="relative -m-6">
+                <img :src="previewSrc"
+                     class="max-w-full max-h-[80vh] mx-auto rounded-md"
+                     alt="{{ t('gallery.preview_alt') }}">
+                <div class="absolute bottom-0 left-0 right-0 rounded-b-md bg-black/70 px-4 py-2 text-sm text-white"
+                     x-text="previewFilename"></div>
+            </div>
+        {% endcall %}
+    </main>
+</div>
 {% endblock %}
