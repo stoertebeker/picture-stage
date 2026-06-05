@@ -1,0 +1,59 @@
+{#- Toast macros (PS-UX-13).
+
+Two responsibilities:
+1. Render the global toast container in <body> via `toast_container()`.
+2. Render a single toast in server-side responses (for non-HTMX page-rendered
+   flash messages) via `toast(kind, message)`.
+
+For HTMX responses, the server sets a `HX-Trigger` response header carrying
+JSON like:
+
+   HX-Trigger: {"showToast": {"kind": "success", "message": "Galerie erstellt"}}
+
+The client-side listener in frontend/static/js/app.js (function showToast)
+picks the event up, builds the toast DOM, inserts it into the container,
+auto-dismisses after 5s, and accepts a manual close click.
+
+Kinds: success | info | warn | danger
+ARIA: success/info use role="status" (polite), warn/danger use role="alert".
+
+Server-side flash usage (rare, e.g. setup page):
+
+  {{ toast('success', t('setup.created_admin')) }}
+
+This emits the same DOM the client builds on HX-Trigger.
+-#}
+
+{%- set _toast_kind_class = {
+    'success': 'bg-emerald-700/30 border border-emerald-700/60 text-emerald-100',
+    'info':    'bg-sky-700/30 border border-sky-700/60 text-sky-100',
+    'warn':    'bg-amber-700/30 border border-amber-700/60 text-amber-100',
+    'danger':  'bg-red-700/30 border border-red-700/60 text-red-100',
+} -%}
+
+{%- macro toast_container() -%}
+  {#- Fixed top-right stack. z-toast (= 50). Pointer-events-none on container
+      so it does not block clicks on the page; per-toast pointer-events-auto
+      restores click handling for the close button. -#}
+  <div id="toast-container"
+       aria-live="polite"
+       class="fixed top-4 right-4 z-toast flex flex-col gap-2 pointer-events-none"></div>
+{%- endmacro -%}
+
+{%- macro toast(kind='info', message='') -%}
+  {%- set cls = _toast_kind_class.get(kind, _toast_kind_class['info']) -%}
+  {%- set role = 'alert' if kind in ('warn', 'danger') else 'status' -%}
+  <div role="{{ role }}"
+       data-toast-kind="{{ kind }}"
+       class="pointer-events-auto flex items-start gap-3 max-w-sm px-4 py-3 rounded-md shadow-md backdrop-blur-sm {{ cls }}">
+    <span class="text-sm flex-1">{{ message }}</span>
+    <button type="button"
+            data-toast-dismiss
+            aria-label="Schliessen"
+            class="text-current opacity-70 hover:opacity-100 transition-opacity">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </button>
+  </div>
+{%- endmacro -%}

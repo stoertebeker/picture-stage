@@ -1,5 +1,6 @@
 """Frontend dashboard: gallery list with status and progress."""
 
+import json
 import logging
 from typing import Any
 
@@ -89,7 +90,7 @@ async def create_gallery(
     }
 
     csrf_token = request.cookies.get("csrf_token", "")
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "dashboard/_gallery_card.html",
         {
@@ -98,6 +99,16 @@ async def create_gallery(
             "csrf_token": csrf_token,
         },
     )
+    # Toast notification (ps-ux-13).
+    locale = getattr(request.state, "locale", "de")
+    if locale == "de":
+        message = f"Galerie {name!r} angelegt."
+    else:
+        message = f"Gallery {name!r} created."
+    response.headers["HX-Trigger"] = json.dumps(
+        {"showToast": {"kind": "success", "message": message}}
+    )
+    return response
 
 
 async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict[str, Any]]:

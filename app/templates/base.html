@@ -1,3 +1,4 @@
+{% from "_macros/toast.html" import toast_container %}
 <!DOCTYPE html>
 <html lang="de" data-theme="dark">
 <head>
@@ -61,6 +62,7 @@
             </button>
         </div>
     </div>
+    {{ toast_container() }}
     <script src="/static/js/htmx.min.js"></script>
     <script src="/static/js/components.js"></script>
     <script src="/static/js/alpine.min.js"></script>
