@@ -45,3 +45,28 @@ class PendingSignupResponse(BaseModel):
 
 class LocaleUpdate(BaseModel):
     locale: str
+
+
+class AdminUserResponse(BaseModel):
+    """A user account as seen by an admin in the user-management view."""
+
+    id: uuid.UUID
+    email: str
+    status: str
+    locale: str
+    email_verified_at: datetime | None
+    created_at: datetime
+    galleries_count: int
+
+    model_config = {"from_attributes": True}
+
+
+class AdminUserListResponse(BaseModel):
+    users: list[AdminUserResponse]
+    total: int
+    page: int
+    per_page: int
+
+
+class PendingSignupCountResponse(BaseModel):
+    count: int

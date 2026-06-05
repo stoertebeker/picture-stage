@@ -1,12 +1,18 @@
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_admin
-from app.auth.schemas import PendingSignupResponse, UserResponse
-from app.db.models import PendingSignup, User, UserStatus
+from app.auth.schemas import (
+    AdminUserListResponse,
+    AdminUserResponse,
+    PendingSignupCountResponse,
+    PendingSignupResponse,
+    UserResponse,
+)
+from app.db.models import Gallery, PendingSignup, User, UserStatus
 from app.db.session import get_db
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -67,3 +73,57 @@ async def reject_signup(
 
     await db.delete(signup)
     await db.commit()
+
+
+@router.get("/pending-signups/count", response_model=PendingSignupCountResponse)
+async def pending_signups_count(
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> PendingSignupCountResponse:
+    """Lightweight count of open signup requests, used for the admin nav badge."""
+    count = await db.scalar(select(func.count()).select_from(PendingSignup))
+    return PendingSignupCountResponse(count=count or 0)
+
+
+@router.get("/users", response_model=AdminUserListResponse)
+async def list_users(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(50, ge=1, le=200),
+    status_filter: UserStatus | None = Query(None, alias="status"),
+    _admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+) -> AdminUserListResponse:
+    """Paginated list of real user accounts (active/admin/disabled) with gallery counts.
+
+    Pending signups live in their own table and are listed via /pending-signups.
+    """
+    count_stmt = select(func.count()).select_from(User)
+    if status_filter is not None:
+        count_stmt = count_stmt.where(User.status == status_filter)
+    total = await db.scalar(count_stmt) or 0
+
+    stmt = (
+        select(User, func.count(Gallery.id))
+        .outerjoin(Gallery, Gallery.owner_id == User.id)
+        .group_by(User.id)
+        .order_by(User.created_at.desc())
+        .limit(per_page)
+        .offset((page - 1) * per_page)
+    )
+    if status_filter is not None:
+        stmt = stmt.where(User.status == status_filter)
+
+    rows = (await db.execute(stmt)).all()
+    users = [
+        AdminUserResponse(
+            id=user.id,
+            email=user.email,
+            status=str(user.status),
+            locale=user.locale,
+            email_verified_at=user.email_verified_at,
+            created_at=user.created_at,
+            galleries_count=galleries_count,
+        )
+        for user, galleries_count in rows
+    ]
+    return AdminUserListResponse(users=users, total=total, page=page, per_page=per_page)
