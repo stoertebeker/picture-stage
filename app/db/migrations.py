@@ -61,7 +61,9 @@ def _do_migrations(connection, cfg: Config) -> None:  # type: ignore[no-untyped-
 
         logger.info(f"Running migrations from {base_rev} to {target_rev}")
 
-        for revision in script.walk_revisions(head=target_rev, base=base_rev):
-            logger.info(f"Applying migration {revision.revision}")
-            # Call the upgrade function from the migration module
-            revision.module.upgrade()
+        from alembic.operations import Operations
+
+        with Operations.context(ctx):
+            for revision in script.walk_revisions(head=target_rev, base=base_rev):
+                logger.info(f"Applying migration {revision.revision}")
+                revision.module.upgrade()
