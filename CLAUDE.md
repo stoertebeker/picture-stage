@@ -100,7 +100,7 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ### Key Design Decisions
 - **Event-sourced selections:** `selection_events` is append-only (INSERT only, no UPDATE/DELETE). Current state materialized by replaying events. Enables audit trail, undo, change detection.
 - **Isolated Guest API:** `/g/` router has zero overlap with admin API. No shared endpoints, no auth dependencies.
-- **Token hashing:** SHA-256 + random salt for share tokens (fast lookups). bcrypt only for user passwords.
+- **Share links:** SHA-256 + random salt for token lookups; token is also stored replayable for the owner UI. bcrypt is used for user passwords and optional gallery passwords.
 - **Signed URLs:** HMAC-SHA256 for image delivery. Thumbnails 1h TTL, previews 15min TTL.
 - **UUIDs as external IDs** on all endpoints to prevent IDOR enumeration.
 

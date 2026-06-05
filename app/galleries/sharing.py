@@ -40,6 +40,7 @@ async def create_share_link(
 
     gallery.share_token_hash = token_hash
     gallery.share_token_salt = token_salt
+    gallery.share_token = token
 
     if body.password:
         gallery.password_hash = hash_password(body.password)
@@ -71,6 +72,7 @@ async def revoke_share_link(
 
     gallery.share_token_hash = None
     gallery.share_token_salt = None
+    gallery.share_token = None
     gallery.password_hash = None
 
     if gallery.status == GalleryStatus.shared:

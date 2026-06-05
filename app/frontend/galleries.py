@@ -132,6 +132,9 @@ def _build_context(
         "has_share_token": gallery.share_token_hash is not None,
         "csrf_token": request.cookies.get("csrf_token", ""),
     }
+    if gallery.share_token:
+        base_url = str(request.base_url).rstrip("/")
+        ctx["share_url"] = f"{base_url}/g/{gallery.share_token}"
     ctx.update(extra)
     return ctx
 
@@ -315,6 +318,7 @@ async def create_share_link(
 
     gallery.share_token_hash = token_hash
     gallery.share_token_salt = token_salt
+    gallery.share_token = token
 
     if password:
         gallery.password_hash = hash_password(password)
@@ -347,6 +351,7 @@ async def revoke_share_link(
 
     gallery.share_token_hash = None
     gallery.share_token_salt = None
+    gallery.share_token = None
     gallery.password_hash = None
 
     if gallery.status == GalleryStatus.shared:

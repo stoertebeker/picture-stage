@@ -108,6 +108,38 @@ class TestShareLinkAutoTransition:
             source = f.read()
         assert "gallery.status == GalleryStatus.shared" in source
 
+    def test_sharing_persists_replayable_share_token(self) -> None:
+        with open("app/galleries/sharing.py") as f:
+            api_source = f.read()
+        with open("app/frontend/galleries.py") as f:
+            frontend_source = f.read()
+        with open("app/db/models.py") as f:
+            model_source = f.read()
+
+        assert "share_token: Mapped[str | None]" in model_source
+        assert "gallery.share_token = token" in api_source
+        assert "gallery.share_token = token" in frontend_source
+        assert "gallery.share_token = None" in api_source
+        assert "gallery.share_token = None" in frontend_source
+
+    def test_frontend_rebuilds_share_url_from_persisted_token(self) -> None:
+        with open("app/frontend/galleries.py") as f:
+            source = f.read()
+
+        assert "if gallery.share_token:" in source
+        assert 'ctx["share_url"] = f"{base_url}/g/{gallery.share_token}"' in source
+
+    def test_legacy_active_share_link_has_clear_fallback_copy(self) -> None:
+        import json
+
+        with open("app/i18n/de.json") as f:
+            de = json.load(f)
+        with open("app/i18n/en.json") as f:
+            en = json.load(f)
+
+        assert "aeltere Links" in de["gallery"]["share_active_text"]
+        assert "Older links" in en["gallery"]["share_active_text"]
+
 
 class TestTransitionEndpointGuards:
     """Verify the transition endpoint enforces share-token requirement."""

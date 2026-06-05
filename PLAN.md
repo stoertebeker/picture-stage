@@ -44,7 +44,7 @@ Picture-Stage ist die freie Alternative zu Picdrop, mit voller Datenhoheit, Cont
 ### Sicherheits-Säulen
 
 1. **Tenant-Isolation auf DB-Ebene** – zentrale FastAPI-Dependency `current_user`, jede Query gefiltert nach `owner_id`. Pytest-Tests prüfen Isolation explizit.
-2. **Share-Tokens** – `secrets.token_urlsafe(32)`, **SHA-256+Salt** gehasht in DB (nicht bcrypt — zu langsam für lookup-heavy Tokens; bcrypt bleibt für User-Passwörter), niemals im Klartext geloggt. Timing-Attack-Schutz via `hmac.compare_digest()`.
+2. **Share-Tokens** – `secrets.token_urlsafe(32)`, **SHA-256+Salt** fuer schnelle Lookups plus wiederanzeigbarer Token fuer die Owner-UI. Share-Links sind bewusst weitergebbare Capability-URLs; fuer sensible Galerien gibt es optionalen Passwortschutz. Tokens werden nicht geloggt. Timing-Attack-Schutz via `hmac.compare_digest()`.
 3. **Bild-Auslieferung** – ausschließlich über authentifizierten App-Endpoint mit **HMAC-SHA256-signierten** kurzlebigen URLs (Thumbnails 1h, Previews 15min). Originale werden Models **niemals** ausgeliefert.
 4. **Wasserzeichen serverseitig** in Preview eingebrannt (Pillow RGBA-Overlay, Ecke unten rechts, enthält Token-Kurzcode zur Rückverfolgung), plus Frontend Speed-Bumps.
 5. **Isolierte Guest-API** – separater FastAPI-Router nur für Model-Zugriff (`/g/`), keine Shared-Endpoints mit Admin-API. Minimale Angriffsfläche.
@@ -60,7 +60,7 @@ Picture-Stage ist die freie Alternative zu Picdrop, mit voller Datenhoheit, Cont
 | Tabelle | Zweck | Wichtige Felder |
 |---|---|---|
 | `users` | Fotografen | id (UUID), email, password_hash (bcrypt), status (`pending`/`active`/`admin`), email_verified_at, locale |
-| `galleries` | Pro User eine Galerie | id (UUID), owner_id, name, phase (`review`, später `delivery`), status (`draft`/`shared`/`completed`/`archived`), share_token_hash (SHA-256+Salt), share_token_salt, password_hash (nullable, bcrypt), expires_at (nullable), watermark_config |
+| `galleries` | Pro User eine Galerie | id (UUID), owner_id, name, phase (`review`, später `delivery`), status (`draft`/`shared`/`completed`/`archived`), share_token_hash (SHA-256+Salt), share_token_salt, share_token (nullable, fuer Owner-Wiederanzeige), password_hash (nullable, bcrypt), expires_at (nullable), watermark_config |
 | `images` | Bilder einer Galerie | id (UUID), gallery_id, storage_key, filename, exif, width/height, sha256 |
 | `image_previews` | Generierte Web-Versionen (WebP) | image_id, variant (`thumb_sm`/`thumb_md`/`preview` → 320/640/1280px), storage_key |
 | `selection_events` | **Event-sourced Bewertungen** (append-only) | id, image_id, share_session_id, action (`select`/`deselect`/`favorite`/`unfavorite`/`comment`), comment (nullable), timestamp. Aktueller Stand wird aus Event-Log abgeleitet → Audit-Trail, Undo, "was hat sich geändert" |
@@ -73,7 +73,7 @@ Picture-Stage ist die freie Alternative zu Picdrop, mit voller Datenhoheit, Cont
 **Wichtige Architektur-Entscheidung (aus Research):**
 - `selection_events` statt mutable `ratings`-Tabelle: Event-Sourcing erlaubt Audit-Trail, Undo und "was hat sich seit letztem Besuch geändert" ohne zusätzliche Logik. Der aktuelle Auswahl-Stand wird per View/Query aus dem Event-Log materialisiert.
 - **UUIDs als externe IDs** auf allen Endpoints — verhindert IDOR-Angriffe durch sequentielle Enumeration. Intern können auto-increment IDs als FK bleiben.
-- **SHA-256+Salt für Share-Tokens**, bcrypt für User-Passwörter — unterschiedliche Hash-Strategien für unterschiedliche Performance-Anforderungen.
+- **SHA-256+Salt fuer Share-Token-Lookup**, wiederanzeigbarer Share-Token fuer die Owner-UI, bcrypt fuer User-/Galerie-Passwoerter — unterschiedliche Schutz- und Performance-Anforderungen.
 
 **Migrations-Vorsorge für Post-MVP:**
 - `galleries.phase` als Enum mit aktuell nur `review` – `delivery` wird später ergänzt für Voll-Auflösungs-Downloads.

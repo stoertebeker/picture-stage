@@ -102,7 +102,7 @@ docker compose up -d
 
 ## Security
 
-- **Token hashing:** SHA-256 + random salt for share tokens, bcrypt for passwords
+- **Share links:** long random capability URLs are hashed for lookup and stored replayable for the owner UI; optional gallery passwords protect sensitive galleries
 - **Signed URLs:** HMAC-SHA256 with configurable TTL (thumbnails 1h, previews 15min)
 - **Rate limiting:** signup 5/min, login 10/min, token resolution 20/10min
 - **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy

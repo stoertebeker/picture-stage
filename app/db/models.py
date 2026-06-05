@@ -86,6 +86,7 @@ class Gallery(TimestampMixin, Base):
 
     share_token_hash: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     share_token_salt: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    share_token: Mapped[str | None] = mapped_column(String(128), nullable=True)
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

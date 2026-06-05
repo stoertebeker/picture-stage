@@ -94,7 +94,7 @@
     "expiry_current": "Current: {date}",
     "expiry_none": "No expiry date set — the gallery is accessible indefinitely.",
     "share_heading": "Share",
-    "share_active_text": "Gallery is shared. The share link was shown when created.",
+    "share_active_text": "Gallery is shared. Older links cannot be shown again; revoke and create a new one if needed.",
     "share_copy": "Copy",
     "share_copied": "Copied!",
     "share_revoke": "Revoke link",

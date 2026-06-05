@@ -94,7 +94,7 @@
     "expiry_current": "Aktuell: {date} Uhr",
     "expiry_none": "Kein Ablaufdatum gesetzt – die Galerie ist unbegrenzt zugaenglich.",
     "share_heading": "Teilen",
-    "share_active_text": "Galerie ist geteilt. Der Share-Link wurde bei der Erstellung angezeigt.",
+    "share_active_text": "Galerie ist geteilt. Fuer aeltere Links ist der Link nicht erneut anzeigbar; widerrufe ihn bei Bedarf und erstelle einen neuen.",
     "share_copy": "Kopieren",
     "share_copied": "Kopiert!",
     "share_revoke": "Link widerrufen",
