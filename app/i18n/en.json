@@ -29,7 +29,15 @@
     "back_to_login": "Back to Login",
     "signup_success": "Signup received. Please check your email to verify your address.",
     "verify_success": "Email verified successfully. Your account is now waiting for admin approval.",
-    "language": "Language"
+    "language": "Language",
+    "email_password_required": "Email and password are required.",
+    "invalid_credentials": "Invalid email address or password.",
+    "not_approved": "Account not yet approved by admin.",
+    "passwords_mismatch": "Passwords do not match.",
+    "password_too_short": "Password must be at least 8 characters.",
+    "email_registered": "Email address already registered.",
+    "signup_pending": "Signup already pending.",
+    "invalid_verify_token": "Invalid or expired verification token."
   },
   "setup": {
     "title": "Setup - Picture-Stage",
@@ -143,7 +151,8 @@
     "delete_confirm_suffix": " to confirm deletion:",
     "delete_confirm_placeholder": "Enter gallery name",
     "delete_confirm_button": "Delete permanently",
-    "preview_alt": "Preview"
+    "preview_alt": "Preview",
+    "delete_name_mismatch": "The name entered does not match the gallery name."
   },
   "guest": {
     "selected_of_total": "{selected} / {total} selected, {favorited} favorites",

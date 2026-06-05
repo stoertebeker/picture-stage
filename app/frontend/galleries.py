@@ -498,7 +498,7 @@ async def delete_gallery(
             gallery,
             images,
             user,
-            delete_error="Der eingegebene Name stimmt nicht mit dem Galerienamen ueberein.",
+            delete_error="gallery.delete_name_mismatch",
         )
         return templates.TemplateResponse(request, "galleries/detail.html", ctx)
 

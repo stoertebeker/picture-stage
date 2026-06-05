@@ -49,15 +49,15 @@ async def setup_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
     ctx = {"request": request, "csrf_token": csrf_token, "error": None}
 
     if not email or not password:
-        ctx["error"] = "Email and password are required."
+        ctx["error"] = "auth.email_password_required"
         return templates.TemplateResponse(request, "setup/index.html", ctx, status_code=422)
 
     if password != password_confirm:
-        ctx["error"] = "Passwords do not match."
+        ctx["error"] = "auth.passwords_mismatch"
         return templates.TemplateResponse(request, "setup/index.html", ctx, status_code=422)
 
     if len(password) < 8:
-        ctx["error"] = "Password must be at least 8 characters."
+        ctx["error"] = "auth.password_too_short"
         return templates.TemplateResponse(request, "setup/index.html", ctx, status_code=422)
 
     admin = User(

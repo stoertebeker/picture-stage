@@ -47,7 +47,7 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
             {
                 "request": request,
                 "csrf_token": _csrf_from_request(request),
-                "error": "Email and password are required.",
+                "error": "auth.email_password_required",
             },
             status_code=422,
         )
@@ -59,7 +59,7 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
         return templates.TemplateResponse(
             request,
             "auth/login.html",
-            {"request": request, "csrf_token": _csrf_from_request(request), "error": "Invalid email or password."},
+            {"request": request, "csrf_token": _csrf_from_request(request), "error": "auth.invalid_credentials"},
             status_code=401,
         )
 
@@ -70,7 +70,7 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
             {
                 "request": request,
                 "csrf_token": _csrf_from_request(request),
-                "error": "Account not yet approved by admin.",
+                "error": "auth.not_approved",
             },
             status_code=403,
         )
@@ -109,27 +109,27 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
     ctx = {"request": request, "csrf_token": _csrf_from_request(request), "error": None, "success": False}
 
     if not email or not password:
-        ctx["error"] = "Email and password are required."
+        ctx["error"] = "auth.email_password_required"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
     if password != password_confirm:
-        ctx["error"] = "Passwords do not match."
+        ctx["error"] = "auth.passwords_mismatch"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
     if len(password) < 8:
-        ctx["error"] = "Password must be at least 8 characters."
+        ctx["error"] = "auth.password_too_short"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
     # Check for existing user
     existing_user = await db.execute(select(User).where(User.email == email))
     if existing_user.scalar_one_or_none() is not None:
-        ctx["error"] = "Email already registered."
+        ctx["error"] = "auth.email_registered"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=409)
 
     # Check for existing pending signup
     existing_signup = await db.execute(select(PendingSignup).where(PendingSignup.email == email))
     if existing_signup.scalar_one_or_none() is not None:
-        ctx["error"] = "Signup already pending."
+        ctx["error"] = "auth.signup_pending"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=409)
 
     verification_token = generate_verification_token()
@@ -171,7 +171,7 @@ async def verify_email_page(request: Request, token: str, db: AsyncSession = Dep
         return templates.TemplateResponse(
             request,
             "auth/verify.html",
-            {"request": request, "success": False, "error": "Invalid or expired verification token."},
+            {"request": request, "success": False, "error": "auth.invalid_verify_token"},
             status_code=404,
         )
 

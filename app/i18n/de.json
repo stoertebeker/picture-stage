@@ -29,7 +29,15 @@
     "back_to_login": "Back to Login",
     "signup_success": "Signup received. Please check your email to verify your address.",
     "verify_success": "Email verified successfully. Your account is now waiting for admin approval.",
-    "language": "Sprache"
+    "language": "Sprache",
+    "email_password_required": "E-Mail und Passwort sind erforderlich.",
+    "invalid_credentials": "Ungültige E-Mail-Adresse oder falsches Passwort.",
+    "not_approved": "Konto wartet noch auf Admin-Freigabe.",
+    "passwords_mismatch": "Passwörter stimmen nicht überein.",
+    "password_too_short": "Passwort muss mindestens 8 Zeichen lang sein.",
+    "email_registered": "E-Mail-Adresse bereits registriert.",
+    "signup_pending": "Registrierung bereits ausstehend.",
+    "invalid_verify_token": "Ungültiger oder abgelaufener Bestätigungslink."
   },
   "setup": {
     "title": "Setup - Picture-Stage",
@@ -143,7 +151,8 @@
     "delete_confirm_suffix": " ein, um die Loeschung zu bestaetigen:",
     "delete_confirm_placeholder": "Galeriename eingeben",
     "delete_confirm_button": "Endgueltig loeschen",
-    "preview_alt": "Vorschau"
+    "preview_alt": "Vorschau",
+    "delete_name_mismatch": "Der eingegebene Name stimmt nicht mit dem Galerienamen überein."
   },
   "guest": {
     "selected_of_total": "{selected} / {total} ausgewählt, {favorited} Favoriten",
