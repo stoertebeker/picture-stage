@@ -117,7 +117,7 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ## Aktueller Stand
 
 **Datum:** 2026-06-05
-**Wachwechsel-Tag:** `handover-2026-06-02` (zeigt auf `c0b1fe4`, vor Übergabe-Commit)
+**Wachwechsel-Tag:** `handover-2026-06-05` (zeigt auf `f1b72c3`, verifizierter grüner Migrations-Stand)
 
 ### Was ist fertig
 - v0.1 API komplett: 12/12 Issues, 27 Endpoints
@@ -128,9 +128,12 @@ users, galleries, images, image_previews, selection_events (append-only), share_
   optionales Ablaufdatum mit Guest-Enforcement, i18n DE+EN (176 Keys)
 - v0.4 Frontend funktional: 6/6 Issues — Templates, Router, HTMX-Logik,
   Cookie-Auth, CSRF, i18n im Template-Context
-- 181 Tests grün: 165 Unit/Security + 16 DB-Integration (CI gegen Postgres-Service)
+- 200 Tests grün (Unit/Security + DB-Integration + Migrations-Drift-Guard, CI gegen Postgres-Service)
 - Quality Gates: ruff (check+format), mypy strict, pytest — alle grün
 - CI/CD Workflows (GitHub Actions inkl. Postgres-Service), Multi-Arch Dockerfile
+- DB-Migrationen produktionsreif (2026-06-05): Alembic `command.upgrade` beim Startup
+  statt `create_all`; native ENUM-Types in Migration 0001; Migration↔ORM-Drift-Guard
+  (`tests/migrations/`) verhindert künftige Drift in CI. Details: `docs/lessons-learned.md`
 
 ### Nächste große Baustelle: Frontend-UX-Redesign (Epic `picture-stage-qdz`) – REDUCED SCOPE
 
@@ -152,12 +155,13 @@ Assets: `styles.css` (Tailwind Standalone), `htmx.min.js` + `alpine.min.js` (sel
 - Einstieg: `bd ready` → `picture-stage-qdz.2` (PS-UX-01, Design-Token-Spec)
 
 ### Was sonst noch offen ist (kleinere Brocken)
-- Alembic initiale Migration (aktuell `create_all` beim Startup)
 - WATERMARK_OPACITY Breaking-Change-Migrationshinweis (int 0-255 → float 0.0-1.0)
   in Release-Notes
 - Hardcoded Strings auf i18n ziehen: `app/frontend/guest.py:325` ("Falsches
   Passwort"), `STATUS_LABELS` in `app/frontend/galleries.py`
 - Docker-Build verifizieren (oder via `docker-publish.yml`)
+- GitHub Actions: Node-20-Deprecation (`actions/checkout@v4`, `setup-python@v5`) —
+  Frist Sept. 2026, bei Gelegenheit Action-Versionen anheben
 
 ### Epics
 | Epic | Beads-ID | Status |

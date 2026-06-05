@@ -54,3 +54,17 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Konsequenz:** Alle DB-gebundenen Tests (Galerie-CRUD, Lösch-Workflow, Audit-Log-Persistenz) sind **CI-only**. Lokal: In-Process via `TestClient` / `httpx.AsyncClient(ASGITransport(app))` ohne echtes TCP.
 **Setup für CI-Integrationstests:** `tests/integration/conftest.py` mit `NullPool`-Engine (gegen `asyncpg`-Loop-Issues), per-Test `drop_all`/`create_all`, `dependency_overrides[get_db]`. `verify_db`-Fixture für stale-read-freie Verifikation.
 **Regel:** Wenn ein Test eine DB braucht, gehört er nach `tests/integration/` — er läuft dort gegen den Postgres-Service-Container der CI.
+
+## DB-Migrationen (2026-06-05)
+
+### Tests mit `create_all` sind blind für Migrations-Drift
+**Kontext:** `tests/integration/conftest.py` baut sein Schema per `Base.metadata.create_all` auf, nicht über die Alembic-Migration. Die App im Container migriert dagegen via Alembic.
+**Problem:** Migration und ORM können beliebig auseinanderlaufen, ohne dass ein Test es merkt — die Tests sehen immer das frische ORM-Schema, nie das von der Migration erzeugte. Drei Drifts erreichten so die Produktion: falsche Tabellen-Reihenfolge (FK vor Ziel), `VARCHAR`-Spalten wo das ORM native ENUM-Types erwartet (`type "userstatus" does not exist` beim ersten INSERT), und ein redundanter `UniqueConstraint` zusätzlich zum unique Index auf `email`.
+**Lösung:** Dedizierter Drift-Guard `tests/migrations/test_migration_drift.py` — fährt die echte Migration (`command.upgrade("head")`) gegen die CI-Postgres und difft das Ergebnis per `alembic.autogenerate.compare_metadata` gegen `Base.metadata`. Nur `modify_default` wird toleriert (einige Spalten tragen einen DB-seitigen Default, den das ORM Python-seitig setzt).
+**Regel:** Wenn Tests das Schema per `create_all` aufbauen, brauchst du einen separaten Test, der die Migration tatsächlich ausführt und gegen das ORM vergleicht — sonst ist die Migration ungetestet.
+
+### Handgeschriebene Migrationen driften vom ORM — strukturell prüfen
+**Kontext:** Migration `0001` war handgepflegt, um das ORM-Schema „nachzubauen". Sie wich in dieser Session viermal ab (Reihenfolge, stamped-but-empty, ENUMs, unique-Index-vs-Constraint).
+**Nicht-offensichtlich:** `mapped_column(unique=True, index=True)` erzeugt einen **einzelnen unique Index** und **keinen** separaten `UniqueConstraint`. Ein `Enum(StrEnum)` erzeugt einen **nativen PG-ENUM-Type** (Name = lowercase Klassenname), den die Migration explizit anlegen/droppen muss — `create_all` macht das automatisch, eine VARCHAR-Migration nicht.
+**Lösung:** Migrations-Runner auf das offizielle Alembic-Async-Rezept umgestellt (`command.upgrade` über geteilte Connection via `cfg.attributes["connection"]`, `engine.connect()` damit `env.py` die Transaktion besitzt). Damit ist auch der „stamped-but-empty"-Zustand strukturell unmöglich: Alembic besitzt Versionstabelle und Migrations-Transaktion gemeinsam.
+**Regel:** Eine handgeschriebene Migration, die ein ORM spiegeln soll, ist eine Drift-Quelle. Entweder per `--autogenerate` erzeugen oder per `compare_metadata`-Test absichern (siehe oben). Self-rolled Migrations-Runner mit manuellem Stamping vermeiden — `alembic.command` nutzen.
