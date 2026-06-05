@@ -1,15 +1,16 @@
 """Initial schema creation.
 
 Revision ID: 0001
-Revises: 
+Revises:
 Create Date: 2026-06-05
 
 This migration creates all tables for Picture-Stage v0.1-v0.4.
 """
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # Revision identifiers
 revision = "0001"
