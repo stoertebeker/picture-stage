@@ -1,0 +1,83 @@
+{#- Button macro (PS-UX-10).
+
+Usage:
+  {% from "_macros/buttons.html" import button %}
+
+  {% call button(variant='primary') %}Erstellen{% endcall %}
+
+  {% call button(variant='danger', size='sm',
+                 attrs={'hx-delete': '/galleries/'+gallery.id+'/share',
+                        'hx-confirm': t('gallery.share_revoke_confirm')}) %}
+    {{ t('gallery.share_revoke') }}
+  {% endcall %}
+
+  {% call button(variant='ghost', icon_only=true,
+                 attrs={'aria-label': t('common.close'),
+                        '@click': '$el.closest(\'dialog\').close()'}) %}
+    <svg ...>...</svg>
+  {% endcall %}
+
+Variants: primary | secondary | ghost | danger | success
+Sizes:    sm | md | lg
+Slots:    body via `{% call %}` (text, icon, or both)
+
+Defaults to type="button" so a button in a <form> does not accidentally
+submit (build.md hygiene rule 5). Pass `type='submit'` for actual submit
+buttons.
+
+`loading=true` adds a spinner and `disabled`. `icon_only=true` uses
+square padding suited for a single icon.
+
+`attrs` is a dict of extra HTML attributes (hx-*, data-*, @click, aria-*,
+form, name, value, ...). Keys are rendered verbatim — pick CSP-safe ones.
+
+`extra_class` appends to the computed class string (use for layout
+tweaks like `w-full`, `mt-2`, etc.).
+-#}
+
+{%- set _variant_class = {
+    'primary':   'bg-accent hover:bg-accent-hover text-text-on-accent font-medium shadow-sm',
+    'secondary': 'bg-surface-raised hover:bg-surface-sunken text-text-primary border border-border-subtle font-medium',
+    'ghost':     'bg-transparent hover:bg-surface-raised text-text-secondary hover:text-text-primary',
+    'danger':    'bg-status-danger hover:opacity-90 text-white font-medium shadow-sm',
+    'success':   'bg-status-success hover:opacity-90 text-white font-medium shadow-sm',
+} -%}
+
+{%- set _size_class = {
+    'sm': 'text-sm',
+    'md': 'text-base',
+    'lg': 'text-lg',
+} -%}
+
+{%- set _padding_text = {
+    'sm': 'px-3 py-1.5',
+    'md': 'px-4 py-2',
+    'lg': 'px-6 py-3',
+} -%}
+
+{%- set _padding_icon = {
+    'sm': 'p-1.5',
+    'md': 'p-2',
+    'lg': 'p-3',
+} -%}
+
+{%- macro button(variant='primary', size='md', type='button',
+                 icon_only=false, loading=false,
+                 extra_class='', attrs={}) -%}
+  {%- set base = 'inline-flex items-center justify-center gap-2 rounded-md transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus disabled:opacity-50 disabled:cursor-not-allowed' -%}
+  {%- set variant_cls = _variant_class.get(variant, _variant_class['primary']) -%}
+  {%- set size_cls = _size_class.get(size, _size_class['md']) -%}
+  {%- set padding_cls = (_padding_icon if icon_only else _padding_text).get(size, _padding_text['md']) -%}
+  <button type="{{ type }}"
+          class="{{ base }} {{ variant_cls }} {{ size_cls }} {{ padding_cls }} {{ extra_class }}"
+          {%- if loading %} disabled aria-busy="true"{% endif %}
+          {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+    {%- if loading -%}
+      <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="4"></circle>
+        <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
+      </svg>
+    {%- endif -%}
+    {{ caller() }}
+  </button>
+{%- endmacro -%}

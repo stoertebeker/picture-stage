@@ -30,15 +30,18 @@
 
 | Variante | Status | Heute zu finden | Welle-2-Issue |
 |----------|--------|-----------------|---------------|
-| **Primary** (`bg-blue-600 hover:bg-blue-700 text-white …`) | teilweise | wortwörtlich repliziert in Dashboard, Auth, Galerie-Detail, Modals | **PS-UX-10** |
-| **Secondary / Ghost** (`text-gray-500 hover:text-gray-700 …`) | teilweise | Theme-Toggle, Lang-Switcher, „Abbrechen" in Modals | **PS-UX-10** |
-| **Danger** (`bg-red-600 hover:bg-red-700 …`) | teilweise | Galerie-Delete, Share-Revoke, Bulk-Delete, Admin-Reject | **PS-UX-10** |
-| **Success** (`bg-green-600 hover:bg-green-700 …`) | teilweise | Admin-Approve, Complete-Review (Guest) | **PS-UX-10** |
-| **Icon-only** | fehlt | – | **PS-UX-10** |
-| **Loading-State** (Spinner + disabled) | fehlt | – | **PS-UX-10** |
-| **Größen** (sm / md / lg) | fehlt | Ad-hoc-Padding pro Stelle (`px-3 py-1.5`, `px-4 py-2`, …) | **PS-UX-10** |
+| **Primary** | vorhanden | `_macros/buttons.html` `button(variant='primary')` (semantic Tokens: `bg-accent`, `text-on-accent`) | PS-UX-10 ✓ |
+| **Secondary** | vorhanden | `button(variant='secondary')` (Border + `bg-surface-raised`) | PS-UX-10 ✓ |
+| **Ghost** | vorhanden | `button(variant='ghost')` (transparent, Hover-Surface) | PS-UX-10 ✓ |
+| **Danger** | vorhanden | `button(variant='danger')` (`bg-status-danger`) | PS-UX-10 ✓ |
+| **Success** | vorhanden | `button(variant='success')` (`bg-status-success`) | PS-UX-10 ✓ |
+| **Icon-only** | vorhanden | `button(icon_only=true)` (quadratisches Padding) | PS-UX-10 ✓ |
+| **Loading-State** | vorhanden | `button(loading=true)` (Spinner-SVG + `disabled` + `aria-busy`) | PS-UX-10 ✓ |
+| **Größen** (sm / md / lg) | vorhanden | `button(size='sm'/'md'/'lg')` | PS-UX-10 ✓ |
 
-**Aktion Welle 2:** Macro `_macros/buttons.html` mit Varianten × Größen × icon-only × loading.
+**Verprobt in:** `dashboard/index.html` (Header + Empty-State + Modal Erstellen/Abbrechen), `auth/login.html` (Submit), `galleries/detail.html` (Status-Transitions + Expiry).
+
+**Migrations-Backlog:** Restliche Button-Stellen in `galleries/detail.html` (Rename, Bulk-Delete, Share-Modal), `auth/signup.html`, `auth/verify.html`, `setup/index.html`, `admin/_signup_row.html`, `guest/_complete_modal.html`, `guest/_password.html`, `guest/_lightbox.html`, `guest/viewer.html` werden im jeweiligen Page-Redesign (Welle 3) migriert.
 
 ---
 

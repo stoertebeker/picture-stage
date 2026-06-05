@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros/buttons.html" import button %}
 
 {% block title %}{{ t('dashboard.title') }}{% endblock %}
 
@@ -6,13 +7,9 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
     <div class="flex items-center justify-between mb-8">
         <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('dashboard.my_galleries') }}</h1>
-        <button
-            @click="$refs.createModal.showModal()"
-            type="button"
-            class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-        >
+        {% call button(variant='primary', attrs={'@click': '$refs.createModal.showModal()'}) %}
             {{ t('dashboard.new_gallery') }}
-        </button>
+        {% endcall %}
     </div>
 
     <div id="gallery-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -29,13 +26,9 @@
             </div>
             <h2 class="text-lg font-medium text-gray-600 dark:text-gray-400 mb-2">{{ t('dashboard.no_galleries_title') }}</h2>
             <p class="text-gray-500 dark:text-gray-500 mb-6">{{ t('dashboard.no_galleries_text') }}</p>
-            <button
-                @click="$refs.createModal.showModal()"
-                type="button"
-                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-            >
+            {% call button(variant='primary', attrs={'@click': '$refs.createModal.showModal()'}) %}
                 {{ t('dashboard.new_gallery_create') }}
-            </button>
+            {% endcall %}
         </div>
         {% endif %}
     </div>
@@ -66,19 +59,12 @@
                 >
             </div>
             <div class="flex justify-end gap-3">
-                <button
-                    type="button"
-                    @click="$el.closest('dialog').close()"
-                    class="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-                >
+                {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
                     {{ t('dashboard.cancel') }}
-                </button>
-                <button
-                    type="submit"
-                    class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors"
-                >
+                {% endcall %}
+                {% call button(variant='primary', type='submit') %}
                     {{ t('dashboard.create') }}
-                </button>
+                {% endcall %}
             </div>
         </form>
     </div>

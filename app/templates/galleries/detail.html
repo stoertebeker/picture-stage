@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros/buttons.html" import button %}
 
 {% block title %}{{ gallery.name }} – Picture-Stage{% endblock %}
 
@@ -76,10 +77,7 @@
                   class="inline">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <input type="hidden" name="status" value="{{ t.status }}">
-                <button type="submit"
-                        class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                    {{ t.label }}
-                </button>
+                {% call button(variant='secondary', size='sm', type='submit') %}{{ t.label }}{% endcall %}
             </form>
             {% endfor %}
 
@@ -141,17 +139,10 @@
                        value="{% if gallery.expires_at %}{{ gallery.expires_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
                        class="text-sm px-3 py-1.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500">
             </div>
-            <button type="submit"
-                    class="px-3 py-1.5 text-sm font-medium rounded-lg bg-blue-600 hover:bg-blue-700 text-white transition-colors">
-                {{ t('gallery.expiry_save') }}
-            </button>
+            {% call button(variant='primary', size='sm', type='submit') %}{{ t('gallery.expiry_save') }}{% endcall %}
             {% if gallery.expires_at %}
-            <button type="submit"
-                    name="clear_expiry"
-                    value="1"
-                    class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                {{ t('gallery.expiry_remove') }}
-            </button>
+            {% call button(variant='secondary', size='sm', type='submit',
+                           attrs={'name': 'clear_expiry', 'value': '1'}) %}{{ t('gallery.expiry_remove') }}{% endcall %}
             {% endif %}
         </form>
         {% if gallery.expires_at %}
