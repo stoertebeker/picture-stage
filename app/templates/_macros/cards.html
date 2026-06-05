@@ -1,0 +1,68 @@
+{#- Card macros (PS-UX-14).
+
+Usage:
+  {% from "_macros/cards.html" import card, status_pill %}
+
+  {% call card(href='/galleries/'~g.id, interactive=True) %}
+    <header class="flex items-start justify-between">
+      <h3 class="text-lg font-semibold">{{ g.name }}</h3>
+      {{ status_pill(g.status.value) }}
+    </header>
+    <div class="text-sm text-text-muted">…body…</div>
+    <footer class="flex gap-2 pt-3 border-t border-border-subtle">…actions…</footer>
+  {% endcall %}
+
+The card is a Stack (flex-col gap-3) wrapper with Editorial-Dark surface
+(bg-surface-raised, border-border-subtle, rounded-lg, p-5). Pass
+`interactive=True` to add hover-shadow + cursor-pointer for whole-card
+links. Pass `href` to wrap the entire card in an <a> tag (preferred over
+nested <a>s for whole-card clickability).
+
+For image cards (tiles inside a grid), use the simpler `tile` macro which
+defaults to rounded-md, smaller padding, and an aspect-ratio wrapper.
+
+Status pill colours intentionally still use status-pill-bg-{name} tokens
+that fall back to neutral Tailwind palette names for now; can be migrated
+to semantic accent/status tokens once the editorial palette is finalised.
+-#}
+
+{%- macro card(href='', interactive=False, extra_class='', attrs={}) -%}
+  {%- set base = 'flex flex-col gap-3 bg-surface-raised border border-border-subtle rounded-lg p-5 transition-colors' -%}
+  {%- set hover = ' hover:border-border-strong hover:shadow-md' if interactive else '' -%}
+  {%- if href -%}
+    <a href="{{ href }}"
+       class="{{ base }}{{ hover }} no-underline text-inherit {{ extra_class }}"
+       {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+      {{ caller() }}
+    </a>
+  {%- else -%}
+    <article class="{{ base }}{{ hover }} {{ extra_class }}"
+             {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+      {{ caller() }}
+    </article>
+  {%- endif -%}
+{%- endmacro -%}
+
+{%- macro tile(extra_class='', attrs={}) -%}
+  <article class="group relative bg-surface-raised border border-border-subtle rounded-md overflow-hidden hover:border-border-strong transition-colors {{ extra_class }}"
+           {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
+    {{ caller() }}
+  </article>
+{%- endmacro -%}
+
+{%- set _pill_class = {
+    'draft':     'bg-zinc-700 text-zinc-200',
+    'shared':    'bg-sky-700/40 text-sky-200 border border-sky-700/60',
+    'completed': 'bg-emerald-700/40 text-emerald-200 border border-emerald-700/60',
+    'archived':  'bg-amber-700/40 text-amber-200 border border-amber-700/60',
+    'expired':   'bg-red-700/40 text-red-200 border border-red-700/60',
+    'expires_soon': 'bg-amber-700/40 text-amber-200 border border-amber-700/60',
+    'expires_today': 'bg-orange-700/40 text-orange-200 border border-orange-700/60',
+} -%}
+
+{%- macro status_pill(kind, label='') -%}
+  {%- set cls = _pill_class.get(kind, 'bg-zinc-700 text-zinc-200') -%}
+  <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap {{ cls }}">
+    {{ label or kind }}
+  </span>
+{%- endmacro -%}

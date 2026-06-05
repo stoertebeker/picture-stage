@@ -38,12 +38,16 @@ def test_dashboard_has_create_button():
 
 
 def test_gallery_card_has_status_badges():
-    """Check that gallery card partial has status badges for all states."""
+    """Gallery card uses the status_pill macro (ps-ux-14). The macro knows all
+    four status keys (draft, shared, completed, archived) plus expiry variants.
+    We assert the card invokes the macro with the runtime status, and the
+    macro itself enumerates the four statuses."""
     card_html = (PROJECT_ROOT / "app" / "templates" / "dashboard" / "_gallery_card.html").read_text()
-    assert "draft" in card_html
-    assert "shared" in card_html
-    assert "completed" in card_html
-    assert "archived" in card_html
+    assert "status_pill" in card_html
+    assert "g.gallery.status.value" in card_html
+    cards_macro = (PROJECT_ROOT / "app" / "templates" / "_macros" / "cards.html").read_text()
+    for status in ("draft", "shared", "completed", "archived"):
+        assert status in cards_macro
 
 
 def test_gallery_card_has_quick_actions():
