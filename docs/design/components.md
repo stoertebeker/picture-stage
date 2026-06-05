@@ -101,12 +101,12 @@
 
 | Komponente | Status | Heute zu finden | Welle-2-Issue |
 |------------|--------|-----------------|---------------|
-| **Gallery-Card** | teilweise | `dashboard/_gallery_card.html` | **PS-UX-14** (in Slot-Pattern überführen) |
+| **Gallery-Card** | umgesetzt | `dashboard/_gallery_card.html` (Hero-Cover, Status, Quick-Actions) | **PS-UX-24b** |
 | **Image-Card / Thumbnail-Tile** | teilweise | `galleries/_image_grid.html`, `guest/_image_grid.html` (zwei separate Implementierungen) | **PS-UX-14** |
-| **Status-Pill** (draft/shared/completed/archived) | teilweise | inline in `_gallery_card.html` mit Farbabbildung pro Status | wird Slot in Card-Macro (PS-UX-14) |
+| **Status-Pill** (draft/shared/completed/archived) | umgesetzt | `_macros/cards.html` + Dashboard/Galerie-Detail | PS-UX-14 |
 | **Empty-Tile / Placeholder** | teilweise | grauer Quadrat in `_image_grid.html`, wenn keine Preview | bleibt Card-intern |
 
-**Aktion Welle 2:** Macro `_macros/cards.html` mit generischer Card (Slots für Header, Body, Footer, Cover) + Spezialisierungen GalleryCard und ImageCard. Status-Pill als eigenes Sub-Macro für Wiederverwendung.
+**Aktion Welle 2:** Macro `_macros/cards.html` stellt generische Card, Tile und Status-Pill bereit. Dashboard nutzt zusätzlich eine spezialisierte Hero-Gallery-Card, weil Cover, Counts und Quick-Actions dort fest zusammengehören.
 
 ---
 
@@ -114,7 +114,7 @@
 
 | Page | Status | Heute zu finden | Welle-2-Issue |
 |------|--------|-----------------|---------------|
-| **Dashboard ohne Galerien** | vorhanden | `dashboard/index.html:21-40` (mit Icon, Headline, CTA) | wird in PS-UX-15 zu Macro |
+| **Dashboard ohne Galerien** | vorhanden | `dashboard/index.html` (mit Icon, Headline, CTA im HTMX-Grid) | wird in PS-UX-15 zu Macro |
 | **Galerie ohne Bilder** | vorhanden | `galleries/_image_grid.html:57-68` (gleiches Pattern) | **PS-UX-15** |
 | **Audit-Log leer** | fehlt | keine Empty-Behandlung – Tabelle bleibt einfach leer | **PS-UX-15** |
 | **Pending-Signups leer** | fehlt | Admin-Tabelle ohne Empty-Hinweis | **PS-UX-15** |

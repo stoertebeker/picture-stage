@@ -85,7 +85,7 @@ Viewport.
 
 | Variante | Tailwind | Verwendung |
 |----------|----------|------------|
-| `grid-cards` | `grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6` | Galerie-Karten im Dashboard |
+| `grid-cards` | `grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3` | Galerie-Karten im Dashboard |
 | `grid-tiles` | `grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4` | Bild-Thumbnails im Galerie-Grid |
 | `grid-tiles-dense` | `grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2` | Sehr dichtes Image-Grid (Mobile zuerst) |
 | `grid-list` | `grid grid-cols-1 md:grid-cols-2 gap-4` | Zwei-Spalten-Listen (z.B. Audit-Log) |
@@ -93,7 +93,7 @@ Viewport.
 **Beispiel (Dashboard):**
 
 ```html
-<div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+<div id="gallery-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
   {% for g in galleries %}{% include "dashboard/_gallery_card.html" %}{% endfor %}
 </div>
 ```
@@ -102,7 +102,7 @@ Viewport.
 Grid-Target für HTMX immer existiert (siehe `docs/design/build.md` Regel 2):
 
 ```html
-<div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+<div id="gallery-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
   {% for g in galleries %}…{% endfor %}
   {% if not galleries %}
     <div id="dashboard-empty-state" class="col-span-full …">…</div>
@@ -128,12 +128,12 @@ horizontales Padding auf kleinen Viewports.
 **Beispiel (Dashboard-Page):**
 
 ```html
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-  <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
+<div class="min-h-screen bg-surface-base">
+  <header class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90">
     <h1>{{ t('dashboard.my_galleries') }}</h1>
     <button class="…">{{ t('dashboard.new_gallery') }}</button>
-  </div>
-  <div id="gallery-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">…</div>
+  </header>
+  <div id="gallery-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">…</div>
 </div>
 ```
 

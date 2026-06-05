@@ -23,7 +23,7 @@ def test_dashboard_template_has_gallery_grid():
     index_html = (PROJECT_ROOT / "app" / "templates" / "dashboard" / "index.html").read_text()
     assert "grid-cols-1" in index_html
     assert "md:grid-cols-2" in index_html
-    assert "lg:grid-cols-3" in index_html
+    assert "xl:grid-cols-3" in index_html
 
 
 def test_gallery_card_partial_exists():
@@ -55,6 +55,17 @@ def test_gallery_card_has_quick_actions():
     card_html = (PROJECT_ROOT / "app" / "templates" / "dashboard" / "_gallery_card.html").read_text()
     assert "/galleries/" in card_html
     assert "export" in card_html.lower()
+    assert "#share-section" in card_html
+
+
+def test_gallery_card_has_cover_image_surface():
+    """Dashboard gallery cards use a hero cover surface."""
+    card_html = (PROJECT_ROOT / "app" / "templates" / "dashboard" / "_gallery_card.html").read_text()
+    dashboard_py = (PROJECT_ROOT / "app" / "frontend" / "dashboard.py").read_text()
+    assert "g.cover_url" in card_html
+    assert "aspect-[5/3]" in card_html
+    assert "cover_url" in dashboard_py
+    assert "sign_url" in dashboard_py
 
 
 def test_dashboard_has_empty_state():
@@ -65,6 +76,15 @@ def test_dashboard_has_empty_state():
     assert "t('dashboard.no_galleries_title')" in index_html
     de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())
     assert de["dashboard"]["no_galleries_title"] == "Noch keine Galerien"
+
+
+def test_dashboard_has_prominent_new_gallery_cta():
+    """Dashboard keeps the HTMX create flow prominent."""
+    index_html = (PROJECT_ROOT / "app" / "templates" / "dashboard" / "index.html").read_text()
+    assert "dashboard.metric_galleries" in index_html
+    assert "dashboard.create_hint" in index_html
+    assert 'hx-target="#gallery-grid"' in index_html
+    assert 'hx-swap="beforeend"' in index_html
 
 
 def test_dashboard_router_registered():

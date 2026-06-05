@@ -13,6 +13,8 @@ from app.auth.dependencies import get_user_from_cookie, require_authenticated_pa
 from app.db.models import (
     Gallery,
     Image,
+    ImagePreview,
+    PreviewVariant,
     SelectionAction,
     SelectionEvent,
     ShareSession,
@@ -20,6 +22,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.security.signing import sign_url
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +90,7 @@ async def create_gallery(
         "favorited_count": 0,
         "commented_count": 0,
         "last_activity": None,
+        "cover_url": None,
     }
 
     csrf_token = request.cookies.get("csrf_token", "")
@@ -148,6 +152,7 @@ async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict[str, Any
             select(func.max(ShareSession.started_at)).where(ShareSession.gallery_id == gallery.id)
         )
         last_activity = last_access_result.scalar()
+        cover_url = await _load_gallery_cover_url(gallery, db)
 
         gallery_data.append(
             {
@@ -157,7 +162,32 @@ async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict[str, Any
                 "favorited_count": favorited_count,
                 "commented_count": commented_count,
                 "last_activity": last_activity,
+                "cover_url": cover_url,
             }
         )
 
     return gallery_data
+
+
+async def _load_gallery_cover_url(gallery: Gallery, db: AsyncSession) -> str | None:
+    """Return a signed medium thumbnail URL for the first image in a gallery."""
+    result = await db.execute(
+        select(ImagePreview.storage_key)
+        .join(Image, ImagePreview.image_id == Image.id)
+        .where(Image.gallery_id == gallery.id, ImagePreview.variant == PreviewVariant.thumb_md)
+        .order_by(Image.sort_order)
+        .limit(1)
+    )
+    storage_key = result.scalar_one_or_none()
+    if storage_key is None:
+        result = await db.execute(
+            select(ImagePreview.storage_key)
+            .join(Image, ImagePreview.image_id == Image.id)
+            .where(Image.gallery_id == gallery.id, ImagePreview.variant == PreviewVariant.thumb_sm)
+            .order_by(Image.sort_order)
+            .limit(1)
+        )
+        storage_key = result.scalar_one_or_none()
+    if storage_key is None:
+        return None
+    return sign_url(f"/media/{storage_key}", expires_in=3600)

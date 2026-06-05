@@ -2,35 +2,91 @@
 {% from "_macros/buttons.html" import button %}
 {% from "_macros/forms.html" import field, text_input, csrf_input %}
 {% from "_macros/modal.html" import modal, modal_footer %}
-{% from "_macros/empty.html" import empty_state, icon_image %}
 
 {% block title %}{{ t('dashboard.title') }}{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    <div class="flex items-center justify-between mb-8">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('dashboard.my_galleries') }}</h1>
-        {% call button(variant='primary', attrs={'@click': '$refs.createModal.showModal()'}) %}
-            {{ t('dashboard.new_gallery') }}
-        {% endcall %}
-    </div>
-
-    <div id="gallery-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {% for g in galleries %}
-            {% include "dashboard/_gallery_card.html" %}
-        {% endfor %}
-        {% if not galleries %}
-        <div id="dashboard-empty-state" class="col-span-full">
-            {% call empty_state(icon=icon_image(),
-                                 title=t('dashboard.no_galleries_title'),
-                                 text=t('dashboard.no_galleries_text')) %}
+<div class="min-h-screen bg-surface-base">
+    <header class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
+        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between gap-4">
+                <div>
+                    <div class="text-xs uppercase text-text-muted">{{ t('nav.brand') }}</div>
+                    <h1 class="font-display text-3xl leading-tight text-text-primary sm:text-4xl">{{ t('dashboard.my_galleries') }}</h1>
+                </div>
                 {% call button(variant='primary', attrs={'@click': '$refs.createModal.showModal()'}) %}
-                    {{ t('dashboard.new_gallery_create') }}
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    {{ t('dashboard.new_gallery') }}
                 {% endcall %}
-            {% endcall %}
+            </div>
+
+            <div class="grid gap-3 sm:grid-cols-4">
+                <div class="rounded-md border border-border-subtle bg-surface-raised px-4 py-3">
+                    <div class="text-2xl font-semibold text-text-primary">{{ galleries | length }}</div>
+                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_galleries') }}</div>
+                </div>
+                <div class="rounded-md border border-status-info bg-surface-raised px-4 py-3">
+                    <div class="text-2xl font-semibold text-status-info">{{ galleries | selectattr('gallery.share_token_hash') | list | length }}</div>
+                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_shared') }}</div>
+                </div>
+                <div class="rounded-md border border-accent bg-surface-raised px-4 py-3">
+                    <div class="text-2xl font-semibold text-accent">{{ galleries | sum(attribute='selected_count') }}</div>
+                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_selected') }}</div>
+                </div>
+                <div class="rounded-md border border-favorite bg-surface-raised px-4 py-3">
+                    <div class="text-2xl font-semibold text-favorite">{{ galleries | sum(attribute='favorited_count') }}</div>
+                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_favorites') }}</div>
+                </div>
+            </div>
         </div>
-        {% endif %}
-    </div>
+    </header>
+
+    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+        <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div class="flex flex-wrap gap-2">
+                <span class="rounded-full border border-accent bg-surface-raised px-3 py-1 text-xs font-medium text-accent">{{ t('dashboard.filter_all') }}</span>
+                <span class="rounded-full border border-border-subtle px-3 py-1 text-xs font-medium text-text-secondary">{{ t('gallery.status_draft') }}</span>
+                <span class="rounded-full border border-border-subtle px-3 py-1 text-xs font-medium text-text-secondary">{{ t('gallery.status_shared') }}</span>
+                <span class="rounded-full border border-border-subtle px-3 py-1 text-xs font-medium text-text-secondary">{{ t('gallery.status_completed') }}</span>
+            </div>
+            <label class="relative block min-w-0 sm:w-72">
+                <span class="sr-only">{{ t('dashboard.search_label') }}</span>
+                <svg class="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-4.35-4.35m1.35-5.65a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                </svg>
+                <input type="search"
+                       placeholder="{{ t('dashboard.search_placeholder') }}"
+                       class="w-full rounded-md border border-border-subtle bg-surface-raised py-2 pl-9 pr-3 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus-visible:ring focus-visible:ring-focus">
+            </label>
+        </div>
+
+        <div id="gallery-grid" class="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {% for g in galleries %}
+                {% include "dashboard/_gallery_card.html" %}
+            {% endfor %}
+            {% if not galleries %}
+            <div id="dashboard-empty-state" class="col-span-full">
+                <div class="rounded-md border border-border-subtle bg-surface-raised p-8 text-center">
+                    <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-surface-sunken text-accent">
+                        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5"/>
+                        </svg>
+                    </div>
+                    <h2 class="font-display text-3xl text-text-primary">{{ t('dashboard.no_galleries_title') }}</h2>
+                    <p class="mx-auto mt-3 max-w-xl text-sm text-text-muted">{{ t('dashboard.no_galleries_text') }}</p>
+                    {% call button(variant='primary', extra_class='mt-6', attrs={'@click': '$refs.createModal.showModal()'}) %}
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        {{ t('dashboard.new_gallery_create') }}
+                    {% endcall %}
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </main>
 </div>
 
 {% call modal(ref='createModal', title=t('dashboard.create_modal_title'), size='sm') %}
@@ -47,6 +103,9 @@
                           placeholder=t('dashboard.gallery_name_placeholder'),
                           autofocus=true) }}
         {% endcall %}
+        <p class="rounded-md border border-border-subtle bg-surface-base p-3 text-sm text-text-muted">
+            {{ t('dashboard.create_hint') }}
+        </p>
         {% call modal_footer() %}
             {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
                 {{ t('dashboard.cancel') }}
