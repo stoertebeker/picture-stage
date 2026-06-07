@@ -174,8 +174,8 @@ async def test_status_change_is_audited(client, db, auth_headers, verify_db):
     )
 
     rows = (
-        await verify_db.execute(select(AuditLog).where(AuditLog.event_type == "user_status_changed"))
-    ).scalars().all()
+        (await verify_db.execute(select(AuditLog).where(AuditLog.event_type == "user_status_changed"))).scalars().all()
+    )
     assert len(rows) == 1
     assert rows[0].actor_user_id == admin.id
     assert rows[0].details["new_status"] == "disabled"
@@ -226,9 +226,7 @@ async def test_delete_user_removes_account_and_galleries(client, db, auth_header
 
     assert resp.status_code == 204
     assert await verify_db.get(User, target.id) is None
-    remaining = await verify_db.scalar(
-        select(func.count()).select_from(Gallery).where(Gallery.owner_id == target.id)
-    )
+    remaining = await verify_db.scalar(select(func.count()).select_from(Gallery).where(Gallery.owner_id == target.id))
     assert remaining == 0
 
 
@@ -238,9 +236,7 @@ async def test_delete_user_is_audited(client, db, auth_headers, verify_db):
 
     await client.delete(f"/api/v1/admin/users/{target.id}", headers=auth_headers(admin))
 
-    rows = (
-        await verify_db.execute(select(AuditLog).where(AuditLog.event_type == "user_deleted"))
-    ).scalars().all()
+    rows = (await verify_db.execute(select(AuditLog).where(AuditLog.event_type == "user_deleted"))).scalars().all()
     assert len(rows) == 1
     assert rows[0].details["target_email"] == "u@test.local"
 

@@ -82,11 +82,7 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     if user.status not in LOGIN_ALLOWED_STATUSES:
-        detail = (
-            "Account is disabled"
-            if user.status == UserStatus.disabled
-            else "Account not yet approved by admin"
-        )
+        detail = "Account is disabled" if user.status == UserStatus.disabled else "Account not yet approved by admin"
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
     access_token = create_access_token(str(user.id))
@@ -110,11 +106,7 @@ async def login_form(request: Request, db: AsyncSession = Depends(get_db)) -> Re
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     if user.status not in LOGIN_ALLOWED_STATUSES:
-        detail = (
-            "Account is disabled"
-            if user.status == UserStatus.disabled
-            else "Account not yet approved by admin"
-        )
+        detail = "Account is disabled" if user.status == UserStatus.disabled else "Account not yet approved by admin"
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
     access_token = create_access_token(str(user.id))

@@ -29,9 +29,7 @@ async def purge_gallery(gallery: Gallery, db: AsyncSession, storage: StorageBack
     beforehand and call ``db.commit()`` afterwards.
     """
     # 1. Delete image files from storage (best-effort: log warnings on failure)
-    result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews))
-    )
+    result = await db.execute(select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)))
     images = result.scalars().all()
     for image in images:
         try:
