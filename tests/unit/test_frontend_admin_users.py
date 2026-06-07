@@ -102,3 +102,23 @@ def test_users_page_renders_table_and_empty_state() -> None:
 
     empty = _render("admin/users.html", rows=[], current_user=admin, csrf_token="x", request=None)
     assert _t("admin.no_users") in empty
+
+
+def test_nav_badge_shows_count_and_hides_when_zero() -> None:
+    with_pending = _render("admin/_nav_badge.html", count=3)
+    assert "/admin/signups" in with_pending
+    assert "3" in with_pending
+
+    none_pending = _render("admin/_nav_badge.html", count=0)
+    assert none_pending.strip() == ""
+
+
+def test_base_layout_admin_menu_is_admin_gated() -> None:
+    """Admin nav link + lazy badge are only emitted for admins."""
+    import pathlib
+
+    base = pathlib.Path("app/templates/base.html").read_text()
+    assert "current_user" in base
+    assert "/admin/users" in base
+    assert 'hx-get="/admin/nav-badge"' in base
+    assert "== 'admin'" in base

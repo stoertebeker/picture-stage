@@ -1,0 +1,8 @@
+{# Pending-signups badge for the admin nav. Renders nothing when count is 0. #}
+{% if count and count > 0 %}
+<a href="/admin/signups"
+   title="{{ t('admin.pending_badge_label', count=count) }}"
+   class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 ml-1 text-xs font-bold rounded-full bg-red-600 text-white">
+    {{ count }}
+</a>
+{% endif %}

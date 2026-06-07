@@ -60,7 +60,10 @@ async def get_user_from_cookie(request: Request, db: AsyncSession = Depends(get_
     except ValueError:
         return None
     result = await db.execute(select(User).where(User.id == uid))
-    return result.scalar_one_or_none()
+    user = result.scalar_one_or_none()
+    # Expose to templates (admin nav menu + pending badge) without touching every route.
+    request.state.current_user = user
+    return user
 
 
 async def require_authenticated_page(request: Request, db: AsyncSession = Depends(get_db)) -> User:

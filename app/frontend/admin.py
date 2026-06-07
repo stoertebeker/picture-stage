@@ -120,6 +120,17 @@ async def admin_reject_signup(
     return HTMLResponse("")
 
 
+@router.get("/admin/nav-badge", response_class=HTMLResponse)
+async def admin_nav_badge(
+    request: Request,
+    _admin: User = Depends(require_admin_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Lazy-loaded pending-signups badge for the admin nav (empty when none)."""
+    count = await service.count_pending_signups(db)
+    return templates.TemplateResponse(request, "admin/_nav_badge.html", {"request": request, "count": count})
+
+
 @router.get("/admin/users", response_class=HTMLResponse)
 async def admin_users(
     request: Request,

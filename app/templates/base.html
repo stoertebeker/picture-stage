@@ -19,6 +19,10 @@
         </div>
         <div>
             <a href="/dashboard">Dashboard</a>
+            {% if current_user and (current_user.status | string) == 'admin' %}
+            <a href="/admin/users">{{ t('admin.nav_admin') }}</a>
+            <span hx-get="/admin/nav-badge" hx-trigger="load, every 60s" hx-swap="innerHTML"></span>
+            {% endif %}
             <button type="button" data-theme-toggle>
                 <span data-theme-label="dark">{{ t('nav.dark_mode') }}</span>
                 <span data-theme-label="light">{{ t('nav.light_mode') }}</span>

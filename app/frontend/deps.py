@@ -34,6 +34,9 @@ def _patched_template_response(
     context.setdefault("locale", locale)
     # Provide request-aware t() bound to the current request
     context.setdefault("t", partial(_t_for_request, request))
+    # Expose the logged-in user (set by get_user_from_cookie) for the nav/admin menu.
+    current_user = getattr(request.state, "current_user", None) if hasattr(request, "state") else None
+    context.setdefault("current_user", current_user)
     return _original_TemplateResponse(request, name, context, **kwargs)
 
 
