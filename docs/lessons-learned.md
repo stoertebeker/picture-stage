@@ -68,3 +68,27 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Nicht-offensichtlich:** `mapped_column(unique=True, index=True)` erzeugt einen **einzelnen unique Index** und **keinen** separaten `UniqueConstraint`. Ein `Enum(StrEnum)` erzeugt einen **nativen PG-ENUM-Type** (Name = lowercase Klassenname), den die Migration explizit anlegen/droppen muss — `create_all` macht das automatisch, eine VARCHAR-Migration nicht.
 **Lösung:** Migrations-Runner auf das offizielle Alembic-Async-Rezept umgestellt (`command.upgrade` über geteilte Connection via `cfg.attributes["connection"]`, `engine.connect()` damit `env.py` die Transaktion besitzt). Damit ist auch der „stamped-but-empty"-Zustand strukturell unmöglich: Alembic besitzt Versionstabelle und Migrations-Transaktion gemeinsam.
 **Regel:** Eine handgeschriebene Migration, die ein ORM spiegeln soll, ist eine Drift-Quelle. Entweder per `--autogenerate` erzeugen oder per `compare_metadata`-Test absichern (siehe oben). Self-rolled Migrations-Runner mit manuellem Stamping vermeiden — `alembic.command` nutzen.
+
+## Admin-User-Verwaltung (2026-06-07)
+
+### CI prüft `ruff format --check` UND `ruff check` — lokal beides laufen lassen
+**Kontext:** Lokal nur `ruff check .` (Linter) geprüft und committet. Die CI-Stufe `ruff format --check .` schlug danach fehl (`Would reformat: ...`) — mehrfach in Folge.
+**Problem:** `ruff check` (Linter, Regeln/Imports) und `ruff format` (Formatter, Zeilenumbrüche) sind getrennte Werkzeuge. Grüner Linter heißt nicht formatkonform.
+**Lösung/Regel:** Verifikations-Standard = `ruff format --check . && ruff check . && mypy app/ && pytest tests/unit/ -q`. Bei rotem Format-Check `ruff format <dateien>` anwenden.
+
+### Async-SQLAlchemy: `db.delete(obj)` lazy-lädt Cascade-Relationships → `MissingGreenlet`
+**Kontext:** Admin-User-Delete sollte einen User samt Galerien/Notifications löschen. `await db.delete(user)` triggert ORM-Cascade über `relationship(cascade="all, delete-orphan")`.
+**Problem:** Sind die Collections (`galleries`, `notification_configs`) nicht eager geladen, lazy-lädt das ORM sie beim Flush — im async-Kontext → `MissingGreenlet`. Eager laden + parallele Core-Deletes (für Storage) kollidieren dagegen (Stale/StaleData).
+**Lösung:** Storage-relevante Kinder (Galerien) zuerst explizit purgen (Files + Core-`delete()`), dann den User per **Core-`delete(User).where(...)`** entfernen. Die übrigen Abhängigen (`notification_configs` → `deliveries`) räumt die **DB-seitige `ON DELETE CASCADE`** ab — kein ORM-Lazy-Load nötig.
+**Regel:** In async destruktive Multi-Table-Löschungen über Core-Statements + DB-`ondelete=CASCADE` fahren, nicht über `db.delete(orm_obj)` mit lazy Cascade.
+
+### DB-Cascade löscht keine Storage-Dateien — User-Delete muss storage-aware sein
+**Kontext:** `galleries.owner_id` / `images.gallery_id` haben `ondelete=CASCADE`. Ein User-Delete entfernt damit alle DB-Rows automatisch.
+**Problem:** Die physischen Dateien (WebP-Previews, Originale in Local/S3-Storage) kennt die DB nicht — sie verwaisen. Bei einem gelöschten Account ist das nicht nur ein Leak, sondern ein DSGVO-Problem (Bilddaten bleiben liegen).
+**Lösung:** Gemeinsame `purge_gallery(gallery, db, storage)` (`app/galleries/deletion.py`), die Gallery-Delete und User-Delete teilen — löscht Storage-Files best-effort + DB-Rows in FK-Reihenfolge + anonymisiert Audit-Log.
+**Regel:** Jeder Lösch-Pfad, der indirekt Bilder entfernt (User, Bulk), muss explizit über den Storage-Backend gehen — DB-Cascade allein reicht nie.
+
+### Native PG-ENUM erweitern: `ALTER TYPE ... ADD VALUE` im autocommit_block
+**Kontext:** `UserStatus` (StrEnum) ist als nativer PG-Type `userstatus` gemappt. Neuer Wert `disabled` nötig.
+**Lösung:** Migration `0002`: `op.execute("ALTER TYPE userstatus ADD VALUE IF NOT EXISTS 'disabled'")` innerhalb `with op.get_context().autocommit_block():` (ADD VALUE verträgt keinen offenen Transaktionsblock auf älteren PG). Downgrade ist ein No-op (PG kann Enum-Werte nicht in-place entfernen).
+**Regel:** Enum-Werte ergänzen ≠ Spalte ändern — eigener `ALTER TYPE`-Schritt, idempotent (`IF NOT EXISTS`), autocommit, kein Downgrade-Drop.

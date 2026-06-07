@@ -116,20 +116,47 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-05
-**Wachwechsel-Tag:** `handover-2026-06-05` (zeigt auf `f1b72c3`, verifizierter grüner Migrations-Stand)
+**Datum:** 2026-06-07
+**Wachwechsel-Tag:** `handover-2026-06-07` (zeigt auf `78a984a`, letzter grüner Stand: Admin-User-Verwaltung komplett)
 
 ### Was ist fertig
 - v0.1–v0.4 vollständig (API, Lifecycle, Compliance, Frontend funktional)
-- 170 Unit-Tests grün; CI gegen Postgres-Service; ruff + mypy strict grün
+- 184 Unit-Tests grün; CI gegen Postgres-Service; ruff format + ruff check + mypy strict grün
 - DB-Migrationen produktionsreif; Migration↔ORM-Drift-Guard in CI
-- i18n DE+EN vollständig — alle hardcoded Strings auf Keys (`auth.*`, `gallery.*`)
+- i18n DE+EN vollständig — alle hardcoded Strings auf Keys (`auth.*`, `gallery.*`, `admin.*`)
 - **v0.5 Foundation komplett:** Design-Tokens (`docs/design/tokens.md`), Tailwind-Config,
   Web-Fonts self-hosted (Inter + Fraunces WOFF2), Dark-Mode-Bootstrap, Layout-Primitives,
   Komponenten-Inventar
 - **v0.5 Komponenten komplett:** Button (`_macros/buttons.html`), Form (`_macros/forms.html`),
   Modal/Dialog (`_macros/modal.html`)
 - **v0.5 Guest-Viewer komplett:** Spike + Template auf Editorial Dark
+- **Admin-User-Verwaltung komplett (Epic `picture-stage-uwy`, closed):** siehe nächster Abschnitt
+
+### Admin-User-Verwaltung (Epic `picture-stage-uwy`, closed 2026-06-07)
+Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Frontend-UI.
+- **Neuer User-Status `disabled`** (Migration `0002`, nativer PG-Enum via `ALTER TYPE … ADD VALUE`).
+  Zentrale Whitelist `LOGIN_ALLOWED_STATUSES` (`app/db/models.py`) = `{active, admin}`; an allen vier
+  Auth-Punkten geprüft (API-Login, Form-Login, `require_active_user`, `require_authenticated_page`).
+- **Service-Schicht `app/admin/service.py`** = Single Source of Truth für Geschäftslogik +
+  Sicherheits-Leitplanken; API-Router (`app/admin/router.py`) und Frontend-Router
+  (`app/frontend/admin.py`) sind dünne Adapter darauf. Service wirft `AdminActionError`
+  (status_code + i18n_key); jeder Aufrufer übersetzt selbst (HTTPException bzw. Toast).
+- **Leitplanken:** S1 kein Self-Sabotage, S2 letzter-Admin-Schutz (Defense-in-Depth), S4 Audit-Log
+  je Mutation (`user_status_changed`/`user_deleted`/`user_password_reset`), Rate-Limits, CSRF.
+- **Storage-aware Delete:** `purge_gallery` (`app/galleries/deletion.py`, aus Gallery-Delete extrahiert)
+  wird pro Galerie aufgerufen → keine verwaisten Bilddateien (DSGVO). Danach Core-`delete(User)`.
+- **Frontend:** `/admin/users` (Tabelle, Status-Badges, Aktionen via HTMX, Delete-/PW-Reset-Modals),
+  Admin-Nav-Menü + lazy Pending-Badge (`/admin/nav-badge`) nur für Admins. `current_user` global im
+  Template-Context (gesetzt in `get_user_from_cookie`, injiziert in `app/frontend/deps.py`).
+- **Tests:** 21 Integration-Tests (`tests/integration/test_admin_users.py`, CI/Postgres) +
+  DB-freie Unit-Tests (`tests/unit/test_auth_disabled_status.py`, `test_frontend_admin_users.py`).
+
+**Offene Follow-ups (Beads):**
+| Punkt | Beads-ID | Prio |
+|-------|----------|------|
+| JWT-Invalidierung bei Sperren/PW-Reset (stateless-Token-Lücke) | `picture-stage-7kr` | P2 🛡️ |
+| Visuelle/Playwright-UI-Verifikation `/admin/users` | `picture-stage-52s` | P3 |
+| Share-Sessions gesperrter User invalidieren/prüfen | `picture-stage-cxs` | P3 |
 
 ### v0.5 – Noch offen (Epic `picture-stage-qdz`)
 
@@ -156,6 +183,7 @@ Einstieg: `bd ready` → `qdz.13` (PS-UX-21a, Guest-Lightbox Mockup)
 | v0.3 Produktion & Compliance | `picture-stage-fbr` | closed |
 | v0.4 Frontend (funktional) | `picture-stage-gza` | closed |
 | v0.5 UX-Redesign – Editorial Dark (Guest-Focused) | `picture-stage-qdz` | Foundation + Komponenten + Viewer ✅, Lightbox/PW-Gate/Mobile offen |
+| Admin-User-Verwaltung (API + Frontend) | `picture-stage-uwy` | closed (3 Follow-ups offen: `7kr`/`52s`/`cxs`) |
 
 ### Verifikation für neue Sessions
 `bash scripts/verify-handover.sh` prüft den Übergabe-Stand

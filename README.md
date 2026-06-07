@@ -15,6 +15,7 @@ Picture-Stage lets photographers share image galleries with models for review. M
 - **Server-side watermarking** — originals are never exposed to models
 - **Pluggable storage** — local Docker volume or S3-compatible (MinIO, AWS, Hetzner, R2, B2)
 - **Multi-tenant** — multiple photographers with admin approval registration
+- **Admin user management** — list users, change roles, lock/unlock, delete, reset passwords
 - **Multi-arch Docker image** — runs on amd64 and arm64 (Raspberry Pi, Synology)
 
 ## Installation (Docker)
@@ -97,8 +98,13 @@ docker compose up -d
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/admin/pending-signups` | List pending registrations |
+| GET | `/api/v1/admin/pending-signups/count` | Count pending registrations |
 | POST | `/api/v1/admin/approve/{id}` | Approve registration |
 | DELETE | `/api/v1/admin/reject/{id}` | Reject registration |
+| GET | `/api/v1/admin/users` | List user accounts (paginated, status filter) |
+| PATCH | `/api/v1/admin/users/{id}/status` | Promote/demote, lock/unlock (disabled) |
+| DELETE | `/api/v1/admin/users/{id}` | Delete user incl. galleries + storage files |
+| POST | `/api/v1/admin/users/{id}/reset-password` | Set a new password for a user |
 
 ## Security
 

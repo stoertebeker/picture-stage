@@ -55,3 +55,7 @@ node_modules/
 # Beads / Dolt (added by bd init)
 .dolt/
 .beads-credential-key
+
+# Playwright (ad-hoc screenshots + MCP session artifacts)
+.playwright-mcp/
+/*.png
