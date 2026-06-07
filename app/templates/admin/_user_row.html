@@ -1,0 +1,124 @@
+{#
+  One user row for the admin user-management table.
+  Context: user (User), current_user (the acting admin), galleries_count (int).
+  Status changes swap this row via outerHTML; delete removes it.
+#}
+{% set badge_class = {
+    'active': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+    'admin': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+    'disabled': 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300',
+    'pending': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+} %}
+<tr id="user-row-{{ user.id }}"
+    x-data='{ deleteConfirm: "", pwValue: "", targetEmail: {{ user.email | tojson }} }'>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ user.email }}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm">
+        <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium {{ badge_class.get(user.status | string, badge_class['active']) }}">
+            {{ t('admin.status_' ~ (user.status | string)) }}
+        </span>
+    </td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ galleries_count }}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ user.created_at.strftime('%d.%m.%Y') }}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-right text-sm space-x-1">
+        {% if user.id == current_user.id %}
+        <span class="text-gray-400 dark:text-gray-500 italic text-xs">—</span>
+        {% else %}
+        {# Promote / demote #}
+        {% if user.status | string == 'admin' %}
+        <button
+            hx-post="/admin/users/{{ user.id }}/status/demote"
+            hx-target="#user-row-{{ user.id }}" hx-swap="outerHTML"
+            hx-confirm="{{ t('admin.demote_confirm').replace('{email}', user.email) }}"
+            class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+            {{ t('admin.demote') }}
+        </button>
+        {% else %}
+        <button
+            hx-post="/admin/users/{{ user.id }}/status/promote"
+            hx-target="#user-row-{{ user.id }}" hx-swap="outerHTML"
+            hx-confirm="{{ t('admin.promote_confirm').replace('{email}', user.email) }}"
+            class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700">
+            {{ t('admin.promote') }}
+        </button>
+        {% endif %}
+        {# Disable / enable #}
+        {% if user.status | string == 'disabled' %}
+        <button
+            hx-post="/admin/users/{{ user.id }}/status/enable"
+            hx-target="#user-row-{{ user.id }}" hx-swap="outerHTML"
+            hx-confirm="{{ t('admin.enable_confirm').replace('{email}', user.email) }}"
+            class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+            {{ t('admin.enable') }}
+        </button>
+        {% else %}
+        <button
+            hx-post="/admin/users/{{ user.id }}/status/disable"
+            hx-target="#user-row-{{ user.id }}" hx-swap="outerHTML"
+            hx-confirm="{{ t('admin.disable_confirm').replace('{email}', user.email) }}"
+            class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700">
+            {{ t('admin.disable') }}
+        </button>
+        {% endif %}
+        {# Reset password (opens modal) #}
+        <button type="button" @click="pwValue = ''; $refs.pwModal.showModal()"
+            class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
+            {{ t('admin.reset_password') }}
+        </button>
+        {# Delete (opens confirm modal) #}
+        <button type="button" @click="deleteConfirm = ''; $refs.deleteModal.showModal()"
+            class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700">
+            {{ t('admin.delete_user') }}
+        </button>
+
+        {# --- Delete modal: requires typing the email to confirm --- #}
+        <dialog x-ref="deleteModal" @click.self="$refs.deleteModal.close()"
+            class="rounded-lg p-0 backdrop:bg-black/50 w-full max-w-md bg-white dark:bg-gray-800">
+            <div class="p-6 text-left">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{{ t('admin.delete_user_title') }}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ t('admin.delete_user_warning').replace('{email}', user.email) }}</p>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ t('admin.delete_confirm_label') }}</label>
+                <input type="text" x-model="deleteConfirm" autocomplete="off"
+                    class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-4">
+                <div class="flex justify-end gap-2">
+                    <button type="button" @click="$refs.deleteModal.close()"
+                        class="px-3 py-1.5 text-sm rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{{ t('admin.cancel') }}</button>
+                    <button type="button"
+                        :disabled="deleteConfirm !== targetEmail"
+                        :class="deleteConfirm === targetEmail ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-300 text-white cursor-not-allowed'"
+                        @click="$refs.deleteModal.close()"
+                        hx-post="/admin/users/{{ user.id }}/delete"
+                        hx-target="#user-row-{{ user.id }}" hx-swap="outerHTML"
+                        class="px-3 py-1.5 text-sm rounded-md font-medium">
+                        {{ t('admin.delete_confirm_button') }}
+                    </button>
+                </div>
+            </div>
+        </dialog>
+
+        {# --- Reset-password modal --- #}
+        <dialog x-ref="pwModal" @click.self="$refs.pwModal.close()"
+            class="rounded-lg p-0 backdrop:bg-black/50 w-full max-w-md bg-white dark:bg-gray-800">
+            <form class="p-6 text-left"
+                hx-post="/admin/users/{{ user.id }}/reset-password"
+                hx-swap="none"
+                @submit="$refs.pwModal.close()">
+                <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{{ t('admin.reset_password_title') }}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ t('admin.reset_password_info').replace('{email}', user.email) }}</p>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ t('admin.new_password_label') }}</label>
+                <input type="password" name="new_password" x-model="pwValue" minlength="8" required autocomplete="new-password"
+                    class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-4">
+                <div class="flex justify-end gap-2">
+                    <button type="button" @click="$refs.pwModal.close()"
+                        class="px-3 py-1.5 text-sm rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{{ t('admin.cancel') }}</button>
+                    <button type="submit"
+                        :disabled="pwValue.length < 8"
+                        :class="pwValue.length >= 8 ? 'bg-blue-600 hover:bg-blue-700 text-white' : 'bg-blue-300 text-white cursor-not-allowed'"
+                        class="px-3 py-1.5 text-sm rounded-md font-medium">
+                        {{ t('admin.reset_password_button') }}
+                    </button>
+                </div>
+            </form>
+        </dialog>
+        {% endif %}
+    </td>
+</tr>

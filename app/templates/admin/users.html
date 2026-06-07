@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+
+{% block title %}{{ t('admin.users_title') }}{% endblock %}
+
+{% block content %}
+<div class="max-w-5xl mx-auto px-4 py-8">
+    <div class="flex items-center justify-between mb-6">
+        <h1 class="text-2xl font-bold text-gray-900 dark:text-gray-100">{{ t('admin.users_heading') }}</h1>
+        <a href="/admin/signups" class="text-sm text-blue-600 dark:text-blue-400 hover:underline">{{ t('admin.nav_signups') }} &rarr;</a>
+    </div>
+
+    {% if rows %}
+    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
+        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead class="bg-gray-100 dark:bg-gray-800">
+                <tr>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.email_col') }}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.status_col') }}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.galleries_col') }}</th>
+                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.created_col') }}</th>
+                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.actions_col') }}</th>
+                </tr>
+            </thead>
+            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+                {% for user, galleries_count in rows %}
+                {% include "admin/_user_row.html" %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    {% from "_macros/empty.html" import empty_state, icon_inbox %}
+    {{ empty_state(icon=icon_inbox(), title=t('admin.no_users')) }}
+    {% endif %}
+</div>
+{% endblock %}
