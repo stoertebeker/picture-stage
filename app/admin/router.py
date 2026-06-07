@@ -2,11 +2,12 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
-from sqlalchemy import delete, func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.admin import service
+from app.admin.service import AdminActionError
 from app.auth.dependencies import require_admin
-from app.auth.passwords import hash_password
 from app.auth.schemas import (
     AdminPasswordResetRequest,
     AdminUserListResponse,
@@ -16,14 +17,25 @@ from app.auth.schemas import (
     PendingSignupResponse,
     UserResponse,
 )
-from app.db.models import AuditLog, Gallery, PendingSignup, User, UserStatus
+from app.db.models import PendingSignup, User, UserStatus
 from app.db.session import get_db
-from app.galleries.deletion import purge_gallery
 from app.security.rate_limit import limiter
 from app.storage.base import StorageBackend
 from app.storage.dependencies import get_storage
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
+
+
+async def _user_response(user: User, db: AsyncSession) -> AdminUserResponse:
+    return AdminUserResponse(
+        id=user.id,
+        email=user.email,
+        status=str(user.status),
+        locale=user.locale,
+        email_verified_at=user.email_verified_at,
+        created_at=user.created_at,
+        galleries_count=await service.galleries_count(db, user.id),
+    )
 
 
 @router.get("/pending-signups", response_model=list[PendingSignupResponse])
@@ -89,8 +101,7 @@ async def pending_signups_count(
     db: AsyncSession = Depends(get_db),
 ) -> PendingSignupCountResponse:
     """Lightweight count of open signup requests, used for the admin nav badge."""
-    count = await db.scalar(select(func.count()).select_from(PendingSignup))
-    return PendingSignupCountResponse(count=count or 0)
+    return PendingSignupCountResponse(count=await service.count_pending_signups(db))
 
 
 @router.get("/users", response_model=AdminUserListResponse)
@@ -105,23 +116,7 @@ async def list_users(
 
     Pending signups live in their own table and are listed via /pending-signups.
     """
-    count_stmt = select(func.count()).select_from(User)
-    if status_filter is not None:
-        count_stmt = count_stmt.where(User.status == status_filter)
-    total = await db.scalar(count_stmt) or 0
-
-    stmt = (
-        select(User, func.count(Gallery.id))
-        .outerjoin(Gallery, Gallery.owner_id == User.id)
-        .group_by(User.id)
-        .order_by(User.created_at.desc())
-        .limit(per_page)
-        .offset((page - 1) * per_page)
-    )
-    if status_filter is not None:
-        stmt = stmt.where(User.status == status_filter)
-
-    rows = (await db.execute(stmt)).all()
+    rows, total = await service.list_users(db, page=page, per_page=per_page, status_filter=status_filter)
     users = [
         AdminUserResponse(
             id=user.id,
@@ -137,23 +132,6 @@ async def list_users(
     return AdminUserListResponse(users=users, total=total, page=page, per_page=per_page)
 
 
-async def _count_admins(db: AsyncSession) -> int:
-    return await db.scalar(select(func.count()).select_from(User).where(User.status == UserStatus.admin)) or 0
-
-
-async def _admin_user_response(user: User, db: AsyncSession) -> AdminUserResponse:
-    galleries_count = await db.scalar(select(func.count()).select_from(Gallery).where(Gallery.owner_id == user.id)) or 0
-    return AdminUserResponse(
-        id=user.id,
-        email=user.email,
-        status=str(user.status),
-        locale=user.locale,
-        email_verified_at=user.email_verified_at,
-        created_at=user.created_at,
-        galleries_count=galleries_count,
-    )
-
-
 @router.patch("/users/{user_id}/status", response_model=AdminUserResponse)
 @limiter.limit("30/minute")
 async def update_user_status(
@@ -164,42 +142,11 @@ async def update_user_status(
     db: AsyncSession = Depends(get_db),
 ) -> AdminUserResponse:
     """Promote/demote (active <-> admin) or lock/unlock (disabled) a user."""
-    new_status = body.status
-    if new_status == UserStatus.pending:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot set a user to 'pending'")
-
-    target = await db.get(User, user_id)
-    if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    # S1: an admin must not change their own status (avoids self-lockout).
-    if target.id == admin.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot change your own status")
-
-    old_status = target.status
-    # S2: never demote/lock the last remaining admin (avoids system lockout).
-    if old_status == UserStatus.admin and new_status != UserStatus.admin and await _count_admins(db) <= 1:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot demote the last remaining admin")
-
-    if new_status != old_status:
-        target.status = new_status
-        db.add(
-            AuditLog(
-                gallery_id=None,
-                event_type="user_status_changed",
-                actor_user_id=admin.id,
-                details={
-                    "target_user_id": str(target.id),
-                    "target_email": target.email,
-                    "old_status": str(old_status),
-                    "new_status": str(new_status),
-                },
-            )
-        )
-        await db.commit()
-        await db.refresh(target)
-
-    return await _admin_user_response(target, db)
+    try:
+        target = await service.change_user_status(db, actor=admin, target_id=user_id, new_status=body.status)
+    except AdminActionError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail) from err
+    return await _user_response(target, db)
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -212,38 +159,10 @@ async def delete_user(
     storage: StorageBackend = Depends(get_storage),
 ) -> None:
     """Permanently delete a user, including all their galleries and storage files."""
-    target = await db.get(User, user_id)
-    if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    # S1: no self-deletion.
-    if target.id == admin.id:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="You cannot delete your own account")
-
-    # S2: never delete the last remaining admin.
-    if target.status == UserStatus.admin and await _count_admins(db) <= 1:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Cannot delete the last remaining admin")
-
-    # Audit BEFORE deletion (gallery_id=None: this is a user-level, not gallery, event).
-    db.add(
-        AuditLog(
-            gallery_id=None,
-            event_type="user_deleted",
-            actor_user_id=admin.id,
-            details={"target_user_id": str(target.id), "target_email": target.email, "status": str(target.status)},
-        )
-    )
-    await db.flush()
-
-    # Storage-aware: purge each gallery (files + DB rows) so no image data is orphaned.
-    galleries = (await db.execute(select(Gallery).where(Gallery.owner_id == target.id))).scalars().all()
-    for gallery in galleries:
-        await purge_gallery(gallery, db, storage)
-
-    # Core delete avoids async lazy-load of cascade relationships; remaining dependents
-    # (notification_configs -> deliveries) are removed by DB-level ON DELETE CASCADE.
-    await db.execute(delete(User).where(User.id == target.id))
-    await db.commit()
+    try:
+        await service.delete_user(db, storage, actor=admin, target_id=user_id)
+    except AdminActionError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail) from err
 
 
 @router.post("/users/{user_id}/reset-password", status_code=status.HTTP_204_NO_CONTENT)
@@ -260,17 +179,7 @@ async def reset_user_password(
     Note: auth is stateless JWT, so existing sessions remain valid until their
     token expires. The reset is audit-logged. The new password is never logged.
     """
-    target = await db.get(User, user_id)
-    if target is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
-
-    target.password_hash = hash_password(body.new_password)
-    db.add(
-        AuditLog(
-            gallery_id=None,
-            event_type="user_password_reset",
-            actor_user_id=admin.id,
-            details={"target_user_id": str(target.id), "target_email": target.email},
-        )
-    )
-    await db.commit()
+    try:
+        await service.reset_user_password(db, actor=admin, target_id=user_id, new_password=body.new_password)
+    except AdminActionError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail) from err
