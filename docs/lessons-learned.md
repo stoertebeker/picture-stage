@@ -104,3 +104,15 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Kontext:** Im Lightbox-Spike hatte ich Steuerelemente (Counter, Close, Pfeile) mit `text-text-inverse/70` gestylt. Sah im Spike richtig aus, weil der Spike-`<style>`-Block `text-inverse` hart als Weiß übersteuerte.
 **Problem:** `--color-text-inverse` ist bewusst theme-INVERTIERT: dark = `#09090b` (fast schwarz), light = `#fafafa` (weiß). Auf der schwarzen Lightbox-Bühne (`surface-sunken` dark = `#000`) wäre `text-inverse` also schwarz-auf-schwarz = unsichtbar.
 **Lösung/Regel:** Für lesbare Controls auf `surface-sunken` (Bühne) `text-primary` nehmen — schwingt korrekt mit (dark=weiß, light=dunkel). `text-inverse` nur für Text AUF einer Akzentfläche (z.B. `text-on-accent` auf `bg-accent`). Theme-aware Scrim = `bg-surface-overlay` + `backdrop-blur`, NICHT harter `from-black`-Gradient (im Light-Mode falsch).
+
+## Async-Verarbeitung & BackgroundTasks (2026-06-08)
+
+### FastAPI-BackgroundTasks brauchen eine EIGENE DB-Session — die Request-Session ist tot
+**Kontext:** Bei o4d (async Multi-Upload) wurde die Preview-Generierung aus dem Upload-Request in einen `BackgroundTasks`-Worker verlagert, damit der Request sofort zurückkehrt.
+**Problem:** Der Worker läuft NACH dem Response. Die per `Depends(get_db)` injizierte Request-Session ist da bereits geschlossen — ihre Wiederverwendung im Task wirft Fehler oder liefert stale Daten. Auch die Storage-Bytes des Uploads nicht im RAM festhalten (bei großen Batches Speicher-Druck).
+**Lösung/Regel:** Der Worker öffnet eine frische Session via `async_session()` (`app/db/base.py`), nicht die Request-Session. Pillow blockiert → in `asyncio.to_thread()` wrappen, sonst friert der Event-Loop für ALLE Requests ein. Original aus dem Storage zurücklesen (`download_stream`) statt Bytes durchzureichen. Fehler-Status (`failed`) in einer SEPARATEN Session/Transaktion setzen, damit der Status-Write den Rollback der Haupt-Transaktion überlebt. Tenant-Isolation: Bild per `(image_id, gallery_id)` laden, nie nur per ID. Siehe `app/images/preview_worker.py`.
+
+### Neue NOT-NULL-Enum-Spalte ohne Massen-Reprocessing der Bestandsdaten
+**Kontext:** Migration 0004 fügte `images.processing_status` (`pending`/`ready`/`failed`) hinzu. Bestandsbilder haben bereits Previews — sie dürfen nicht als „pending" erscheinen und erneut verarbeitet werden.
+**Problem:** Eine NOT-NULL-Spalte mit ORM-Default `pending` würde alle Altzeilen auf `pending` setzen → das Grid pollt endlos und der Worker würde theoretisch alles neu rendern.
+**Lösung/Regel:** Spalte mit transientem `server_default="ready"` anlegen (Backfill der Altzeilen), direkt danach `server_default` wieder droppen. Neue Inserts kommen dann über den ORM-Default (`pending`). Gleiches Muster wie der NULL-Default bei `tokens_valid_after` (0003): Migrations-Defaults steuern Bestandsdaten, ORM-Defaults steuern Neuzugänge — die beiden bewusst entkoppeln. Native PG-ENUM weiterhin explizit `create_type=False` + `.create(bind, checkfirst=True)` (Muster aus 0001).

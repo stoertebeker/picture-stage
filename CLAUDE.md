@@ -119,8 +119,32 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ## Aktueller Stand
 
 **Datum:** 2026-06-08
-**Wachwechsel-Tag:** `handover-2026-06-08` (zeigt auf `f291487`, letzter grüner Stand: Guest-Lightbox + Auswahl-Persistenz, live auf Prod verifiziert)
+**Wachwechsel-Tag:** `handover-2026-06-08-o4d` (zeigt auf `129158b`, letzter grüner Stand: Async Multi-Upload live auf Prod verifiziert + 2 neue Tickets)
 **Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung.
+
+### Async Multi-Upload (2026-06-08) — `picture-stage-o4d`, closed, live auf Prod verifiziert
+- **Problem:** Upload vieler Bilder fror die UI ~20s ein — alle Previews (Thumbnails/Watermark via Pillow)
+  liefen synchron im Request und blockierten den Event-Loop für ALLE Requests.
+- **Lösung:** Upload speichert nur Originale + `Image`-Rows (`processing_status=pending`) und kehrt sofort
+  zurück. Ein per-Bild `BackgroundTasks`-Worker (`app/images/preview_worker.py`) generiert die WebP-Varianten
+  in `asyncio.to_thread` (Event-Loop bleibt frei), eigene `async_session()`, liest Original aus Storage
+  zurück, setzt `ready` bzw. `failed` (separate Transaktion). Tenant-Isolation via `(image_id, gallery_id)`.
+- **Frontend:** Grid rendert je `processing_status` Thumbnail/Spinner/Fehler-Kachel. Selbstterminierendes
+  Polling: Wrapper trägt `hx-trigger="every 2s"` nur solange ein Bild `pending` ist → stoppt automatisch,
+  sobald alle settled. i18n `gallery.processing` / `gallery.processing_failed` (DE+EN).
+- **DB:** Migration `0004` — Enum `imageprocessingstatus` + Spalte. Backfill der Bestandsbilder auf `ready`
+  via transientem `server_default` (danach gedroppt → ORM-Default `pending` für Neue). Siehe Stolperstein
+  in `docs/lessons-learned.md`.
+- **Verifiziert:** ruff+mypy+205 Unit-Tests grün; CI inkl. Migration 0004 gegen Postgres; **Live-Smoke auf
+  Prod:** 12×12MP-Upload → Grid sofort mit Spinnern, kein Freeze, Polling im 2s-Takt, 12/12 ready, Polling
+  stoppt selbst. 4 atomare Commits (`9eff000` DB, `ae9f306` Worker, `229ef00` Grid+Polling, `045429f` Tests).
+
+### Neue offene Tickets aus User-Findings (2026-06-08)
+- **`picture-stage-42q` (P1, [bug] SECURITY):** Signup-Account-Enumeration. IST: existierende E-Mail liefert
+  HTTP 409 + Hinweis an ZWEI Stellen (`app/frontend/auth.py:125-134`, `app/auth/router.py:20-26`). SOLL:
+  generische Neutral-Antwort, kein 409, **kein** neuer/überschriebener PendingSignup (Account-Takeover-Vektor!).
+- **`picture-stage-dxj` (P2):** Top-Nav umbauen — Brand links, Aktionen rechts, Theme-Toggle + Sprachwechsel
+  in neues „Einstellungen"-Dropdown (`nav.settings`). Kein generisches Dropdown-Macro vorhanden → neu bauen.
 
 ### Security-Härtung (2026-06-08) — Share-Link HTTPS + JWT-Invalidierung
 - **Share-Links immer HTTPS (`picture-stage-0hp`, closed):** Zentraler Helper `build_share_url()`
