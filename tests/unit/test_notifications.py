@@ -12,6 +12,7 @@ Verifies that:
 """
 
 from pathlib import Path
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from pydantic import ValidationError
@@ -197,3 +198,96 @@ class TestCompleteReviewNotification:
             source = f.read()
         assert "except Exception" in source
         assert "Failed to send gallery_completed notification" in source
+
+
+class TestNotifyAdminsSignup:
+    """Verify the guaranteed signup-alert path (system override, config-free)."""
+
+    @staticmethod
+    def _db_returning_admin_emails(emails: list[str]) -> MagicMock:
+        """Build a mock AsyncSession whose execute() yields the given admin emails."""
+        db = MagicMock()
+        result = MagicMock()
+        result.all.return_value = [(e,) for e in emails]
+        db.execute = AsyncMock(return_value=result)
+        return db
+
+    @pytest.mark.asyncio
+    async def test_emails_every_admin(self) -> None:
+        from app.notifications import service
+
+        db = self._db_returning_admin_emails(["a@example.com", "b@example.com"])
+        with (
+            patch.object(service.settings, "notify_admins_on_signup", True),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.notify_admins_signup("newuser@example.com", db)
+
+        assert send_mock.await_count == 2
+        recipients = {call.args[0]["To"] for call in send_mock.await_args_list}
+        assert recipients == {"a@example.com", "b@example.com"}
+
+    @pytest.mark.asyncio
+    async def test_disabled_by_setting(self) -> None:
+        from app.notifications import service
+
+        db = self._db_returning_admin_emails(["a@example.com"])
+        with (
+            patch.object(service.settings, "notify_admins_on_signup", False),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.notify_admins_signup("newuser@example.com", db)
+
+        send_mock.assert_not_awaited()
+        db.execute.assert_not_awaited()  # short-circuits before any DB hit
+
+    @pytest.mark.asyncio
+    async def test_no_smtp_host_skips(self) -> None:
+        from app.notifications import service
+
+        db = self._db_returning_admin_emails(["a@example.com"])
+        with (
+            patch.object(service.settings, "notify_admins_on_signup", True),
+            patch.object(service.settings, "smtp_host", ""),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.notify_admins_signup("newuser@example.com", db)
+
+        send_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_admins_no_send(self) -> None:
+        from app.notifications import service
+
+        db = self._db_returning_admin_emails([])
+        with (
+            patch.object(service.settings, "notify_admins_on_signup", True),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.notify_admins_signup("newuser@example.com", db)
+
+        send_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_per_recipient_failure_isolated(self) -> None:
+        from app.notifications import service
+
+        db = self._db_returning_admin_emails(["a@example.com", "b@example.com"])
+        # First send raises, second must still be attempted; call must not propagate.
+        send_mock = AsyncMock(side_effect=[RuntimeError("smtp down"), None])
+        with (
+            patch.object(service.settings, "notify_admins_on_signup", True),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.aiosmtplib, "send", new=send_mock),
+        ):
+            await service.notify_admins_signup("newuser@example.com", db)
+
+        assert send_mock.await_count == 2  # second recipient still attempted
+
+    def test_function_exists(self) -> None:
+        from app.notifications.service import notify_admins_signup
+
+        assert callable(notify_admins_signup)

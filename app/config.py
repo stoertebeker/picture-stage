@@ -37,6 +37,11 @@ class Settings(BaseSettings):
     smtp_from: str = "noreply@example.com"
     smtp_starttls: bool = True
 
+    # System notification: email all admins when a new user registers. Unlike the
+    # per-user NotificationConfig opt-in, this is a guaranteed operational alert
+    # sent directly to every admin's address. Requires smtp_host to be set.
+    notify_admins_on_signup: bool = True
+
     watermark_text: str = "PREVIEW · {gallery_id}"
     watermark_position: str = "bottom-right"
     watermark_opacity: float = 0.3

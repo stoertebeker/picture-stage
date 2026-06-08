@@ -1,5 +1,7 @@
 """Frontend auth routes: login, signup, verify-email, logout."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import select
@@ -11,7 +13,10 @@ from app.auth.tokens import create_access_token, generate_verification_token
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.notifications.service import notify_admins_signup
 from app.security.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["frontend-auth"])
 
@@ -144,6 +149,11 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
     )
     db.add(pending)
     await db.commit()
+
+    try:
+        await notify_admins_signup(email, db)
+    except Exception:
+        logger.exception("Failed to send signup_pending notification to admins")
 
     # TODO: send verification email via SMTP
     ctx["success"] = True

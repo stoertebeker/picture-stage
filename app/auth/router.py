@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -9,7 +11,10 @@ from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRe
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
+from app.notifications.service import notify_admins_signup
 from app.security.rate_limit import limiter
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -42,6 +47,11 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
     )
     db.add(pending)
     await db.commit()
+
+    try:
+        await notify_admins_signup(body.email, db)
+    except Exception:
+        logger.exception("Failed to send signup_pending notification to admins")
 
     # TODO: send verification email via SMTP (issue ebm.7)
     return SignupResponse(

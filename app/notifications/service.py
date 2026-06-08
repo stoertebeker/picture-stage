@@ -57,6 +57,53 @@ async def notify_all_admins(
         await send_notification(event_type, str(admin_id), payload, db)
 
 
+async def notify_admins_signup(pending_email: str, db: AsyncSession) -> None:
+    """Email every admin that a new user registered — guaranteed operational alert.
+
+    Unlike notify_all_admins(), this bypasses the per-user NotificationConfig
+    opt-in: there is no UI to configure it, so a config-gated path would silently
+    deliver nothing. Gated only by the notify_admins_on_signup setting and a
+    configured SMTP host. Failures are logged per-recipient and never propagate
+    to the caller — a signup must succeed even if mail delivery is down.
+    """
+    if not settings.notify_admins_on_signup or not settings.smtp_host:
+        return
+
+    result = await db.execute(select(User.email).where(User.status == UserStatus.admin))
+    admin_emails = [row[0] for row in result.all()]
+    if not admin_emails:
+        return
+
+    payload = {"email": pending_email, "admin_url": f"{settings.app_url}/admin/users"}
+    try:
+        html_body = _jinja_env.get_template("signup_pending.html").render(**payload)
+        text_body = _jinja_env.get_template("signup_pending.txt").render(**payload)
+        subject = _jinja_env.from_string(SUBJECT_MAP["signup_pending"]).render(**payload)
+    except Exception:
+        logger.exception("Failed to render signup_pending templates")
+        return
+
+    for admin_email in admin_emails:
+        try:
+            msg = MIMEMultipart("alternative")
+            msg["From"] = settings.smtp_from
+            msg["To"] = admin_email
+            msg["Subject"] = subject
+            msg.attach(MIMEText(text_body, "plain", "utf-8"))
+            msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+            await aiosmtplib.send(
+                msg,
+                hostname=settings.smtp_host,
+                port=settings.smtp_port,
+                username=settings.smtp_user or None,
+                password=settings.smtp_password or None,
+                start_tls=settings.smtp_starttls,
+            )
+        except Exception as exc:
+            logger.warning("signup_pending notification to admin failed: %s", exc)
+
+
 async def _send_email(
     config: NotificationConfig,
     event_type: str,
