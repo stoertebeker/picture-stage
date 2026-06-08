@@ -54,6 +54,19 @@ class PreviewVariant(enum.StrEnum):
     preview = "preview"
 
 
+class ImageProcessingStatus(enum.StrEnum):
+    """Lifecycle of an image's preview generation.
+
+    pending: original stored, previews not yet generated (background worker queued).
+    ready:   all preview variants generated and available.
+    failed:  preview generation raised; the original is stored but unusable previews.
+    """
+
+    pending = "pending"
+    ready = "ready"
+    failed = "failed"
+
+
 class SelectionAction(enum.StrEnum):
     select = "select"
     deselect = "deselect"
@@ -126,6 +139,11 @@ class Image(TimestampMixin, Base):
     sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     exif: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processing_status: Mapped[ImageProcessingStatus] = mapped_column(
+        Enum(ImageProcessingStatus),
+        nullable=False,
+        default=ImageProcessingStatus.pending,
+    )
 
     gallery: Mapped["Gallery"] = relationship(back_populates="images")
     previews: Mapped[list["ImagePreview"]] = relationship(back_populates="image", cascade="all, delete-orphan")
