@@ -6,67 +6,101 @@
      class="fixed inset-0 z-modal bg-surface-sunken flex items-center justify-center touch-pan-y"
      style="display: none;">
 
-    <!-- Close button -->
-    <button @click="closeLightbox()"
-            class="absolute top-4 right-4 z-10 text-white/70 hover:text-white text-2xl w-10 h-10 flex items-center justify-center">
-        ✕
-    </button>
-
-    <!-- Image counter -->
-    <div class="absolute top-4 left-4 z-10 text-white/70 text-sm">
-        <span x-text="lightboxIndex + 1"></span> / <span x-text="images.length"></span>
+    <!-- Image counter (top-left) -->
+    <div class="absolute top-4 left-4 z-10 text-sm text-text-primary/70 tabular-nums">
+        <span class="text-text-primary font-medium" x-text="lightboxIndex + 1"></span> / <span x-text="images.length"></span>
     </div>
 
-    <!-- Previous button -->
+    <!-- Close button (top-right) -->
+    <button @click="closeLightbox()"
+            aria-label="{{ t('guest.lightbox_close') }}"
+            class="absolute top-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full text-text-primary/70 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+        <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+        </svg>
+    </button>
+
+    <!-- Previous button (left edge, hidden on mobile — swipe instead) -->
     <button @click="prevImage()"
             x-show="lightboxIndex > 0"
-            class="absolute left-4 z-10 text-white/70 hover:text-white text-4xl w-12 h-12 flex items-center justify-center">
-        ‹
+            aria-label="{{ t('guest.lightbox_prev') }}"
+            class="absolute left-2 sm:left-4 z-10 hidden sm:flex h-12 w-12 items-center justify-center rounded-full text-text-primary/60 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+        </svg>
     </button>
 
     <!-- Image -->
     <template x-if="currentImage">
         <img :src="currentImage.preview_url || currentImage.thumb_md_url"
              :alt="currentImage.filename"
-             class="max-h-[85vh] max-w-[90vw] object-contain">
+             class="max-h-[82vh] max-w-[88vw] object-contain">
     </template>
 
-    <!-- Next button -->
+    <!-- Next button (right edge, hidden on mobile — swipe instead) -->
     <button @click="nextImage()"
             x-show="lightboxIndex < images.length - 1"
-            class="absolute right-4 z-10 text-white/70 hover:text-white text-4xl w-12 h-12 flex items-center justify-center">
-        ›
+            aria-label="{{ t('guest.lightbox_next') }}"
+            class="absolute right-2 sm:right-4 z-10 hidden sm:flex h-12 w-12 items-center justify-center rounded-full text-text-primary/60 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+        <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+        </svg>
     </button>
 
-    <!-- Bottom toolbar -->
+    <!-- Swipe hint (mobile only) -->
+    <div x-show="images.length > 1"
+         class="absolute bottom-32 inset-x-0 z-10 flex sm:hidden items-center justify-center text-text-primary/60">
+        <span class="rounded-full border border-text-primary/25 bg-surface-overlay backdrop-blur px-4 py-1.5 text-sm font-medium shadow-md">
+            {{ t('guest.lightbox_swipe_hint') }}
+        </span>
+    </div>
+
+    <!-- Bottom toolbar: theme-aware scrim, controls fade into the stage -->
     <template x-if="currentImage">
-        <div class="absolute bottom-0 inset-x-0 bg-black/60 backdrop-blur px-6 py-4">
-            <div class="max-w-2xl mx-auto flex items-center justify-between">
-                <div class="flex items-center gap-4">
+        <div class="absolute inset-x-0 bottom-0 z-10 bg-surface-overlay backdrop-blur px-4 pb-5 pt-6 sm:px-6">
+            <div class="mx-auto flex max-w-3xl flex-col gap-3">
+                <div class="flex flex-wrap items-center gap-3">
+                    <!-- Select toggle -->
                     <button @click="toggleSelect(currentImage.id)"
                             :disabled="completed"
-                            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            :class="currentImage.selected ? 'bg-blue-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'">
-                        ✓ <span x-text="currentImage.selected ? '{{ t('guest.lightbox_selected') }}' : '{{ t('guest.lightbox_select') }}'"></span>
+                            :aria-pressed="currentImage.selected ? 'true' : 'false'"
+                            class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus disabled:opacity-50 disabled:cursor-not-allowed"
+                            :class="currentImage.selected ? 'bg-accent text-text-on-accent shadow hover:bg-accent-hover' : 'border border-text-primary/25 bg-text-primary/10 text-text-primary hover:bg-text-primary/20'">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span x-text="currentImage.selected ? '{{ t('guest.lightbox_selected') }}' : '{{ t('guest.lightbox_select') }}'"></span>
                     </button>
+                    <!-- Favorite toggle -->
                     <button @click="toggleFavorite(currentImage.id)"
                             :disabled="completed"
-                            class="px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            :class="currentImage.favorited ? 'bg-yellow-500 text-white' : 'bg-white/20 text-white hover:bg-white/30'">
-                        ★ <span x-text="currentImage.favorited ? '{{ t('guest.lightbox_favorited') }}' : '{{ t('guest.lightbox_favorite') }}'"></span>
+                            :aria-pressed="currentImage.favorited ? 'true' : 'false'"
+                            class="inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus disabled:opacity-50 disabled:cursor-not-allowed"
+                            :class="currentImage.favorited ? 'border border-favorite/50 bg-favorite/15 text-favorite hover:bg-favorite/25' : 'border border-text-primary/25 bg-text-primary/10 text-text-primary hover:bg-text-primary/20'">
+                        <template x-if="currentImage.favorited">
+                            <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                                <path d="M12 21s-7-4.5-7-10a4 4 0 017-2.6A4 4 0 0119 11c0 5.5-7 10-7 10z"/>
+                            </svg>
+                        </template>
+                        <template x-if="!currentImage.favorited">
+                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M4.318 6.318a4.5 4.5 0 016.364 0L12 7.636l1.318-1.318a4.5 4.5 0 116.364 6.364L12 20.364l-7.682-7.682a4.5 4.5 0 010-6.364z"/>
+                            </svg>
+                        </template>
+                        <span x-text="currentImage.favorited ? '{{ t('guest.lightbox_favorited') }}' : '{{ t('guest.lightbox_favorite') }}'"></span>
                     </button>
-                </div>
-                <div class="flex items-center gap-2">
+                    <!-- Comment field -->
                     <input type="text"
                            :value="currentImage.comment || ''"
                            :disabled="completed"
                            @keydown.enter="submitComment(currentImage.id, $event.target.value)"
                            placeholder="{{ t('guest.lightbox_comment_placeholder') }}"
-                           class="px-3 py-1.5 text-sm bg-white/20 text-white placeholder-white/50 rounded-lg border-0 focus:ring-2 focus:ring-blue-500 w-48 disabled:opacity-50 disabled:cursor-not-allowed">
+                           aria-label="{{ t('guest.lightbox_comment_placeholder') }}"
+                           class="min-w-0 flex-1 rounded-full border border-text-primary/25 bg-text-primary/10 px-4 py-2 text-sm text-text-primary placeholder:text-text-primary/40 focus:outline-none focus-visible:ring focus-visible:ring-focus disabled:opacity-50 disabled:cursor-not-allowed">
                 </div>
-            </div>
-            <div class="max-w-2xl mx-auto mt-1 text-xs text-white/50">
-                <span x-text="currentImage.filename"></span>
+                <div class="flex items-center gap-2 text-xs text-text-primary/50">
+                    <span class="font-mono" x-text="currentImage.filename"></span>
+                </div>
             </div>
         </div>
     </template>

@@ -28,6 +28,42 @@ def test_guest_viewer_has_lightbox():
     assert "ArrowRight" in lightbox_html or "nextImage" in lightbox_html
 
 
+def test_guest_lightbox_is_token_based_and_accessible():
+    """ps-ux-21b: the redesigned lightbox uses Editorial-Dark semantic tokens
+    (so it follows data-theme for dark AND light), exposes aria-labels on
+    icon-only controls, and preserves the read-only completed gate."""
+    lightbox_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "_lightbox.html").read_text()
+
+    # Token-based, theme-aware — no hard-coded raw colors that break light mode.
+    assert "bg-accent" in lightbox_html
+    assert "text-on-accent" in lightbox_html
+    assert "text-favorite" in lightbox_html or "bg-favorite" in lightbox_html
+    assert "bg-surface-overlay" in lightbox_html
+    assert "bg-blue-500" not in lightbox_html
+    assert "bg-yellow-500" not in lightbox_html
+    assert "text-white" not in lightbox_html
+
+    # Accessibility: icon-only controls are labelled, focus is visible.
+    assert "guest.lightbox_close" in lightbox_html
+    assert "guest.lightbox_prev" in lightbox_html
+    assert "guest.lightbox_next" in lightbox_html
+    assert "focus-visible:ring" in lightbox_html
+
+    # Read-only gate from the persistence feature must survive the redesign.
+    assert ':disabled="completed"' in lightbox_html
+
+
+def test_guest_lightbox_i18n_keys_exist():
+    """All i18n keys referenced by the lightbox exist in DE and EN."""
+    import json
+
+    de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())["guest"]
+    en = json.loads((PROJECT_ROOT / "app" / "i18n" / "en.json").read_text())["guest"]
+    for key in ("lightbox_close", "lightbox_prev", "lightbox_next", "lightbox_swipe_hint"):
+        assert key in de, f"DE missing guest.{key}"
+        assert key in en, f"EN missing guest.{key}"
+
+
 def test_guest_viewer_has_dark_mode():
     """Guest viewer renders under data-theme='dark' and uses Editorial-Dark
     semantic tokens (bg-surface-*, text-text-*). After ps-ux-20b the legacy
