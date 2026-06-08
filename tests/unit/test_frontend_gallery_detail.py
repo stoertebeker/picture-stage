@@ -68,3 +68,32 @@ def test_gallery_detail_escapes_alpine_embedded_values() -> None:
     assert "| tojson" in image_grid
     assert "| tojson" in share
     assert "gallery.name | tojson" in delete
+
+
+def test_image_grid_polls_only_while_previews_pending() -> None:
+    """The grid self-polls /images-grid every 2s, gated on a pending image.
+
+    The trigger lives inside a `{% if pending_count %}` block so it disappears
+    once all images settle — that is what stops the polling loop (picture-stage-o4d).
+    """
+    image_grid = _template("_image_grid.html")
+
+    assert "selectattr('processing_status', 'equalto', 'pending')" in image_grid
+    assert "if pending_count" in image_grid
+    assert 'hx-get="/galleries/{{ gallery.id }}/images-grid"' in image_grid
+    assert 'hx-trigger="every 2s"' in image_grid
+    assert 'hx-target="#image-grid"' in image_grid
+
+
+def test_image_grid_branches_on_processing_status() -> None:
+    """Each tile renders by status: ready -> thumbnail, pending -> spinner, failed -> error."""
+    image_grid = _template("_image_grid.html")
+
+    assert "img.processing_status == 'ready'" in image_grid
+    assert "img.processing_status == 'failed'" in image_grid
+    # Spinner + error copy come from i18n, not hardcoded strings.
+    assert "gallery.processing" in image_grid
+    assert "gallery.processing_failed" in image_grid
+    # Status semantics for assistive tech.
+    assert 'role="status"' in image_grid
+    assert 'role="alert"' in image_grid
