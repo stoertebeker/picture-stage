@@ -6,6 +6,8 @@ All notable changes to Picture-Stage are documented in this file.
 
 ### Security
 
+- **Signup no longer reveals whether an account exists** (`picture-stage-42q`). Previously a repeated registration with an already-known email returned HTTP 409 with an explicit hint (account enumeration / information disclosure), on both the web form and the JSON API. A signup with an existing email (as user *or* pending) now returns the same neutral success response as a fresh one, creates no new pending signup, and never overwrites an existing account/password (which would otherwise be an account-takeover vector). Best-effort timing equalization (matching bcrypt cost) reduces the existing-vs-new timing signal.
+  - **BREAKING (API):** `POST /api/v1/auth/signup` no longer returns `verification_token` in the response body — emitting it for fresh signups but `null` for existing emails would itself leak existence. The token is persisted server-side and will be delivered by email (`ebm.7`). Clients that read the token from the response must change.
 - **Stateless JWTs are invalidated on password reset and account lock** (`picture-stage-7kr`). Previously an already-issued access token stayed valid for up to 24 h after an admin reset a user's password or disabled the account. Tokens now carry an `iat` claim and are rejected once the per-user `tokens_valid_after` cut-off (set on reset/lock) is passed.
   - No mass-logout on upgrade: the cut-off defaults to NULL, so existing tokens keep working until the next reset/lock of that user.
   - The check compares server-side timestamps only, so client clock skew is irrelevant. Multi-instance deployments should keep server clocks in sync (NTP).

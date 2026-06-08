@@ -126,17 +126,17 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
         ctx["error"] = "auth.password_too_short"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
-    # Check for existing user
+    # Account-enumeration guard (picture-stage-42q): an already-registered email
+    # (as User OR PendingSignup) must NOT be revealed. Render the same neutral
+    # success page as a fresh signup, create NO new PendingSignup, and never
+    # overwrite an existing account/password (account-takeover vector).
     existing_user = await db.execute(select(User).where(User.email == email))
-    if existing_user.scalar_one_or_none() is not None:
-        ctx["error"] = "auth.email_registered"
-        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=409)
-
-    # Check for existing pending signup
     existing_signup = await db.execute(select(PendingSignup).where(PendingSignup.email == email))
-    if existing_signup.scalar_one_or_none() is not None:
-        ctx["error"] = "auth.signup_pending"
-        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=409)
+    if existing_user.scalar_one_or_none() is not None or existing_signup.scalar_one_or_none() is not None:
+        # Best-effort timing equalization: match the bcrypt cost of a fresh signup.
+        hash_password(password)
+        ctx["success"] = True
+        return templates.TemplateResponse(request, "auth/signup.html", ctx)
 
     verification_token = generate_verification_token()
     token_hash, token_salt = hash_token(verification_token)

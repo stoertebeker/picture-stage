@@ -36,8 +36,6 @@
     "account_disabled": "This account has been disabled. Please contact an administrator.",
     "passwords_mismatch": "Passwords do not match.",
     "password_too_short": "Password must be at least 8 characters.",
-    "email_registered": "Email address already registered.",
-    "signup_pending": "Signup already pending.",
     "invalid_verify_token": "Invalid or expired verification token."
   },
   "setup": {

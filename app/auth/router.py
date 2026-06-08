@@ -22,19 +22,23 @@ router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
 async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depends(get_db)) -> SignupResponse:
-    existing_user = await db.execute(select(User).where(User.email == body.email))
-    if existing_user.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
-
-    existing_signup = await db.execute(select(PendingSignup).where(PendingSignup.email == body.email))
-    if existing_signup.scalar_one_or_none() is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Signup already pending")
-
     if len(body.password) < 8:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Password must be at least 8 characters",
         )
+
+    # Account-enumeration guard (picture-stage-42q): an already-registered email
+    # (as User OR PendingSignup) must NOT be revealed. Return the same neutral
+    # response as a fresh signup, create NO new PendingSignup, and never overwrite
+    # an existing account/password (that would be an account-takeover vector).
+    existing_user = await db.execute(select(User).where(User.email == body.email))
+    existing_signup = await db.execute(select(PendingSignup).where(PendingSignup.email == body.email))
+    if existing_user.scalar_one_or_none() is not None or existing_signup.scalar_one_or_none() is not None:
+        # Best-effort timing equalization: spend the same bcrypt time a fresh
+        # signup would, so existing vs. new isn't trivially distinguishable.
+        hash_password(body.password)
+        return SignupResponse(message="Signup received. Please verify your email.")
 
     verification_token = generate_verification_token()
     token_hash, token_salt = hash_token(verification_token)
@@ -54,10 +58,7 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
         logger.exception("Failed to send signup_pending notification to admins")
 
     # TODO: send verification email via SMTP (issue ebm.7)
-    return SignupResponse(
-        message="Signup received. Please verify your email.",
-        verification_token=verification_token,
-    )
+    return SignupResponse(message="Signup received. Please verify your email.")
 
 
 @router.post("/verify-email/{token}")

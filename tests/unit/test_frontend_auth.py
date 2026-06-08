@@ -83,3 +83,35 @@ def test_router_registered_in_main():
     """Frontend auth router is included in app/main.py."""
     main_py = (PROJECT_ROOT / "app" / "main.py").read_text()
     assert "frontend_auth_router" in main_py or "frontend.auth" in main_py
+
+
+def test_signup_has_no_409_enumeration_leak():
+    """picture-stage-42q: neither signup path returns a 409 / existence hint.
+
+    An already-registered email must yield the same neutral response as a fresh
+    signup. The old i18n leak keys must be gone from both code paths.
+    """
+    frontend = (PROJECT_ROOT / "app" / "frontend" / "auth.py").read_text()
+    api = (PROJECT_ROOT / "app" / "auth" / "router.py").read_text()
+
+    # No existence-revealing status codes / messages in the signup flow.
+    assert "409" not in frontend
+    assert "auth.email_registered" not in frontend
+    assert "auth.signup_pending" not in frontend
+    assert "Email already registered" not in api
+    assert "Signup already pending" not in api
+
+    # The removed i18n keys are gone from both locale files.
+    for locale in ("de.json", "en.json"):
+        text = (PROJECT_ROOT / "app" / "i18n" / locale).read_text()
+        assert "email_registered" not in text
+        assert '"signup_pending":' not in text  # the auth.* leak key; the notification event keeps its own
+
+
+def test_signup_response_does_not_expose_verification_token():
+    """picture-stage-42q: token-vs-null in the response would itself leak existence."""
+    from app.auth.schemas import SignupResponse
+
+    # SignupResponse must no longer declare the verification_token field
+    # (an explanatory comment mentioning the name is fine — check the model).
+    assert "verification_token" not in SignupResponse.model_fields

@@ -12,8 +12,10 @@ class SignupRequest(BaseModel):
 
 
 class SignupResponse(BaseModel):
+    # No verification_token here: returning it (vs. null for an existing email)
+    # would itself leak account existence. The token lives in the DB and is
+    # delivered via email (see ebm.7).
     message: str
-    verification_token: str | None = None
 
 
 class LoginRequest(BaseModel):
