@@ -8,7 +8,13 @@ on:
       - "v*"
 
 jobs:
+  # Vorgelagertes Gate: lint + mypy + pytest. Image wird nur gebaut,
+  # wenn die CI gruen ist (kein Build aus rotem Code, auch nicht :dev).
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   build-and-push:
+    needs: ci
     runs-on: ubuntu-latest
 
     permissions:

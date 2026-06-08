@@ -1,10 +1,12 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
+  # Bei Pushes auf main / Tags wird die CI als vorgelagerter Job von
+  # docker-publish.yml via workflow_call aufgerufen (kein eigener push-Trigger,
+  # sonst liefe die CI doppelt). Direkt getriggert nur fuer Pull Requests.
   pull_request:
     branches: [main]
+  workflow_call:
 
 jobs:
   lint-and-test:
