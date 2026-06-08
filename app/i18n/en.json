@@ -190,6 +190,8 @@
     "upload_browse": "browse",
     "upload_formats": "JPEG, PNG, WebP",
     "upload_progress": "Uploading...",
+    "processing": "Processing...",
+    "processing_failed": "Processing failed",
     "delete_button": "Delete gallery",
     "delete_title": "Permanently delete gallery",
     "delete_warning": "This action cannot be undone. All images, previews, selections and share links will be permanently deleted. Audit log entries will be anonymized and preserved.",

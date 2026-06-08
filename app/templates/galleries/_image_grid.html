@@ -1,8 +1,18 @@
+{#- Owner image grid. Tiles reflect processing_status:
+    ready   -> thumbnail + select/preview controls
+    pending -> spinner placeholder (background worker still generating previews)
+    failed  -> error tile
+  When any image is pending, the wrapper self-polls /images-grid every 2s and
+  replaces #image-grid; once all images are ready/failed the trigger is gone and
+  polling stops. -#}
+{%- set pending_count = images | selectattr('processing_status', 'equalto', 'pending') | list | length -%}
+<div{% if pending_count %} hx-get="/galleries/{{ gallery.id }}/images-grid" hx-trigger="every 2s" hx-target="#image-grid" hx-swap="innerHTML"{% endif %}>
 {% if images %}
 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
     {% for img in images %}
     <article class="group relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-colors hover:border-border-strong"
              data-image-id="{{ img.id }}">
+        {% if img.processing_status == 'ready' %}
         <button type="button"
                 @click.stop="toggleImage('{{ img.id }}')"
                 :class="isSelected('{{ img.id }}') ? 'bg-accent border-accent text-text-on-accent opacity-100' : 'bg-surface-overlay border-border-strong text-text-secondary opacity-0 group-hover:opacity-100'"
@@ -35,6 +45,24 @@
             </span>
             {% endif %}
         </button>
+        {% elif img.processing_status == 'failed' %}
+        <div class="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-surface-sunken px-3 text-center"
+             role="alert">
+            <svg class="h-8 w-8 text-status-danger" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/>
+            </svg>
+            <span class="text-xs text-text-muted">{{ t('gallery.processing_failed') }}</span>
+        </div>
+        {% else %}
+        <div class="flex aspect-square w-full flex-col items-center justify-center gap-2 bg-surface-sunken px-3 text-center"
+             role="status" aria-live="polite">
+            <svg class="h-7 w-7 animate-spin text-text-muted" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.25" stroke-width="4"></circle>
+                <path d="M4 12a8 8 0 018-8" stroke="currentColor" stroke-width="4" stroke-linecap="round"></path>
+            </svg>
+            <span class="text-xs text-text-muted">{{ t('gallery.processing') }}</span>
+        </div>
+        {% endif %}
 
         <div class="px-3 py-2">
             <div class="truncate text-xs text-text-secondary" title="{{ img.filename }}">{{ img.filename }}</div>
@@ -61,3 +89,4 @@
     </a>
 </div>
 {% endif %}
+</div>

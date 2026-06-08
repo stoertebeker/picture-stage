@@ -190,6 +190,8 @@
     "upload_browse": "auswaehlen",
     "upload_formats": "JPEG, PNG, WebP",
     "upload_progress": "Hochladen...",
+    "processing": "Wird verarbeitet...",
+    "processing_failed": "Verarbeitung fehlgeschlagen",
     "delete_button": "Galerie loeschen",
     "delete_title": "Galerie endgueltig loeschen",
     "delete_warning": "Diese Aktion kann nicht rueckgaengig gemacht werden. Alle Bilder, Vorschauen, Auswahlen und Share-Links werden unwiderruflich geloescht. Audit-Log-Eintraege werden anonymisiert und erhalten.",
