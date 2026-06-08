@@ -92,3 +92,15 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Kontext:** `UserStatus` (StrEnum) ist als nativer PG-Type `userstatus` gemappt. Neuer Wert `disabled` nötig.
 **Lösung:** Migration `0002`: `op.execute("ALTER TYPE userstatus ADD VALUE IF NOT EXISTS 'disabled'")` innerhalb `with op.get_context().autocommit_block():` (ADD VALUE verträgt keinen offenen Transaktionsblock auf älteren PG). Downgrade ist ein No-op (PG kann Enum-Werte nicht in-place entfernen).
 **Regel:** Enum-Werte ergänzen ≠ Spalte ändern — eigener `ALTER TYPE`-Schritt, idempotent (`IF NOT EXISTS`), autocommit, kein Downgrade-Drop.
+
+## Frontend-Build & Prod-Verifikation (2026-06-08)
+
+### Eingechecktes `frontend/static/css/styles.css` ist nur ein Stub — echtes CSS entsteht im Docker-Build
+**Kontext:** Bei qdz.14 (Lightbox-Redesign) wollte ich die neuen Token-Klassen lokal visuell verifizieren. Viele Klassen (`bg-accent/15`, `from-black/80`, `tabular-nums`) fehlten im committeten `styles.css` — Verdacht auf Fehler.
+**Problem:** Die ins Repo eingecheckte `styles.css` ist ein **Sicherheits-Stub** (Stand zuletzt PS-UX-03/Fonts). Der echte Tailwind-Build läuft erst in der Docker-Stage `css-builder` (`Dockerfile`), die `app/templates/**` + `frontend/static/spikes/*.html` scannt. Lokal ist kein `npx tailwindcss` möglich (Sandbox blockt npm-Registry). Dazu sind `alpine.min.js` und `htmx.min.js` lokal ebenfalls nur Stubs (echte Bundles kommen aus der `assets`-Docker-Stage). Siehe `docs/design/build.md`.
+**Lösung/Regel:** Lokale visuelle Verifikation einer neuen Frontend-Komponente ist NICHT aussagekräftig — fehlende Klassen lokal heißen nicht „kaputt". Token-Treue per Source-Test absichern (keine Roh-Farben, Klassen aus `tailwind.config.js`), visuelle Abnahme gegen den abgenommenen Spike ODER live auf Prod (dort läuft das gebaute CSS). Prod ist via Playwright-Tools erreichbar (`https://picture.stoertes.cloud`).
+
+### `text-inverse`-Token ist theme-invertiert — für Controls auf der Bühne `text-primary` nehmen
+**Kontext:** Im Lightbox-Spike hatte ich Steuerelemente (Counter, Close, Pfeile) mit `text-text-inverse/70` gestylt. Sah im Spike richtig aus, weil der Spike-`<style>`-Block `text-inverse` hart als Weiß übersteuerte.
+**Problem:** `--color-text-inverse` ist bewusst theme-INVERTIERT: dark = `#09090b` (fast schwarz), light = `#fafafa` (weiß). Auf der schwarzen Lightbox-Bühne (`surface-sunken` dark = `#000`) wäre `text-inverse` also schwarz-auf-schwarz = unsichtbar.
+**Lösung/Regel:** Für lesbare Controls auf `surface-sunken` (Bühne) `text-primary` nehmen — schwingt korrekt mit (dark=weiß, light=dunkel). `text-inverse` nur für Text AUF einer Akzentfläche (z.B. `text-on-accent` auf `bg-accent`). Theme-aware Scrim = `bg-surface-overlay` + `backdrop-blur`, NICHT harter `from-black`-Gradient (im Light-Mode falsch).

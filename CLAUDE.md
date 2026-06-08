@@ -117,8 +117,27 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ## Aktueller Stand
 
 **Datum:** 2026-06-08
-**Wachwechsel-Tag:** `handover-2026-06-07` (zeigt auf `78a984a`, letzter grüner Stand: Admin-User-Verwaltung komplett)
-**Live:** Eine produktive Instanz läuft online (über das Docker-Hub-Image deployt).
+**Wachwechsel-Tag:** `handover-2026-06-08` (zeigt auf `f291487`, letzter grüner Stand: Guest-Lightbox + Auswahl-Persistenz, live auf Prod verifiziert)
+**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung.
+
+### Guest-Persistenz + Lightbox (2026-06-08) — live auf Prod verifiziert
+- **Gast-Auswahl galerie-weit persistent (`picture-stage-7ih`, closed):** Auswahl/Favoriten werden
+  über ALLE Sessions der Galerie materialisiert (`get_current_selections(gallery_id, db)` in
+  `app/selections/service.py` — Session-Filter entfernt). Magic-Link = ein Model → Auswahl überlebt
+  Fenster-Schließen UND Geräte-Wechsel (Smartphone→PC). Read-only-Gate galerie-weit via
+  `gallery.status == completed` (`app/guest/router.py`), nicht mehr pro Session. Frontend: Alpine
+  `completed`-Flag sperrt `toggle*`/`submitComment`, Read-only-Banner. **Prod-Beweis:** Cookies
+  gelöscht → neue Session-ID → Auswahl bleibt (nur `csrf_token`-Cookie, KEIN Session-Cookie).
+- **Guest-Lightbox Editorial-Dark (`qdz.13` Spike + `qdz.14` Impl, beide closed):** Token-basiert
+  (Dark+Light via `data-theme`), A11y (aria-label/aria-pressed/focus-ring), Inline-SVG statt Glyphen,
+  theme-aware Scrim (`bg-surface-overlay`), Mobile-Pfeile ab `sm:` + Swipe. JS-Logik (Tastatur/Swipe)
+  unberührt. **Prod-Test:** ←/→/ESC funktional, Select-Toggle, Dark UND Light lesbar. Spike unter
+  `frontend/static/spikes/guest_lightbox.html`.
+- **Stolpersteine dokumentiert** (`docs/lessons-learned.md`): eingechecktes `styles.css` ist nur
+  Stub (echtes CSS im Docker-`css-builder`); `text-inverse`-Token ist theme-invertiert.
+- **3 neue Tickets aus User-Findings:** `picture-stage-7ih` (Persistenz, ✅ done),
+  `picture-stage-dd1` (Light-Mode-Toggle für Guest-Pages, P2 offen),
+  `picture-stage-a15` (Cookie-Banner: Zweck klären — Gäste haben nur csrf, kein Session-Cookie, P3).
 
 ### CI/CD-Pipeline (Docker Hub, 2026-06-08)
 Vollautomatischer Multi-Arch-Build (amd64+arm64) nach Docker Hub `stoertebeker2k/picture-stage`.
@@ -180,11 +199,14 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 
 | Ausstehend | Beads-ID |
 |------------|----------|
-| Guest-Lightbox Mockup + Impl | `qdz.13`, `qdz.14` |
+| ~~Guest-Lightbox Mockup + Impl~~ ✅ done (2026-06-08) | ~~`qdz.13`, `qdz.14`~~ |
 | Guest-Password-Gate Mockup + Impl | `qdz.15`, `qdz.16` |
+| i18n-Lücken schließen | `qdz.17` |
 | Mobile-Tuning Guest-Pages (375/768/1280px) | `qdz.18` |
 
-Einstieg: `bd ready` → `qdz.13` (PS-UX-21a, Guest-Lightbox Mockup)
+Einstieg: `bd ready` → `qdz.15` (PS-UX-22a, Guest-Password-Gate Mockup) oder `dd1` (Light-Mode-Toggle).
+**Hinweis Frontend-Verifikation:** Lokal kein Tailwind-Build (styles.css = Stub) → visuelle Abnahme
+gegen Spike oder live auf Prod (`https://picture.stoertes.cloud`, via Playwright erreichbar).
 
 ### Kleinere offene Punkte
 - ~~Docker-Build verifizieren~~ ✅ erledigt 2026-06-08 (Pipeline live, siehe CI/CD-Abschnitt oben)
@@ -199,7 +221,7 @@ Einstieg: `bd ready` → `qdz.13` (PS-UX-21a, Guest-Lightbox Mockup)
 | v0.2 Lifecycle & Komfort | `picture-stage-9q3` | closed (1 deferred) |
 | v0.3 Produktion & Compliance | `picture-stage-fbr` | closed |
 | v0.4 Frontend (funktional) | `picture-stage-gza` | closed |
-| v0.5 UX-Redesign – Editorial Dark (Guest-Focused) | `picture-stage-qdz` | Foundation + Komponenten + Viewer ✅, Lightbox/PW-Gate/Mobile offen |
+| v0.5 UX-Redesign – Editorial Dark (Guest-Focused) | `picture-stage-qdz` | Foundation + Komponenten + Viewer + **Lightbox** ✅, PW-Gate/i18n/Mobile offen |
 | Admin-User-Verwaltung (API + Frontend) | `picture-stage-uwy` | closed (3 Follow-ups offen: `7kr`/`52s`/`cxs`) |
 
 ### Verifikation für neue Sessions
