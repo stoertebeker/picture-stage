@@ -59,3 +59,4 @@ node_modules/
 # Playwright (ad-hoc screenshots + MCP session artifacts)
 .playwright-mcp/
 /*.png
+.playwright/
