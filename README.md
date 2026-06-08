@@ -32,6 +32,7 @@ cp .env.example .env
 # 3. .env anpassen — diese Werte MÜSSEN von CHANGE_ME abweichen, sonst startet die App nicht:
 #    SECRET_KEY         (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(64))")
 #    HMAC_SECRET_KEY    (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+#    APP_URL            (öffentliche HTTPS-Domain, z.B. https://deine-domain.tld — sonst zeigen Share-Links auf den internen Host)
 
 # 4. Starten
 docker compose up -d
@@ -141,6 +142,7 @@ Key variables:
 |----------|-------------|
 | `SECRET_KEY` | JWT signing key (must change from default) |
 | `HMAC_SECRET_KEY` | Image URL signing key (must change from default) |
+| `APP_URL` | Public base URL for share links — set to your real HTTPS domain in production (forced to https behind a TLS proxy) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `STORAGE_BACKEND` | `local` or `s3` |
 
