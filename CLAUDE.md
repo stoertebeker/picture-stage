@@ -119,8 +119,30 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ## Aktueller Stand
 
 **Datum:** 2026-06-08
-**Wachwechsel-Tag:** `handover-2026-06-08-o4d` (zeigt auf `129158b`, letzter grüner Stand: Async Multi-Upload live auf Prod verifiziert + 2 neue Tickets)
-**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung.
+**Wachwechsel-Tag:** `handover-2026-06-08-smtp` (zeigt auf `af3d85f`, letzter grüner Stand: SMTP live + Admin-Signup-Mail + Account-Enumeration-Fix, CI-verifiziert)
+**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP ist seit 2026-06-08 produktiv konfiguriert (Mailjet) — Mailversand prod-verifiziert.**
+
+### SMTP-Inbetriebnahme + Admin-Signup-Mail + Enumeration-Fix (2026-06-08) — alles prod/CI-verifiziert
+- **SMTP provisioniert (Mailjet):** `.env` befüllt (HOST=`in-v3.mailjet.com`, PORT=587, USER=API-Key,
+  PASSWORD=Secret-Key, FROM=verifizierte Domain, STARTTLS=true). Smoke-Test-Tool `scripts/smtp_smoke.py`
+  (interaktiv, maskiert Secrets, gleicher `aiosmtplib`-Pfad wie Prod-Mailer). Versand prod-getestet ✅.
+  **Hinweis:** Mailjet-Egress ist aus der Sandbox NICHT erreichbar — SMTP-Tests laufen nur auf dem Server.
+- **Signup-Mail an alle Admins (`picture-stage-ka6`, closed, prod-verifiziert):** Neue Funktion
+  `notify_admins_signup()` in `app/notifications/service.py` — System-Override, **config-frei** (umgeht die
+  per-User `NotificationConfig`, für die es kein UI gibt → config-gated wäre wirkungslos). Gated über Setting
+  `NOTIFY_ADMINS_ON_SIGNUP` (default true) + gesetztem `SMTP_HOST`. Trigger an BEIDEN Signup-Pfaden
+  (`app/frontend/auth.py` + `app/auth/router.py`), je in try/except → Mail-Fehler bricht Signup nie ab,
+  Fehler pro Empfänger isoliert. Commit `e1bf3be`. Echter Signup → Admin-Mail empfangen.
+- **Account-Enumeration-Fix (`picture-stage-42q`, P1 SECURITY, closed):** Existierende E-Mail (User ODER
+  Pending) liefert jetzt dieselbe neutrale Erfolgsantwort wie ein frischer Signup — kein 409, kein neuer/
+  überschriebener PendingSignup (Takeover-Vektor). Zwei versteckte Vektoren mitgeschlossen:
+  (1) `verification_token` aus `SignupResponse` entfernt (**BREAKING API** — token-vs-null wäre selbst ein
+  Leak; im CHANGELOG dokumentiert), (2) Timing-Angleich via bcrypt-Dummy (Best-Effort). i18n-Leak-Keys
+  `auth.email_registered`/`auth.signup_pending` (DE+EN) entfernt. Commit `7a5ebb7`. 5 Unit- + 4 Integration-Tests.
+- **CI-Reparatur:** Integration-Tests posteten `@test.local` → `EmailStr` lehnt reservierte TLDs ab → 422
+  statt 201 (Commit `030b327` fixt auf `@example.com`). Path-Filter um `tests/**` erweitert (`873f741`),
+  weil ein test-only-Commit sonst CI **überspringt** und trügerisch grün meldet. **CI final: 279 passed.**
+  Beide Stolpersteine in `docs/lessons-learned.md` (Commit `af3d85f`).
 
 ### Async Multi-Upload (2026-06-08) — `picture-stage-o4d`, closed, live auf Prod verifiziert
 - **Problem:** Upload vieler Bilder fror die UI ~20s ein — alle Previews (Thumbnails/Watermark via Pillow)
@@ -140,11 +162,12 @@ users, galleries, images, image_previews, selection_events (append-only), share_
   stoppt selbst. 4 atomare Commits (`9eff000` DB, `ae9f306` Worker, `229ef00` Grid+Polling, `045429f` Tests).
 
 ### Neue offene Tickets aus User-Findings (2026-06-08)
-- **`picture-stage-42q` (P1, [bug] SECURITY):** Signup-Account-Enumeration. IST: existierende E-Mail liefert
-  HTTP 409 + Hinweis an ZWEI Stellen (`app/frontend/auth.py:125-134`, `app/auth/router.py:20-26`). SOLL:
-  generische Neutral-Antwort, kein 409, **kein** neuer/überschriebener PendingSignup (Account-Takeover-Vektor!).
+- ~~`picture-stage-42q` (P1 SECURITY, Signup-Enumeration)~~ ✅ closed 2026-06-08 — siehe SMTP-Abschnitt oben.
 - **`picture-stage-dxj` (P2):** Top-Nav umbauen — Brand links, Aktionen rechts, Theme-Toggle + Sprachwechsel
   in neues „Einstellungen"-Dropdown (`nav.settings`). Kein generisches Dropdown-Macro vorhanden → neu bauen.
+- **Logischer nächster Schritt (`picture-stage-ebm.7`):** User-Verifizierungsmail verdrahten — beide
+  `# TODO: send verification email`-Marker (`app/auth/router.py`, `app/frontend/auth.py`) stehen noch.
+  SMTP läuft jetzt produktiv → spruchreif.
 
 ### Security-Härtung (2026-06-08) — Share-Link HTTPS + JWT-Invalidierung
 - **Share-Links immer HTTPS (`picture-stage-0hp`, closed):** Zentraler Helper `build_share_url()`

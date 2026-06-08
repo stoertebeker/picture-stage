@@ -33,6 +33,13 @@ cp .env.example .env
 #    SECRET_KEY         (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(64))")
 #    HMAC_SECRET_KEY    (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 #    APP_URL            (öffentliche HTTPS-Domain, z.B. https://deine-domain.tld — sonst zeigen Share-Links auf den internen Host)
+#
+#    Optional — E-Mail-Benachrichtigungen (z.B. Mailjet, leer = aus):
+#    SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM   (Mailjet: HOST=in-v3.mailjet.com, PORT=587,
+#                                             USER=API-Key, PASSWORD=Secret-Key; FROM-Domain
+#                                             muss beim Provider verifiziert sein)
+#    NOTIFY_ADMINS_ON_SIGNUP=true            (Mail an alle Admins bei Neuregistrierung)
+#    Credentials testen: python scripts/smtp_smoke.py
 
 # 4. Starten
 docker compose up -d
