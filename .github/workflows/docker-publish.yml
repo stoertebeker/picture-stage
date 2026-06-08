@@ -8,13 +8,39 @@ on:
       - "v*"
 
 jobs:
+  # Pfad-Gate: Auf main nur bauen, wenn build-relevante Dateien geaendert
+  # wurden. Versions-Tags v* bauen IMMER (Path-Filter wird bei Tags ignoriert).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      should-build: >-
+        ${{ startsWith(github.ref, 'refs/tags/v')
+            || steps.filter.outputs.build == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            build:
+              - 'app/**'
+              - 'alembic/**'
+              - 'Dockerfile'
+              - 'pyproject.toml'
+              - '.github/workflows/docker-publish.yml'
+              - '.github/workflows/ci.yml'
+
   # Vorgelagertes Gate: lint + mypy + pytest. Image wird nur gebaut,
   # wenn die CI gruen ist (kein Build aus rotem Code, auch nicht :dev).
   ci:
+    needs: changes
+    if: needs.changes.outputs.should-build == 'true'
     uses: ./.github/workflows/ci.yml
 
   build-and-push:
-    needs: ci
+    needs: [changes, ci]
+    if: needs.changes.outputs.should-build == 'true'
     runs-on: ubuntu-latest
 
     permissions:
