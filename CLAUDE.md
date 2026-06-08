@@ -116,8 +116,24 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-07
+**Datum:** 2026-06-08
 **Wachwechsel-Tag:** `handover-2026-06-07` (zeigt auf `78a984a`, letzter grüner Stand: Admin-User-Verwaltung komplett)
+**Live:** Eine produktive Instanz läuft online (über das Docker-Hub-Image deployt).
+
+### CI/CD-Pipeline (Docker Hub, 2026-06-08)
+Vollautomatischer Multi-Arch-Build (amd64+arm64) nach Docker Hub `stoertebeker2k/picture-stage`.
+Zwei Workflows, gated über Job-Graph `changes → ci → build-and-push`:
+- **`ci.yml`** ist reusable (`workflow_call`) + `pull_request` — **kein** direkter `push`-Trigger
+  mehr (lief sonst doppelt). Enthält lint (ruff) + format-check + mypy + pytest (Postgres-Service).
+- **`docker-publish.yml`** triggert auf `push → main` **und** Tags `v*`. Ruft `ci.yml` als
+  vorgelagerten Job → `build-and-push` hat `needs: ci`. **Kein Image aus rotem Code, auch kein `:dev`.**
+- **Tag-Strategie:** `main`-Commit → `:dev` + `:sha-<hash>` (Test-Server zieht `:dev`);
+  Versions-Tag `v*` → semver + `:latest` (via `latest=auto`, nur bei Release-Tags). Saubere
+  Trennung dev/stable über `is_default_branch`.
+- **Path-Filter (`dorny/paths-filter`):** `main` baut nur bei Änderungen an `app/`, `alembic/`,
+  `Dockerfile`, `pyproject.toml` oder den Workflow-Dateien — spart Action-Minuten bei Doku-Commits.
+  Tags `v*` bauen **immer** (Filter wird bei Tag-Push übersprungen via `startsWith(github.ref,…)`).
+- **Verifiziert:** Live-Run auf `bb03bc6` grün (2m 22s, Cache-Hit 74%), Job-Graph wie geplant.
 
 ### Was ist fertig
 - v0.1–v0.4 vollständig (API, Lifecycle, Compliance, Frontend funktional)
@@ -171,7 +187,8 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 Einstieg: `bd ready` → `qdz.13` (PS-UX-21a, Guest-Lightbox Mockup)
 
 ### Kleinere offene Punkte
-- Docker-Build verifizieren (oder via `docker-publish.yml`)
+- ~~Docker-Build verifizieren~~ ✅ erledigt 2026-06-08 (Pipeline live, siehe CI/CD-Abschnitt oben)
+- Noch nicht live getestet: Doku-only-Commit (Build-Skip) und `v*`-Tag (`:latest`-Build)
 - GitHub Actions: Node-20-Deprecation — Frist Sept. 2026
 - WATERMARK_OPACITY Breaking-Change-Hinweis in Release-Notes
 

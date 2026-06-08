@@ -50,6 +50,9 @@ docker compose pull
 docker compose up -d
 ```
 
+> **Tag-Wahl:** `:latest` für die Produktion (nur stabile Releases), `:dev` für
+> einen Test-Server (folgt jedem `main`-Commit). Details siehe [Docker Hub](#docker-hub).
+
 ## API Overview
 
 ### Authentication (`/api/v1/auth/`)
@@ -166,11 +169,29 @@ pytest tests/security/ -v
 
 ## Docker Hub
 
+Multi-arch images (amd64 + arm64) are built and pushed automatically via GitHub Actions ([`docker-publish.yml`](.github/workflows/docker-publish.yml)).
+
+| Tag | When it's built | Use for |
+|-----|-----------------|---------|
+| `:latest` | On every version tag `v*` | **Production** — stable releases only |
+| `:1.2.3`, `:1.2`, `:1` | On every version tag `v*` (semver) | Pinning a specific version |
+| `:dev` | On **every push to `main`** | **Staging / test server** — latest development build |
+| `:sha-<short>` | On every push to `main` | Pinning a specific commit |
+
 ```bash
+# Production / stable
 docker pull stoertebeker2k/picture-stage:latest
+
+# Test server / bleeding edge
+docker pull stoertebeker2k/picture-stage:dev
 ```
 
-Multi-arch images (amd64 + arm64) are built automatically on each tagged release via GitHub Actions.
+### How the pipeline is gated
+
+The Docker build runs only when both conditions hold, so no image is ever published from broken or irrelevant code:
+
+1. **CI must be green.** [`ci.yml`](.github/workflows/ci.yml) is a reusable workflow (`workflow_call`) invoked as a prerequisite job — `build-and-push` has `needs: ci`. Lint (ruff), type check (mypy) and tests (pytest) all run before any image is built. This applies to `:dev` builds too.
+2. **Relevant files changed** (push to `main` only). A `dorny/paths-filter` gate skips the build for doc-only commits. It triggers on changes to `app/`, `alembic/`, `Dockerfile`, `pyproject.toml`, or the workflow files. **Version tags `v*` always build**, regardless of the path filter.
 
 ## License
 
