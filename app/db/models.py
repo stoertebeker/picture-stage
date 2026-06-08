@@ -74,6 +74,10 @@ class User(TimestampMixin, Base):
     status: Mapped[UserStatus] = mapped_column(Enum(UserStatus), nullable=False, default=UserStatus.pending)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     locale: Mapped[str] = mapped_column(String(10), nullable=False, default="de")
+    # Access tokens issued before this instant are rejected (see app/auth/dependencies.py).
+    # Set to now() on admin password-reset or account-lock to invalidate stateless JWTs
+    # immediately. NULL = no invalidation point, so existing tokens stay valid.
+    tokens_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     galleries: Mapped[list["Gallery"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     notification_configs: Mapped[list["NotificationConfig"]] = relationship(

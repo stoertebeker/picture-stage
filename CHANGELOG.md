@@ -4,6 +4,14 @@ All notable changes to Picture-Stage are documented in this file.
 
 ## [Unreleased]
 
+### Security
+
+- **Stateless JWTs are invalidated on password reset and account lock** (`picture-stage-7kr`). Previously an already-issued access token stayed valid for up to 24 h after an admin reset a user's password or disabled the account. Tokens now carry an `iat` claim and are rejected once the per-user `tokens_valid_after` cut-off (set on reset/lock) is passed.
+  - No mass-logout on upgrade: the cut-off defaults to NULL, so existing tokens keep working until the next reset/lock of that user.
+  - The check compares server-side timestamps only, so client clock skew is irrelevant. Multi-instance deployments should keep server clocks in sync (NTP).
+- **Share links are now always HTTPS in production** (`picture-stage-0hp`). Behind a TLS-terminating reverse proxy the container only sees plain HTTP, which caused share links to leak the replayable share token over `http://`. Links are now built from the configured `APP_URL` and the scheme is forced to `https://` in production.
+  - **Action required:** set `APP_URL` to your public HTTPS domain (e.g. `https://photos.example.com`). A missing/default `APP_URL` falls back to the request host with the scheme corrected to https.
+
 ### Changed
 
 - **BREAKING:** `WATERMARK_OPACITY` environment variable now expects **float (0.0-1.0)** instead of **int (0-255)**

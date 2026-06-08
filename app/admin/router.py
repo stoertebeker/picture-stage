@@ -176,8 +176,10 @@ async def reset_user_password(
 ) -> None:
     """Set a new password for a user (admin-initiated reset).
 
-    Note: auth is stateless JWT, so existing sessions remain valid until their
-    token expires. The reset is audit-logged. The new password is never logged.
+    Existing access tokens are invalidated immediately: the reset bumps the
+    user's tokens_valid_after cut-off, so any session holding the old token is
+    rejected on its next request. The reset is audit-logged; the new password is
+    never logged.
     """
     try:
         await service.reset_user_password(db, actor=admin, target_id=user_id, new_password=body.new_password)

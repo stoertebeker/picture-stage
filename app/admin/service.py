@@ -11,6 +11,7 @@ into its own response (HTTPException for the API, a toast for the frontend).
 """
 
 import uuid
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -102,6 +103,11 @@ async def change_user_status(
 
     if new_status != old_status:
         target.status = new_status
+        # Locking a user must also kill already-issued tokens. The status gate in
+        # require_active_user already blocks them, but this is defence in depth for
+        # any route that depends only on get_current_user without a status check.
+        if new_status == UserStatus.disabled:
+            target.tokens_valid_after = datetime.now(UTC)
         db.add(
             AuditLog(
                 gallery_id=None,
@@ -171,6 +177,9 @@ async def reset_user_password(
     """Set a new password for a user (admin-initiated). The password is never logged."""
     target = await _get_target(db, target_id)
     target.password_hash = hash_password(new_password)
+    # Invalidate any access token issued before now: a reset must log out
+    # sessions that still hold the old credentials (the whole point of a reset).
+    target.tokens_valid_after = datetime.now(UTC)
     db.add(
         AuditLog(
             gallery_id=None,

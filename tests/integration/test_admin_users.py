@@ -294,3 +294,74 @@ async def test_reset_password_requires_admin(client, db, auth_headers):
         headers=auth_headers(non_admin),
     )
     assert resp.status_code == 403
+
+
+# --- JWT invalidation on reset/lock (picture-stage-7kr) ---
+
+
+async def test_reset_password_revokes_existing_token(client, db, auth_headers, verify_db):
+    """An access token minted before an admin password reset must stop working."""
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+
+    # Mint the victim's token BEFORE the reset, then prove it works.
+    old_headers = auth_headers(target)
+    pre = await client.get("/api/v1/galleries", headers=old_headers)
+    assert pre.status_code == 200
+
+    reset = await client.post(
+        f"/api/v1/admin/users/{target.id}/reset-password",
+        json={"new_password": "brandnew-pw-123"},
+        headers=auth_headers(admin),
+    )
+    assert reset.status_code == 204
+    assert (await verify_db.get(User, target.id)).tokens_valid_after is not None
+
+    # Same token, now rejected: iat predates the cut-off.
+    after = await client.get("/api/v1/galleries", headers=old_headers)
+    assert after.status_code == 401
+
+
+async def test_disable_revokes_existing_token(client, db, auth_headers, verify_db):
+    """Locking a user sets the cut-off so already-issued tokens are rejected."""
+    admin = await make_user(db, "admin@test.local", status=UserStatus.admin)
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+
+    old_headers = auth_headers(target)
+    assert (await client.get("/api/v1/galleries", headers=old_headers)).status_code == 200
+
+    resp = await client.patch(
+        f"/api/v1/admin/users/{target.id}/status",
+        json={"status": "disabled"},
+        headers=auth_headers(admin),
+    )
+    assert resp.status_code == 200
+    assert (await verify_db.get(User, target.id)).tokens_valid_after is not None
+
+    # Token check (401, revoked) runs before the status gate (403); either way: no access.
+    assert (await client.get("/api/v1/galleries", headers=old_headers)).status_code == 401
+
+
+async def test_token_issued_after_cutoff_is_accepted(client, db, auth_headers):
+    """A token issued after the cut-off (the legitimate re-login) still works.
+
+    The cut-off is placed firmly in the past so this is deterministic despite
+    the second-level granularity of the JWT iat claim.
+    """
+    from datetime import UTC, datetime, timedelta
+
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    target.tokens_valid_after = datetime.now(UTC) - timedelta(hours=1)
+    await db.commit()
+
+    resp = await client.get("/api/v1/galleries", headers=auth_headers(target))
+    assert resp.status_code == 200
+
+
+async def test_no_cutoff_keeps_token_valid(client, db, auth_headers):
+    """A user that was never reset/locked (NULL cut-off) keeps full access."""
+    target = await make_user(db, "u@test.local", status=UserStatus.active)
+    assert target.tokens_valid_after is None
+
+    resp = await client.get("/api/v1/galleries", headers=auth_headers(target))
+    assert resp.status_code == 200
