@@ -1,0 +1,112 @@
+"""Background worker that generates preview variants for an uploaded image.
+
+Preview generation (Pillow resize + watermark + WebP encode) is CPU-bound and
+blocking. Running it inline in the upload request froze the UI and blocked the
+whole event loop. This worker is dispatched via FastAPI BackgroundTasks: it opens
+its own DB session, reads the stored original, generates all variants in a thread
+(asyncio.to_thread keeps the event loop free), and flips
+``images.processing_status`` to ``ready`` (or ``failed`` on error).
+"""
+
+import asyncio
+import io
+import logging
+import uuid
+
+from sqlalchemy import select
+
+from app.db.base import async_session
+from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
+from app.images.processing import (
+    PREVIEW_SIZES,
+    generate_preview_with_watermark,
+    generate_thumbnail,
+)
+from app.storage.base import storage_key
+from app.storage.dependencies import get_storage
+
+logger = logging.getLogger(__name__)
+
+
+async def _read_original(storage_key_str: str) -> bytes:
+    """Read the stored original back into memory for processing."""
+    storage = get_storage()
+    chunks: list[bytes] = []
+    async for chunk in storage.download_stream(storage_key_str):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+async def _mark_failed(image_id: uuid.UUID, gallery_id: uuid.UUID) -> None:
+    """Set processing_status=failed in a fresh transaction.
+
+    Runs in its own session so the status write survives even if the main
+    processing transaction was rolled back.
+    """
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Image).where(Image.id == image_id, Image.gallery_id == gallery_id))
+            image = result.scalar_one_or_none()
+            if image is not None:
+                image.processing_status = ImageProcessingStatus.failed
+                await db.commit()
+    except Exception:
+        # Last-resort: the failure handler must never raise.
+        logger.exception("Failed to mark image %s as failed", image_id)
+
+
+async def process_image_previews(
+    image_id: uuid.UUID,
+    gallery_id: uuid.UUID,
+    watermark_text: str,
+) -> None:
+    """Generate all preview variants for one image and update its status.
+
+    Tenant isolation: the image is loaded by (image_id, gallery_id) so a worker
+    can never touch an image outside its gallery. On success the status becomes
+    ``ready``; any exception flips it to ``failed`` (in a separate transaction).
+    """
+    storage = get_storage()
+    try:
+        async with async_session() as db:
+            result = await db.execute(select(Image).where(Image.id == image_id, Image.gallery_id == gallery_id))
+            image = result.scalar_one_or_none()
+            if image is None:
+                logger.warning(
+                    "Preview worker: image %s not found in gallery %s (deleted?)",
+                    image_id,
+                    gallery_id,
+                )
+                return
+
+            original_bytes = await _read_original(image.storage_key)
+
+            for variant_name, max_width in PREVIEW_SIZES.items():
+                src = io.BytesIO(original_bytes)
+                if variant_name == "preview":
+                    preview_buf, pw, ph = await asyncio.to_thread(
+                        generate_preview_with_watermark, src, max_width, watermark_text
+                    )
+                else:
+                    preview_buf, pw, ph = await asyncio.to_thread(generate_thumbnail, src, max_width)
+
+                preview_key = storage_key(str(gallery_id), "previews", f"{image_id}_{variant_name}.webp")
+                await storage.upload(preview_key, preview_buf, "image/webp")
+
+                db.add(
+                    ImagePreview(
+                        image_id=image_id,
+                        variant=PreviewVariant(variant_name),
+                        storage_key=preview_key,
+                        width=pw,
+                        height=ph,
+                        file_size=preview_buf.getbuffer().nbytes,
+                    )
+                )
+
+            image.processing_status = ImageProcessingStatus.ready
+            await db.commit()
+            logger.info("Preview worker: image %s ready (%d variants)", image_id, len(PREVIEW_SIZES))
+    except Exception:
+        logger.exception("Preview worker failed for image %s", image_id)
+        await _mark_failed(image_id, gallery_id)

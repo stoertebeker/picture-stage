@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
@@ -22,7 +22,7 @@ from app.db.models import (
     GalleryStatus,
     Image,
     ImagePreview,
-    PreviewVariant,
+    ImageProcessingStatus,
     SelectionEvent,
     ShareSession,
     User,
@@ -80,6 +80,7 @@ async def _load_images_with_signed_urls(gallery_id: uuid.UUID, db: AsyncSession)
                 "width": img.width,
                 "height": img.height,
                 "previews": previews,
+                "processing_status": img.processing_status.value,
             }
         )
 
@@ -175,20 +176,25 @@ async def gallery_images_grid(
 async def upload_images(
     gallery_id: uuid.UUID,
     request: Request,
+    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(default_factory=list),
     user: User = Depends(require_authenticated_page),
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> HTMLResponse:
-    """Handle image upload and return refreshed image grid partial."""
+    """Persist uploaded originals fast, queue preview generation, return the grid.
+
+    Preview generation (Pillow resize + watermark + WebP) is CPU-bound and used to
+    run inline here, freezing the UI for ~20s on large batches. Now the request only
+    stores the original + an Image row (status=pending) and dispatches a background
+    worker per image. The returned grid shows spinner tiles that poll until ready.
+    """
     import io
 
+    from app.images.preview_worker import process_image_previews
     from app.images.processing import (
-        PREVIEW_SIZES,
         compute_sha256,
         extract_exif,
-        generate_preview_with_watermark,
-        generate_thumbnail,
         get_image_dimensions,
     )
     from app.storage.base import storage_key
@@ -217,6 +223,9 @@ async def upload_images(
 
     watermark_text = f"PREVIEW · {str(gallery.id)[:8].upper()}"
 
+    # Persist originals + Image rows only. Preview generation is dispatched to a
+    # background worker (below) so the request returns immediately.
+    queued: list[uuid.UUID] = []
     for idx, file in enumerate(files):
         if file.content_type not in allowed_types:
             raise HTTPException(
@@ -250,34 +259,19 @@ async def upload_images(
             sha256=sha256,
             exif=exif,
             sort_order=sort_offset + idx,
+            processing_status=ImageProcessingStatus.pending,
         )
         db.add(image)
-
-        for variant_name, max_width in PREVIEW_SIZES.items():
-            file_buf.seek(0)
-            if variant_name == "preview":
-                preview_buf, pw, ph = generate_preview_with_watermark(file_buf, max_width, watermark_text)
-            else:
-                preview_buf, pw, ph = generate_thumbnail(file_buf, max_width)
-
-            preview_key = storage_key(str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp")
-            await storage.upload(preview_key, preview_buf, "image/webp")
-
-            preview = ImagePreview(
-                image_id=image_uuid,
-                variant=PreviewVariant(variant_name),
-                storage_key=preview_key,
-                width=pw,
-                height=ph,
-                file_size=preview_buf.getbuffer().nbytes,
-            )
-            db.add(preview)
-
-        await db.flush()
+        queued.append(image_uuid)
 
     await db.commit()
 
-    # Return refreshed image grid
+    # Dispatch preview generation after commit so the worker's own session sees
+    # the committed rows. Each image is processed independently.
+    for image_uuid in queued:
+        background_tasks.add_task(process_image_previews, image_uuid, gallery_id, watermark_text)
+
+    # Return refreshed image grid (queued images render as polling spinner tiles).
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
     return templates.TemplateResponse(request, "galleries/_image_grid.html", ctx)
