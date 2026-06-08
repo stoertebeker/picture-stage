@@ -136,10 +136,12 @@ class TestEndpointStructure:
         block = source[idx : idx + 500]
         assert "session_id" in block
 
-    def test_filter_requires_session_id(self) -> None:
+    def test_filter_does_not_require_session_id(self) -> None:
+        # Selections are gallery-wide (magic-link = one model), so filtering
+        # no longer needs a session_id. The old guard must be gone.
         with open("app/guest/router.py") as f:
             source = f.read()
-        assert "session_id is required when using filters" in source
+        assert "session_id is required when using filters" not in source
 
     def test_filter_uses_selections_service(self) -> None:
         with open("app/guest/router.py") as f:

@@ -238,6 +238,7 @@
     "show_label": "Anzeigen",
     "sort_label": "Sortieren",
     "complete_pill": "Auswahl abschließen",
+    "completed_readonly": "Diese Bewertung wurde abgeschlossen. Deine Auswahl ist gespeichert und wird hier angezeigt, kann aber nicht mehr geändert werden.",
     "back_to_overview": "Zurück zur Übersicht"
   },
   "expiry": {

@@ -203,12 +203,6 @@ async def list_shared_images(
 
     _check_gallery_accessible(gallery)
 
-    if filter != ImageFilter.all and session_id is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="session_id is required when using filters",
-        )
-
     order_col: Any = Image.sort_order
     if sort_by == ImageSortBy.filename:
         order_col = Image.filename
@@ -226,8 +220,8 @@ async def list_shared_images(
             reverse=(sort_dir == SortDirection.desc),
         )
 
-    if filter != ImageFilter.all and session_id is not None:
-        selections = await get_current_selections(gallery.id, session_id, db)
+    if filter != ImageFilter.all:
+        selections = await get_current_selections(gallery.id, db)
         sel_map = {s.image_id: s for s in selections}
 
         if filter == ImageFilter.selected:
@@ -281,11 +275,15 @@ async def create_selection_event(
     if image_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found in this gallery")
 
+    # Read-only once the review is completed (gallery-wide, magic-link = one model).
+    if gallery.status == GalleryStatus.completed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review already completed")
+
+    # Session is still resolved for event attribution / audit (one row per visit).
     session_result = await db.execute(
         select(ShareSession).where(
             ShareSession.id == body.session_id,
             ShareSession.gallery_id == gallery.id,
-            ShareSession.completed_at.is_(None),
         )
     )
     session = session_result.scalar_one_or_none()
@@ -307,7 +305,7 @@ async def create_selection_event(
 @router.get("/{token}/selections", response_model=SelectionSummary)
 async def get_selections(
     token: str,
-    session_id: uuid.UUID,
+    session_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> SelectionSummary:
     gallery = await _resolve_gallery_by_token(token, db)
@@ -315,7 +313,7 @@ async def get_selections(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     _check_gallery_accessible(gallery)
 
-    selections = await get_current_selections(gallery.id, session_id, db)
+    selections = await get_current_selections(gallery.id, db)
 
     image_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery.id))
     total = len(image_count_result.scalars().all())

@@ -95,7 +95,6 @@ async def _load_images(
     sort_by: ImageSortBy = ImageSortBy.sort_order,
     sort_dir: SortDirection = SortDirection.asc,
     filter_mode: ImageFilter = ImageFilter.all,
-    session_id: uuid.UUID | None = None,
 ) -> list[dict[str, Any]]:
     """Load images for a gallery with sorting, filtering, and signed URLs."""
     order_col: Any = Image.sort_order
@@ -115,15 +114,13 @@ async def _load_images(
             reverse=(sort_dir == SortDirection.desc),
         )
 
-    # Build selection map for filtering
-    sel_map: dict[uuid.UUID, dict[str, Any]] = {}
-    if session_id is not None:
-        selections = await get_current_selections(gallery.id, session_id, db)
-        sel_map = {
-            s.image_id: {"selected": s.selected, "favorited": s.favorited, "comment": s.comment} for s in selections
-        }
+    # Build selection map for filtering — gallery-wide (magic-link = one model)
+    selections = await get_current_selections(gallery.id, db)
+    sel_map: dict[uuid.UUID, dict[str, Any]] = {
+        s.image_id: {"selected": s.selected, "favorited": s.favorited, "comment": s.comment} for s in selections
+    }
 
-    if filter_mode != ImageFilter.all and session_id is not None:
+    if filter_mode != ImageFilter.all:
         if filter_mode == ImageFilter.selected:
             images = [img for img in images if sel_map.get(img.id, {}).get("selected")]
         elif filter_mode == ImageFilter.favorited:
@@ -234,7 +231,7 @@ async def guest_viewer(
     await db.commit()
     await db.refresh(session)
 
-    images = await _load_images(gallery, db, session_id=session.id)
+    images = await _load_images(gallery, db)
     total = len(images)
     selected_count = sum(1 for img in images if img["selected"])
     favorited_count = sum(1 for img in images if img["favorited"])
@@ -252,6 +249,7 @@ async def guest_viewer(
             "total_images": total,
             "selected_count": selected_count,
             "favorited_count": favorited_count,
+            "session_completed": gallery.status == GalleryStatus.completed,
             "sort_by": "sort_order",
             "sort_dir": "asc",
             "filter": "all",
@@ -276,7 +274,7 @@ async def guest_gallery_images(
 
     _check_gallery_accessible(gallery)
 
-    images = await _load_images(gallery, db, sort_by, sort_dir, filter, session_id)
+    images = await _load_images(gallery, db, sort_by, sort_dir, filter)
     total = len(images)
     selected_count = sum(1 for img in images if img["selected"])
     favorited_count = sum(1 for img in images if img["favorited"])
@@ -292,6 +290,7 @@ async def guest_gallery_images(
             "total_images": total,
             "selected_count": selected_count,
             "favorited_count": favorited_count,
+            "session_completed": gallery.status == GalleryStatus.completed,
             "sort_by": sort_by.value,
             "sort_dir": sort_dir.value,
             "filter": filter.value,
@@ -333,7 +332,7 @@ async def guest_verify_password(
     await db.commit()
     await db.refresh(session)
 
-    images = await _load_images(gallery, db, session_id=session.id)
+    images = await _load_images(gallery, db)
     total = len(images)
     selected_count = sum(1 for img in images if img["selected"])
     favorited_count = sum(1 for img in images if img["favorited"])
@@ -349,6 +348,7 @@ async def guest_verify_password(
             "total_images": total,
             "selected_count": selected_count,
             "favorited_count": favorited_count,
+            "session_completed": gallery.status == GalleryStatus.completed,
             "sort_by": "sort_order",
             "sort_dir": "asc",
             "filter": "all",

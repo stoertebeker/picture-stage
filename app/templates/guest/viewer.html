@@ -11,6 +11,7 @@
      data-total-images="{{ total_images }}"
      data-selected-count="{{ selected_count }}"
      data-favorited-count="{{ favorited_count }}"
+     data-session-completed="{{ 'true' if session_completed else 'false' }}"
      class="min-h-screen bg-surface-base text-text-primary">
 
     {% if requires_password %}
@@ -98,6 +99,16 @@
         <input type="hidden" name="filter" value="{{ filter }}">
     </header>
 
+    <!-- Read-only banner once the review is completed -->
+    <div x-show="completed"
+         class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4"
+         style="display: none;">
+        <div class="flex items-center gap-2 rounded-md border border-border-subtle bg-surface-raised px-4 py-2 text-sm text-text-secondary">
+            <svg class="h-4 w-4 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            <span>{{ t('guest.completed_readonly') }}</span>
+        </div>
+    </div>
+
     <!-- Image grid -->
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 pb-32">
         <div id="image-grid">
@@ -105,9 +116,9 @@
         </div>
     </main>
 
-    <!-- Floating complete pill -->
+    <!-- Floating complete pill (hidden once completed) -->
     <div class="fixed bottom-6 right-6 z-sticky"
-         x-show="selectedCount > 0 || favoritedCount > 0"
+         x-show="!completed && (selectedCount > 0 || favoritedCount > 0)"
          x-transition>
         <button type="button"
                 @click="showCompleteModal = true"

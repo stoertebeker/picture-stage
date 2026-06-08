@@ -1,4 +1,0 @@
-## folgende Punkte wurden als Feedback durch user gefunden:
-Feature/Bug: wenn ein Model in einer geteilten Galerie den Auswahl- oder Like-button drückt, müssen diese Änderungen irgendwo persistent gespeichert werden, damit das Model das Fenster auch schließen und später weiter aussuchen kann.
-Was macht das cookie-banner? Die webseite ist aktuell nutzebar, ohne ihn zu klicken. ich weiss auch nicht, wozu er dient. oder ist er nur präventiv?
-Feature: darkmode ist default. wir sollten auch einen lightmode implementieren

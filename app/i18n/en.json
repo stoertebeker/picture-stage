@@ -238,6 +238,7 @@
     "show_label": "Show",
     "sort_label": "Sort by",
     "complete_pill": "Finish selection",
+    "completed_readonly": "This review has been completed. Your selection is saved and shown here, but can no longer be changed.",
     "back_to_overview": "Back to overview"
   },
   "expiry": {

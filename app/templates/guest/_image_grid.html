@@ -30,7 +30,7 @@
         <!-- Selection toggle (bottom-left, only on hover when unselected) -->
         <button type="button"
                 @click.stop="toggleSelect('{{ img.id }}')"
-                x-show="!images[{{ loop.index0 }}]?.selected"
+                x-show="!images[{{ loop.index0 }}]?.selected && !completed"
                 class="absolute bottom-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 rounded-full bg-black/50 hover:bg-accent text-white flex items-center justify-center"
                 aria-label="{{ t('guest.lightbox_select') }}">
             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" aria-hidden="true">
@@ -41,7 +41,7 @@
         <!-- Deselect toggle (bottom-left, when selected) -->
         <button type="button"
                 @click.stop="toggleSelect('{{ img.id }}')"
-                x-show="images[{{ loop.index0 }}]?.selected"
+                x-show="images[{{ loop.index0 }}]?.selected && !completed"
                 class="absolute bottom-2 left-2 z-10 h-7 w-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center"
                 aria-label="{{ t('guest.lightbox_selected') }}"
                 style="display: none;">
@@ -54,6 +54,7 @@
         <template x-if="images[{{ loop.index0 }}]?.favorited">
             <button type="button"
                     @click.stop="toggleFavorite('{{ img.id }}')"
+                    :disabled="completed"
                     class="absolute top-2 right-2 z-10 text-favorite drop-shadow-md"
                     aria-label="{{ t('guest.lightbox_favorited') }}">
                 <svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -65,7 +66,7 @@
         <!-- Favorite outline only on hover (when not favourited) -->
         <button type="button"
                 @click.stop="toggleFavorite('{{ img.id }}')"
-                x-show="!images[{{ loop.index0 }}]?.favorited"
+                x-show="!images[{{ loop.index0 }}]?.favorited && !completed"
                 class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white drop-shadow-md hover:text-favorite"
                 aria-label="{{ t('guest.lightbox_favorite') }}">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">

@@ -60,3 +60,4 @@ node_modules/
 .playwright-mcp/
 /*.png
 .playwright/
+user-findings.txt

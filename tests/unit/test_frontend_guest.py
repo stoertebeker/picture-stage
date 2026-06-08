@@ -74,7 +74,12 @@ def test_guest_image_grid_does_not_nest_action_buttons_inside_lightbox_button():
 
 
 def test_guest_selection_api_requires_explicit_session_id():
-    """Guest selection events must bind to the caller's share session."""
+    """Guest selection events tag the caller's share session for audit.
+
+    Selections are materialized gallery-wide (magic-link = one model), so the
+    session is used for event attribution, not isolation. Read-only is enforced
+    gallery-wide via the completed gallery status, not per session.
+    """
     schema_py = (PROJECT_ROOT / "app" / "selections" / "schemas.py").read_text()
     router_py = (PROJECT_ROOT / "app" / "guest" / "router.py").read_text()
     components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
@@ -82,7 +87,8 @@ def test_guest_selection_api_requires_explicit_session_id():
     assert "session_id: uuid.UUID" in schema_py
     assert "ShareSession.id == body.session_id" in router_py
     assert "ShareSession.gallery_id == gallery.id" in router_py
-    assert "ShareSession.completed_at.is_(None)" in router_py
+    # Read-only is now gallery-wide, not per-session.
+    assert "gallery.status == GalleryStatus.completed" in router_py
     assert "session_id: this.sessionId" in components_js
 
 

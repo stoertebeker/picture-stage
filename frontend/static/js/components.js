@@ -54,6 +54,7 @@ window.guestViewer = function () {
         lightboxOpen: false,
         lightboxIndex: 0,
         showCompleteModal: false,
+        completed: false,
 
         init() {
             const root = this.$root;
@@ -63,6 +64,8 @@ window.guestViewer = function () {
             this.totalImages = parseInt(root.dataset.totalImages || '0', 10);
             this.selectedCount = parseInt(root.dataset.selectedCount || '0', 10);
             this.favoritedCount = parseInt(root.dataset.favoritedCount || '0', 10);
+            // Once the review is completed the selection is read-only (gallery-wide).
+            this.completed = root.dataset.sessionCompleted === 'true';
         },
 
         get currentImage() {
@@ -134,6 +137,7 @@ window.guestViewer = function () {
         },
 
         async toggleSelect(imageId) {
+            if (this.completed) return;
             const img = this.images.find((i) => i.id === imageId);
             if (!img) return;
             const action = img.selected ? 'deselect' : 'select';
@@ -143,6 +147,7 @@ window.guestViewer = function () {
         },
 
         async toggleFavorite(imageId) {
+            if (this.completed) return;
             const img = this.images.find((i) => i.id === imageId);
             if (!img) return;
             const action = img.favorited ? 'unfavorite' : 'favorite';
@@ -152,6 +157,7 @@ window.guestViewer = function () {
         },
 
         async submitComment(imageId, comment) {
+            if (this.completed) return;
             await this._postSelection(imageId, 'comment', comment);
         },
 
