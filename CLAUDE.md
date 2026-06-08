@@ -122,6 +122,21 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 **Wachwechsel-Tag:** `handover-2026-06-08` (zeigt auf `f291487`, letzter grüner Stand: Guest-Lightbox + Auswahl-Persistenz, live auf Prod verifiziert)
 **Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung.
 
+### Security-Härtung (2026-06-08) — Share-Link HTTPS + JWT-Invalidierung
+- **Share-Links immer HTTPS (`picture-stage-0hp`, closed):** Zentraler Helper `build_share_url()`
+  in `app/galleries/sharing.py` ersetzt drei `request.base_url`-Duplikate (API-Router + 2× Frontend).
+  Hinter dem TLS-terminierenden Proxy (Cloudflare/Caddy) sah der Container nur HTTP → das replaybare
+  Share-Token leakte über `http://`. Jetzt: URL aus `APP_URL` (Source of Truth), Scheme in Produktion
+  zwingend `https://` (Defense-in-Depth bei fehlender/falscher Konfig). **Betrieb:** `APP_URL` muss
+  in Prod auf die öffentliche HTTPS-Domain zeigen (in `.env.example`/README dokumentiert). 4 Unit-Tests.
+- **JWT-Invalidierung bei PW-Reset/Sperren (`picture-stage-7kr`, closed):** Stateless-Tokens blieben
+  bis zu 24h nach Reset/Sperre gültig. Neu: `iat`-Claim auf Tokens + per-User-Cut-off
+  `users.tokens_valid_after` (Migration `0003`, nullable timestamptz). Zentraler Check `_token_revoked()`
+  in `app/auth/dependencies.py` weist Tokens vor dem Cut-off ab — wirkt für API (`get_current_user`)
+  UND Cookie-Frontend (`get_user_from_cookie`). `reset_user_password` + Sperren (`status→disabled`)
+  setzen den Cut-off auf `now()`. NULL-Default = kein Massen-Logout beim Deploy. Zeitstempel rein
+  server-seitig (kein Client-Clock-Skew). 6 Unit- + 4 Integration-Tests. **Beide Härtungen im CHANGELOG.**
+
 ### Guest-Persistenz + Lightbox (2026-06-08) — live auf Prod verifiziert
 - **Gast-Auswahl galerie-weit persistent (`picture-stage-7ih`, closed):** Auswahl/Favoriten werden
   über ALLE Sessions der Galerie materialisiert (`get_current_selections(gallery_id, db)` in
@@ -158,7 +173,7 @@ Zwei Workflows, gated über Job-Graph `changes → ci → build-and-push`:
 
 ### Was ist fertig
 - v0.1–v0.4 vollständig (API, Lifecycle, Compliance, Frontend funktional)
-- 184 Unit-Tests grün; CI gegen Postgres-Service; ruff format + ruff check + mypy strict grün
+- 196 Unit-Tests grün (lokal, DB-frei); CI gegen Postgres-Service (Integration/Security); ruff format + ruff check + mypy strict grün
 - DB-Migrationen produktionsreif; Migration↔ORM-Drift-Guard in CI
 - i18n DE+EN vollständig — alle hardcoded Strings auf Keys (`auth.*`, `gallery.*`, `admin.*`)
 - **v0.5 Foundation komplett:** Design-Tokens (`docs/design/tokens.md`), Tailwind-Config,
@@ -191,9 +206,10 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 **Offene Follow-ups (Beads):**
 | Punkt | Beads-ID | Prio |
 |-------|----------|------|
-| JWT-Invalidierung bei Sperren/PW-Reset (stateless-Token-Lücke) | `picture-stage-7kr` | P2 🛡️ |
 | Visuelle/Playwright-UI-Verifikation `/admin/users` | `picture-stage-52s` | P3 |
 | Share-Sessions gesperrter User invalidieren/prüfen | `picture-stage-cxs` | P3 |
+
+> `picture-stage-7kr` (JWT-Invalidierung) ✅ closed 2026-06-08 — siehe Abschnitt „Security-Härtung" oben.
 
 ### v0.5 – Noch offen (Epic `picture-stage-qdz`)
 
@@ -214,7 +230,7 @@ gegen Spike oder live auf Prod (`https://picture.stoertes.cloud`, via Playwright
 - ~~Docker-Build verifizieren~~ ✅ erledigt 2026-06-08 (Pipeline live, siehe CI/CD-Abschnitt oben)
 - Noch nicht live getestet: Doku-only-Commit (Build-Skip) und `v*`-Tag (`:latest`-Build)
 - GitHub Actions: Node-20-Deprecation — Frist Sept. 2026
-- WATERMARK_OPACITY Breaking-Change-Hinweis in Release-Notes
+- ~~WATERMARK_OPACITY Breaking-Change-Hinweis in Release-Notes~~ ✅ steht im CHANGELOG (`[Unreleased] → Changed`)
 
 ### Epics
 | Epic | Beads-ID | Status |
@@ -224,7 +240,7 @@ gegen Spike oder live auf Prod (`https://picture.stoertes.cloud`, via Playwright
 | v0.3 Produktion & Compliance | `picture-stage-fbr` | closed |
 | v0.4 Frontend (funktional) | `picture-stage-gza` | closed |
 | v0.5 UX-Redesign – Editorial Dark (Guest-Focused) | `picture-stage-qdz` | Foundation + Komponenten + Viewer + **Lightbox** ✅, PW-Gate/i18n/Mobile offen |
-| Admin-User-Verwaltung (API + Frontend) | `picture-stage-uwy` | closed (3 Follow-ups offen: `7kr`/`52s`/`cxs`) |
+| Admin-User-Verwaltung (API + Frontend) | `picture-stage-uwy` | closed (`7kr` ✅ done; 2 Follow-ups offen: `52s`/`cxs`) |
 
 ### Verifikation für neue Sessions
 `bash scripts/verify-handover.sh` prüft den Übergabe-Stand
