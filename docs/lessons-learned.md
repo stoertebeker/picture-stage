@@ -116,3 +116,15 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Kontext:** Migration 0004 fügte `images.processing_status` (`pending`/`ready`/`failed`) hinzu. Bestandsbilder haben bereits Previews — sie dürfen nicht als „pending" erscheinen und erneut verarbeitet werden.
 **Problem:** Eine NOT-NULL-Spalte mit ORM-Default `pending` würde alle Altzeilen auf `pending` setzen → das Grid pollt endlos und der Worker würde theoretisch alles neu rendern.
 **Lösung/Regel:** Spalte mit transientem `server_default="ready"` anlegen (Backfill der Altzeilen), direkt danach `server_default` wieder droppen. Neue Inserts kommen dann über den ORM-Default (`pending`). Gleiches Muster wie der NULL-Default bei `tokens_valid_after` (0003): Migrations-Defaults steuern Bestandsdaten, ORM-Defaults steuern Neuzugänge — die beiden bewusst entkoppeln. Native PG-ENUM weiterhin explizit `create_type=False` + `.create(bind, checkfirst=True)` (Muster aus 0001).
+
+## CI/CD-Pipeline (2026-06-08)
+
+### Ein „grüner" Run kann ein übersprungener Run sein — Job-Liste prüfen, nicht nur den Gesamtstatus
+**Kontext:** Ein reiner Test-Fix-Commit (`030b327`, nur `tests/**` geändert) meldete in GitHub Actions „success" — in 8 Sekunden.
+**Problem:** Der `ci`-Job (lint + mypy + pytest) wurde wegen des Path-Filters (`dorny/paths-filter`) **übersprungen**, weil `tests/**` nicht in der `build`-Filterliste stand. Übersprungene Jobs zählen als Erfolg → der Gesamt-Run ist grün, obwohl pytest nie lief. Der Test-Fix war damit unverifiziert, der „Erfolg" trügerisch.
+**Lösung/Regel:** Bei verdächtig kurzen Läufen (Sekunden statt Minuten) immer `gh run view <id>` öffnen und die Job-Liste auf `- <job> in 0s` (= skipped) prüfen, statt dem grünen Gesamtstatus zu trauen. Und: Der Path-Filter, der CI gated, **muss `tests/**` enthalten** — ein Test-Commit, der die Tests nicht laufen lässt, ist schlimmer als kein Commit. `ci.yml` hat bewusst keinen `push`-Trigger (liefe sonst doppelt), nur `pull_request` + `workflow_call` → ein Test-only-Push auf `main` wird ausschließlich über den Filter in `docker-publish.yml` getriggert.
+
+### `EmailStr` lehnt `.local`/`.test` als reservierte Namen ab — Integration-Tests brauchen echte Domains
+**Kontext:** Die Signup-Enumeration-Integration-Tests (`42q`) posteten `@test.local`-Adressen an `POST /api/v1/auth/signup`. In CI: 3× `assert 422 == 201`.
+**Problem:** `SignupRequest.email` ist ein Pydantic `EmailStr` (via `email-validator`), das reservierte TLDs wie `.local`/`.test` zurückweist → die Request-Validierung wirft 422, **bevor** der Handler läuft. Die DB-Insert-basierten Fixtures (`make_user`) gehen direkt an `EmailStr` vorbei, deshalb fiel es lokal/in Unit-Tests (die `@example.com` nutzten) nicht auf — nur der echte HTTP-Flow stolperte.
+**Lösung/Regel:** In HTTP-Tests, die durch `EmailStr` gehen, **gültige Domains** (`@example.com`) verwenden, nie `@test.local`/`@foo.test`. Wenn ein „negativer" Test (z.B. zu kurzes Passwort → 422) zufällig grün ist, prüfen, ob der erwartete Statuscode wirklich aus dem getesteten Grund kommt und nicht aus einem vorgelagerten Validierungsfehler.
