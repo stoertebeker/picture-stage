@@ -11,7 +11,9 @@ class Settings(BaseSettings):
 
     app_name: str = "Picture-Stage"
     app_url: str = "http://localhost:8000"
-    environment: str = "development"
+    # Secure-by-default: production unless explicitly overridden (e.g. ENVIRONMENT=development).
+    # A forgotten override fails loud in dev/CI rather than silently shipping insecure prod.
+    environment: str = "production"
     secret_key: str = _INSECURE_SECRET_DEFAULT
     debug: bool = False
 
