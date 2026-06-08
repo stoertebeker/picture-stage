@@ -7,10 +7,27 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
 from app.auth.passwords import hash_password, hash_token
+from app.config import settings
 from app.db.models import Gallery, GalleryStatus, User
 from app.db.session import get_db
 
 router = APIRouter(prefix="/api/v1/galleries", tags=["sharing"])
+
+
+def build_share_url(request: Request, token: str) -> str:
+    """Build the public share URL for a gallery token.
+
+    Security: the share token is replayable and travels in the URL. Behind a
+    TLS-terminating proxy (Cloudflare/Caddy) the container only ever sees plain
+    HTTP, so ``request.base_url`` would yield ``http://`` and leak the token in
+    clear text (MITM, proxy logs). We therefore prefer the operator-configured
+    public ``APP_URL`` and, in production, force the scheme to https as a
+    defense-in-depth net should APP_URL be missing or misconfigured.
+    """
+    base = (settings.app_url or str(request.base_url)).rstrip("/")
+    if settings.environment.lower() == "production" and base.startswith("http://"):
+        base = "https://" + base[len("http://") :]
+    return f"{base}/g/{token}"
 
 
 class ShareCreateRequest(BaseModel):
@@ -52,9 +69,8 @@ async def create_share_link(
 
     await db.commit()
 
-    base_url = str(request.base_url).rstrip("/")
     return ShareResponse(
-        share_url=f"{base_url}/g/{token}",
+        share_url=build_share_url(request, token),
         has_password=body.password is not None,
     )
 

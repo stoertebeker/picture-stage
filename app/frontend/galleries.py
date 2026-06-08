@@ -29,6 +29,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.galleries.sharing import build_share_url
 from app.security.signing import sign_url
 from app.storage.base import StorageBackend
 from app.storage.dependencies import get_storage
@@ -116,8 +117,7 @@ def _build_context(
         "csrf_token": request.cookies.get("csrf_token", ""),
     }
     if gallery.share_token:
-        base_url = str(request.base_url).rstrip("/")
-        ctx["share_url"] = f"{base_url}/g/{gallery.share_token}"
+        ctx["share_url"] = build_share_url(request, gallery.share_token)
     ctx.update(extra)
     return ctx
 
@@ -314,8 +314,7 @@ async def create_share_link(
     await db.commit()
     await db.refresh(gallery)
 
-    base_url = str(request.base_url).rstrip("/")
-    share_url = f"{base_url}/g/{token}"
+    share_url = build_share_url(request, token)
 
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user, share_url=share_url)

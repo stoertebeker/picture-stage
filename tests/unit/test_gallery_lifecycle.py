@@ -127,7 +127,7 @@ class TestShareLinkAutoTransition:
             source = f.read()
 
         assert "if gallery.share_token:" in source
-        assert 'ctx["share_url"] = f"{base_url}/g/{gallery.share_token}"' in source
+        assert 'ctx["share_url"] = build_share_url(request, gallery.share_token)' in source
 
     def test_legacy_active_share_link_has_clear_fallback_copy(self) -> None:
         import json
