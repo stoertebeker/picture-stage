@@ -29,7 +29,7 @@ curl -O https://raw.githubusercontent.com/stoertebeker/picture-stage/main/docker
 curl -O https://raw.githubusercontent.com/stoertebeker/picture-stage/main/.env.example
 cp .env.example .env
 
-# 3. .env anpassen — mindestens diese Werte setzen:
+# 3. .env anpassen — diese Werte MÜSSEN von CHANGE_ME abweichen, sonst startet die App nicht:
 #    SECRET_KEY         (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(64))")
 #    HMAC_SECRET_KEY    (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 
