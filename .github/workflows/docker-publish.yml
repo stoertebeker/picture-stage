@@ -26,6 +26,7 @@ jobs:
             build:
               - 'app/**'
               - 'alembic/**'
+              - 'tests/**'
               - 'Dockerfile'
               - 'pyproject.toml'
               - '.github/workflows/docker-publish.yml'
