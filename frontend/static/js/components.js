@@ -210,6 +210,18 @@ function galleryManagerComponent() {
             this.galleryName = this.$root.dataset.galleryName || '';
         },
 
+        startEditing() {
+            this.editing = true;
+            // $nextTick with an arrow lives here in JS — the @alpinejs/csp build
+            // rejects arrow functions inside inline expressions.
+            this.$nextTick(() => this.$refs.nameInput.focus());
+        },
+
+        cancelEditing() {
+            this.editing = false;
+            this.galleryName = this.$root.dataset.galleryName || '';
+        },
+
         toggleImage(imageId) {
             const idx = this.selectedImages.indexOf(imageId);
             if (idx === -1) {

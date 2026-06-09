@@ -69,7 +69,7 @@
                     <div class="flex min-w-0 items-center gap-3">
                         <h1 class="truncate font-display text-3xl leading-tight text-text-primary sm:text-4xl"
                             x-show="!editing"
-                            @dblclick="editing = true; $nextTick(() => $refs.nameInput.focus())">
+                            @dblclick="startEditing()">
                             {{ gallery.name }}
                         </h1>
                         <div x-show="editing" class="flex min-w-0 flex-wrap items-center gap-2">
@@ -77,12 +77,12 @@
                                 x-ref="nameInput"
                                 type="text"
                                 x-model="galleryName"
-                                @keydown.escape="editing = false; galleryName = $root.dataset.galleryName"
+                                @keydown.escape="cancelEditing()"
                                 @keydown.enter.prevent="submitName()"
                                 class="min-w-0 rounded-md border border-border-strong bg-surface-raised px-3 py-2 font-display text-2xl text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus"
                             >
                             {% call button(variant='primary', size='sm', type='button', attrs={'@click': 'submitName()'}) %}{{ t('gallery.save') }}{% endcall %}
-                            {% call button(variant='ghost', size='sm', type='button', attrs={'@click': 'editing = false; galleryName = $root.dataset.galleryName'}) %}{{ t('gallery.cancel') }}{% endcall %}
+                            {% call button(variant='ghost', size='sm', type='button', attrs={'@click': 'cancelEditing()'}) %}{{ t('gallery.cancel') }}{% endcall %}
                         </div>
                         <form x-ref="renameForm"
                               class="hidden"
