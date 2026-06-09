@@ -60,18 +60,18 @@
         </button>
         {% endif %}
         {# Reset password (opens modal) #}
-        <button type="button" @click="pwValue = ''; $refs.pwModal.showModal()"
+        <button type="button" @click="pwValue = ''" data-open-dialog="pwModal-{{ user.id }}"
             class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-gray-700 dark:text-gray-200 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600">
             {{ t('admin.reset_password') }}
         </button>
         {# Delete (opens confirm modal) #}
-        <button type="button" @click="deleteConfirm = ''; $refs.deleteModal.showModal()"
+        <button type="button" @click="deleteConfirm = ''" data-open-dialog="deleteModal-{{ user.id }}"
             class="inline-flex items-center px-2.5 py-1.5 text-xs font-medium rounded-md text-white bg-red-600 hover:bg-red-700">
             {{ t('admin.delete_user') }}
         </button>
 
         {# --- Delete modal: requires typing the email to confirm --- #}
-        <dialog x-ref="deleteModal" @click.self="$refs.deleteModal.close()"
+        <dialog id="deleteModal-{{ user.id }}" data-backdrop-close
             class="rounded-lg p-0 backdrop:bg-black/50 w-full max-w-md bg-white dark:bg-gray-800">
             <div class="p-6 text-left">
                 <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{{ t('admin.delete_user_title') }}</h3>
@@ -80,12 +80,12 @@
                 <input type="text" x-model="deleteConfirm" autocomplete="off"
                     class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-4">
                 <div class="flex justify-end gap-2">
-                    <button type="button" @click="$refs.deleteModal.close()"
+                    <button type="button" data-close-dialog
                         class="px-3 py-1.5 text-sm rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{{ t('admin.cancel') }}</button>
                     <button type="button"
                         :disabled="deleteConfirm !== targetEmail"
                         :class="deleteConfirm === targetEmail ? 'bg-red-600 hover:bg-red-700 text-white' : 'bg-red-300 text-white cursor-not-allowed'"
-                        @click="$refs.deleteModal.close()"
+                        data-close-dialog
                         hx-post="/admin/users/{{ user.id }}/delete"
                         hx-target="#user-row-{{ user.id }}" hx-swap="outerHTML"
                         class="px-3 py-1.5 text-sm rounded-md font-medium">
@@ -96,19 +96,19 @@
         </dialog>
 
         {# --- Reset-password modal --- #}
-        <dialog x-ref="pwModal" @click.self="$refs.pwModal.close()"
+        <dialog id="pwModal-{{ user.id }}" data-backdrop-close
             class="rounded-lg p-0 backdrop:bg-black/50 w-full max-w-md bg-white dark:bg-gray-800">
             <form class="p-6 text-left"
                 hx-post="/admin/users/{{ user.id }}/reset-password"
                 hx-swap="none"
-                @submit="$refs.pwModal.close()">
+                data-close-dialog-on-success>
                 <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{{ t('admin.reset_password_title') }}</h3>
                 <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ t('admin.reset_password_info').replace('{email}', user.email) }}</p>
                 <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ t('admin.new_password_label') }}</label>
                 <input type="password" name="new_password" x-model="pwValue" minlength="8" required autocomplete="new-password"
                     class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-4">
                 <div class="flex justify-end gap-2">
-                    <button type="button" @click="$refs.pwModal.close()"
+                    <button type="button" data-close-dialog
                         class="px-3 py-1.5 text-sm rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{{ t('admin.cancel') }}</button>
                     <button type="submit"
                         :disabled="pwValue.length < 8"
