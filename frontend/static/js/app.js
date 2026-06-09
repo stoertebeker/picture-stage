@@ -49,6 +49,47 @@ if (typeof htmx !== 'undefined') {
     });
 }
 
+/* Delegated dialog control (u3s — CSP-safe).
+ *
+ * Replaces inline Alpine `$refs.x.showModal()` / `$el.closest('dialog').close()`
+ * expressions, which the @alpinejs/csp build cannot evaluate. One document-level
+ * listener also covers HTMX-swapped fragments without re-wiring.
+ *   - [data-open-dialog="id"]        → document.getElementById(id).showModal()
+ *   - [data-close-dialog]            → nearest enclosing <dialog>.close()
+ *   - <dialog data-backdrop-close>   → a click on the dialog itself (backdrop,
+ *                                      since content sits in a padded inner div)
+ */
+document.addEventListener('click', (e) => {
+    const opener = e.target.closest('[data-open-dialog]');
+    if (opener) {
+        document.getElementById(opener.dataset.openDialog)?.showModal();
+        return;
+    }
+    const closer = e.target.closest('[data-close-dialog]');
+    if (closer) {
+        closer.closest('dialog')?.close();
+        return;
+    }
+    if (e.target.matches('dialog[data-backdrop-close]')) {
+        e.target.close();
+    }
+});
+
+/* Close a dialog after a successful HTMX request (replaces inline hx-on and
+ * @submit="$refs.x.close()"). Put [data-close-dialog-on-success] on the form;
+ * a form is also reset so it's clean when reopened.
+ */
+document.addEventListener('htmx:afterRequest', (e) => {
+    if (!(e.detail && e.detail.successful)) return;
+    const el = e.target.closest('[data-close-dialog-on-success]');
+    if (!el) return;
+    el.closest('dialog')?.close();
+    if (el.tagName === 'FORM') el.reset();
+    // Optionally remove an element (e.g. an empty-state placeholder) on success.
+    const removeId = el.dataset.removeOnSuccess;
+    if (removeId) document.getElementById(removeId)?.remove();
+});
+
 /* Toast system (ps-ux-13).
  *
  * Triggered by:

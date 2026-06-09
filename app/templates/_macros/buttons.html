@@ -13,7 +13,7 @@ Usage:
 
   {% call button(variant='ghost', icon_only=true,
                  attrs={'aria-label': t('common.close'),
-                        '@click': '$el.closest(\'dialog\').close()'}) %}
+                        'data-close-dialog': ''}) %}
     <svg ...>...</svg>
   {% endcall %}
 

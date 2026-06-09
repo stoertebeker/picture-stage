@@ -14,7 +14,7 @@
                     <div class="text-xs uppercase text-text-muted">{{ t('nav.brand') }}</div>
                     <h1 class="font-display text-3xl leading-tight text-text-primary sm:text-4xl">{{ t('dashboard.my_galleries') }}</h1>
                 </div>
-                {% call button(variant='primary', attrs={'@click': '$refs.createModal.showModal()'}) %}
+                {% call button(variant='primary', attrs={'data-open-dialog': 'createModal'}) %}
                     <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                     </svg>
@@ -76,7 +76,7 @@
                     </div>
                     <h2 class="font-display text-3xl text-text-primary">{{ t('dashboard.no_galleries_title') }}</h2>
                     <p class="mx-auto mt-3 max-w-xl text-sm text-text-muted">{{ t('dashboard.no_galleries_text') }}</p>
-                    {% call button(variant='primary', extra_class='mt-6', attrs={'@click': '$refs.createModal.showModal()'}) %}
+                    {% call button(variant='primary', extra_class='mt-6', attrs={'data-open-dialog': 'createModal'}) %}
                         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
                         </svg>
@@ -95,7 +95,8 @@
           hx-post="/dashboard/galleries"
           hx-target="#gallery-grid"
           hx-swap="beforeend"
-          hx-on::after-request="if (event.detail.successful) { document.getElementById('dashboard-empty-state')?.remove(); this.closest('dialog').close(); this.reset(); }"
+          data-close-dialog-on-success
+          data-remove-on-success="dashboard-empty-state"
           class="flex flex-col gap-4">
         {{ csrf_input(csrf_token) }}
         {% call field(label=t('dashboard.gallery_name_label'), name='name', required=true) %}
@@ -107,7 +108,7 @@
             {{ t('dashboard.create_hint') }}
         </p>
         {% call modal_footer() %}
-            {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
+            {% call button(variant='ghost', attrs={'data-close-dialog': ''}) %}
                 {{ t('dashboard.cancel') }}
             {% endcall %}
             {% call button(variant='primary', type='submit') %}

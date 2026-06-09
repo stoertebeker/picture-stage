@@ -231,7 +231,8 @@ function galleryManagerComponent() {
         openPreview(src, filename) {
             this.previewSrc = src;
             this.previewFilename = filename;
-            this.$refs.previewModal.showModal();
+            // The modal macro no longer carries x-ref (u3s); open by id.
+            document.getElementById('previewModal').showModal();
         },
 
         submitName() {

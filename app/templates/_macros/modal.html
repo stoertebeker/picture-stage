@@ -9,7 +9,7 @@ Usage:
     <form …>
       …
       {{ modal_footer() }}
-        {% call button(variant='ghost', attrs={'@click': '$el.closest(\'dialog\').close()'}) %}
+        {% call button(variant='ghost', attrs={'data-close-dialog': ''}) %}
           {{ t('common.cancel') }}
         {% endcall %}
         {% call button(variant='primary', type='submit') %}
@@ -20,17 +20,22 @@ Usage:
   {% endcall %}
 
   Open from anywhere:
-  {% call button(attrs={'@click': '$refs.createModal.showModal()'}) %}…{% endcall %}
+  {% call button(attrs={'data-open-dialog': 'createModal'}) %}…{% endcall %}
+
+Open/close are driven by the delegated listener in app.js (CSP-safe; no inline
+$refs/$el expressions): [data-open-dialog="ref"] calls showModal() on #ref,
+[data-close-dialog] closes the nearest enclosing <dialog>.
 
 Mechanics:
 - Built on the native <dialog> element. `dialog.showModal()` makes the rest
   of the document inert and traps Tab focus inside the dialog automatically
   (modern browsers, including Brave/Chromium 148 we test on).
 - ESC closes natively via the <dialog>'s native cancel event.
-- Backdrop-click close uses `@click.self="$el.close()"` — relies on the
-  <dialog> having no padding (p-0) while inner content is wrapped in a
-  div with its own padding, so the <dialog> element itself is only ever
-  hit by clicks on the backdrop region.
+- Backdrop-click close uses `data-backdrop-close` on the <dialog>; the app.js
+  listener closes it when the click lands on the <dialog> element itself. This
+  relies on the <dialog> having no padding (p-0) while inner content is wrapped
+  in a div with its own padding, so the element itself is only ever hit by
+  clicks on the backdrop region.
 
 Sizes:
 - sm  → max-w-md  (forms, confirms)
@@ -53,9 +58,8 @@ A11y:
 
 {%- macro modal(ref, title='', size='md', extra_class='', attrs={}) -%}
   {%- set size_cls = _size_class.get(size, _size_class['md']) -%}
-  <dialog x-ref="{{ ref }}"
-          id="{{ ref }}"
-          @click.self="$el.close()"
+  <dialog id="{{ ref }}"
+          data-backdrop-close
           aria-labelledby="{{ ref }}-title"
           class="p-0 rounded-lg shadow-lg bg-surface-raised text-text-primary border border-border-subtle backdrop:bg-black/60 backdrop:backdrop-blur-sm w-full {{ size_cls }} {{ extra_class }}"
           {%- for k, v in attrs.items() %} {{ k }}="{{ v }}"{% endfor %}>
@@ -64,7 +68,7 @@ A11y:
       <header class="flex items-center justify-between gap-3">
         <h2 id="{{ ref }}-title" class="text-lg font-semibold">{{ title }}</h2>
         <button type="button"
-                @click="$el.closest('dialog').close()"
+                data-close-dialog
                 aria-label="{{ 'Schließen' }}"
                 class="text-text-muted hover:text-text-primary transition-colors p-1 -m-1 rounded focus:outline-none focus-visible:ring focus-visible:ring-focus">
           <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
