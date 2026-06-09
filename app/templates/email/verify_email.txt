@@ -1,0 +1,14 @@
+E-Mail-Adresse bestätigen
+=========================
+
+Willkommen bei Picture-Stage! Bitte bestätige deine E-Mail-Adresse,
+um deine Registrierung abzuschließen:
+
+  {{ verify_url }}
+
+Nach der Bestätigung wird dein Konto von einem Administrator freigegeben.
+
+Wenn du dich nicht registriert hast, kannst du diese E-Mail ignorieren.
+
+--
+Picture-Stage — Self-hosted Photo Proofing

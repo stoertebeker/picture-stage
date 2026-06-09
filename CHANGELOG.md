@@ -7,7 +7,7 @@ All notable changes to Picture-Stage are documented in this file.
 ### Security
 
 - **Signup no longer reveals whether an account exists** (`picture-stage-42q`). Previously a repeated registration with an already-known email returned HTTP 409 with an explicit hint (account enumeration / information disclosure), on both the web form and the JSON API. A signup with an existing email (as user *or* pending) now returns the same neutral success response as a fresh one, creates no new pending signup, and never overwrites an existing account/password (which would otherwise be an account-takeover vector). Best-effort timing equalization (matching bcrypt cost) reduces the existing-vs-new timing signal.
-  - **BREAKING (API):** `POST /api/v1/auth/signup` no longer returns `verification_token` in the response body — emitting it for fresh signups but `null` for existing emails would itself leak existence. The token is persisted server-side and will be delivered by email (`ebm.7`). Clients that read the token from the response must change.
+  - **BREAKING (API):** `POST /api/v1/auth/signup` no longer returns `verification_token` in the response body — emitting it for fresh signups but `null` for existing emails would itself leak existence. The token is persisted server-side and is delivered by email (`picture-stage-x8t`). Clients that read the token from the response must change.
 - **Stateless JWTs are invalidated on password reset and account lock** (`picture-stage-7kr`). Previously an already-issued access token stayed valid for up to 24 h after an admin reset a user's password or disabled the account. Tokens now carry an `iat` claim and are rejected once the per-user `tokens_valid_after` cut-off (set on reset/lock) is passed.
   - No mass-logout on upgrade: the cut-off defaults to NULL, so existing tokens keep working until the next reset/lock of that user.
   - The check compares server-side timestamps only, so client clock skew is irrelevant. Multi-instance deployments should keep server clocks in sync (NTP).
@@ -26,6 +26,7 @@ All notable changes to Picture-Stage are documented in this file.
 
 ### Added
 
+- **Verification email on signup** (`picture-stage-x8t`). A new registrant now receives an email with a confirmation link (built from `APP_URL`, HTTPS in production; the plaintext token travels in the link while the DB keeps only its SHA-256+salt hash). The mail is only sent on the genuine new-signup path, so it never fires for an already-registered email — keeping the account-enumeration guard (`picture-stage-42q`) intact. Config-free and gated by `SEND_VERIFICATION_EMAIL_ENABLED` (default true) plus a configured `SMTP_HOST`; delivery failures are logged and never abort a signup. Verification stays orthogonal to admin approval.
 - v0.4 Frontend: Complete Jinja2 templates, HTMX router, Alpine.js interactivity, CSRF protection, Cookie-based auth, i18n (DE/EN)
 - v0.3 Compliance: DSGVO pages + cookie banner, audit logging with CSV export, backup/restore CLI, encryption for sensitive fields
 - v0.2 Features: Gallery lifecycle (draft → shared → completed → archived), expiry dates with guest enforcement, watermark customization

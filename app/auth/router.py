@@ -11,7 +11,7 @@ from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRe
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
-from app.notifications.service import notify_admins_signup
+from app.notifications.service import notify_admins_signup, send_verification_email
 from app.security.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -57,7 +57,11 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
     except Exception:
         logger.exception("Failed to send signup_pending notification to admins")
 
-    # TODO: send verification email via SMTP (issue ebm.7)
+    try:
+        await send_verification_email(body.email, verification_token, db)
+    except Exception:
+        logger.exception("Failed to send verification email")
+
     return SignupResponse(message="Signup received. Please verify your email.")
 
 

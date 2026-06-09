@@ -291,3 +291,90 @@ class TestNotifyAdminsSignup:
         from app.notifications.service import notify_admins_signup
 
         assert callable(notify_admins_signup)
+
+
+class TestSendVerificationEmail:
+    """Verify the config-free verification-email path (picture-stage-x8t)."""
+
+    def test_function_exists(self) -> None:
+        from app.notifications.service import send_verification_email
+
+        assert callable(send_verification_email)
+
+    def test_subject_and_templates_present(self) -> None:
+        from app.notifications.service import SUBJECT_MAP
+
+        assert "verify_email" in SUBJECT_MAP
+        assert Path("app/templates/email/verify_email.html").exists()
+        assert Path("app/templates/email/verify_email.txt").exists()
+
+    @pytest.mark.asyncio
+    async def test_sends_to_user_with_token_link(self) -> None:
+        from app.notifications import service
+
+        with (
+            patch.object(service.settings, "send_verification_email_enabled", True),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.settings, "app_url", "https://picture.example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.send_verification_email("user@example.com", "tok-abc123", MagicMock())
+
+        assert send_mock.await_count == 1
+        msg = send_mock.await_args.args[0]
+        assert msg["To"] == "user@example.com"
+        # Plaintext token must reach the user via an HTTPS link built from app_url.
+        body = msg.get_payload()[0].get_payload(decode=True).decode()
+        assert "https://picture.example.com/verify-email/tok-abc123" in body
+
+    @pytest.mark.asyncio
+    async def test_disabled_by_setting(self) -> None:
+        from app.notifications import service
+
+        with (
+            patch.object(service.settings, "send_verification_email_enabled", False),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.send_verification_email("user@example.com", "tok", MagicMock())
+
+        send_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_smtp_host_skips(self) -> None:
+        from app.notifications import service
+
+        with (
+            patch.object(service.settings, "send_verification_email_enabled", True),
+            patch.object(service.settings, "smtp_host", ""),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.send_verification_email("user@example.com", "tok", MagicMock())
+
+        send_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_send_failure_does_not_propagate(self) -> None:
+        from app.notifications import service
+
+        send_mock = AsyncMock(side_effect=RuntimeError("smtp down"))
+        with (
+            patch.object(service.settings, "send_verification_email_enabled", True),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.aiosmtplib, "send", new=send_mock),
+        ):
+            # Must swallow the error — a signup must never fail on mail delivery.
+            await service.send_verification_email("user@example.com", "tok", MagicMock())
+
+        assert send_mock.await_count == 1
+
+    @pytest.mark.parametrize("path", ["app/auth/router.py", "app/frontend/auth.py"])
+    def test_both_signup_paths_wire_verification_email(self, path: str) -> None:
+        with open(path) as f:
+            source = f.read()
+        # Wired with the freshly generated plaintext token, failure-isolated.
+        assert "send_verification_email(" in source
+        assert "verification_token" in source
+        assert "Failed to send verification email" in source
+        # The dead ebm.7 TODO marker must be gone.
+        assert "TODO: send verification email" not in source

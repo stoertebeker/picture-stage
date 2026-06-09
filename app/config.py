@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # sent directly to every admin's address. Requires smtp_host to be set.
     notify_admins_on_signup: bool = True
 
+    # Send a verification email to the registrant on signup. Config-free (no
+    # NotificationConfig opt-in), gated only by this flag and a configured
+    # smtp_host. The link carries the plaintext token (DB stores it hashed).
+    send_verification_email_enabled: bool = True
+
     watermark_text: str = "PREVIEW · {gallery_id}"
     watermark_position: str = "bottom-right"
     watermark_opacity: float = 0.3

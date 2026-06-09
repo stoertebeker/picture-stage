@@ -21,6 +21,7 @@ _jinja_env = Environment(loader=FileSystemLoader(str(TEMPLATE_DIR)), autoescape=
 SUBJECT_MAP = {
     "gallery_completed": "Bewertung abgeschlossen - {{ gallery_name }}",
     "signup_pending": "Neue Registrierung - {{ email }}",
+    "verify_email": "E-Mail-Adresse bestätigen - Picture-Stage",
 }
 
 
@@ -102,6 +103,54 @@ async def notify_admins_signup(pending_email: str, db: AsyncSession) -> None:
             )
         except Exception as exc:
             logger.warning("signup_pending notification to admin failed: %s", exc)
+
+
+async def send_verification_email(email: str, token: str, db: AsyncSession) -> None:
+    """Email a freshly registered user a link to confirm their address.
+
+    Config-free like notify_admins_signup(): there is no per-user opt-in UI at
+    signup time, so this bypasses NotificationConfig and is gated only by the
+    send_verification_email_enabled setting plus a configured SMTP host. The
+    verification link is built from app_url (the HTTPS source of truth) and
+    carries the *plaintext* token — the DB stores only its SHA-256+salt hash.
+    Failures are logged and never propagate: a signup must succeed even when
+    mail delivery is down. Callers pass the token from the same neutral
+    new-signup path only, so this never fires for an already-registered email
+    (keeps the account-enumeration guard, picture-stage-42q, intact).
+
+    db is accepted for signature symmetry with the other notify helpers and to
+    allow future delivery tracking; it is currently unused.
+    """
+    if not settings.send_verification_email_enabled or not settings.smtp_host:
+        return
+
+    payload = {"verify_url": f"{settings.app_url}/verify-email/{token}"}
+    try:
+        html_body = _jinja_env.get_template("verify_email.html").render(**payload)
+        text_body = _jinja_env.get_template("verify_email.txt").render(**payload)
+        subject = _jinja_env.from_string(SUBJECT_MAP["verify_email"]).render(**payload)
+    except Exception:
+        logger.exception("Failed to render verify_email templates")
+        return
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = settings.smtp_from
+        msg["To"] = email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+        await aiosmtplib.send(
+            msg,
+            hostname=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_user or None,
+            password=settings.smtp_password or None,
+            start_tls=settings.smtp_starttls,
+        )
+    except Exception as exc:
+        logger.warning("verification email to %s failed: %s", email, exc)
 
 
 async def _send_email(
