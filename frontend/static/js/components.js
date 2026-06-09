@@ -1,14 +1,16 @@
 /* Alpine.js component registry for picture-stage.
  *
- * Components are exposed as global functions so existing templates can keep
- * the `x-data="componentName()"` syntax. Initial state that depends on
- * server-rendered values is read from data-* attributes on the x-data root
- * element during init(). Never put a `<script>` block inside a Jinja template
- * (CSP blocks it). See docs/design/build.md.
+ * Components are registered via Alpine.data() inside the `alpine:init` event,
+ * so templates use the bare `x-data="componentName"` syntax (no parentheses).
+ * This pattern is required by the @alpinejs/csp build (no eval of inline
+ * expressions) and works identically under the standard build. Initial state
+ * that depends on server-rendered values is read from data-* attributes on the
+ * x-data root element during init(). Never put a `<script>` block inside a
+ * Jinja template (CSP blocks it). See docs/design/build.md.
  */
 
 // Upload zone for gallery detail. No server-rendered initial state.
-window.uploadZone = function () {
+function uploadZoneComponent() {
     return {
         dragOver: false,
         uploading: false,
@@ -42,8 +44,8 @@ window.uploadZone = function () {
 };
 
 // Guest viewer: image grid, lightbox, selection/favorite toggling, complete flow.
-// Initial state read from data-* attributes on the root <div x-data="guestViewer()">.
-window.guestViewer = function () {
+// Initial state read from data-* attributes on the root <div x-data="guestViewer">.
+function guestViewerComponent() {
     return {
         token: '',
         sessionId: '',
@@ -196,7 +198,7 @@ window.guestViewer = function () {
 
 // Gallery manager: rename, bulk selection, image preview modal.
 // Initial state read from data-gallery-name on root.
-window.galleryManager = function () {
+function galleryManagerComponent() {
     return {
         editing: false,
         galleryName: '',
@@ -238,4 +240,13 @@ window.galleryManager = function () {
             this.$refs.renameForm.requestSubmit();
         },
     };
-};
+}
+
+// Register components before Alpine boots. components.js is loaded before
+// alpine.min.js (see base.html / guest_base.html), so the alpine:init event
+// fires after this listener is attached.
+document.addEventListener('alpine:init', () => {
+    Alpine.data('uploadZone', uploadZoneComponent);
+    Alpine.data('guestViewer', guestViewerComponent);
+    Alpine.data('galleryManager', galleryManagerComponent);
+});

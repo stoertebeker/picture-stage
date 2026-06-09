@@ -17,7 +17,8 @@ def test_guest_viewer_has_alpine_state():
     """Guest viewer template has Alpine.js x-data state."""
     viewer_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "viewer.html").read_text()
     assert "x-data" in viewer_html
-    assert "guestViewer()" in viewer_html
+    # Alpine.data() registration → bare component name, no parentheses (u3s.1).
+    assert 'x-data="guestViewer"' in viewer_html
 
 
 def test_guest_viewer_has_lightbox():

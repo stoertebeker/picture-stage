@@ -4,7 +4,7 @@
 {% block gallery_name %}{{ gallery_name }}{% endblock %}
 
 {% block content %}
-<div x-data="guestViewer()"
+<div x-data="guestViewer"
      data-token="{{ token }}"
      data-session-id="{{ session_id }}"
      data-images='{{ images | tojson }}'
