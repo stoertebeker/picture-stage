@@ -1,9 +1,8 @@
 {% from "_macros/buttons.html" import button %}
 
-<div x-data='{ "deleteConfirmName": "", "galleryName": {{ gallery.name | tojson }} }'
-     {% if delete_error is defined and delete_error %}x-init="$nextTick(() => $refs.deleteModal.showModal())"{% endif %}>
+<div x-data='{ "deleteConfirmName": "", "galleryName": {{ gallery.name | tojson }} }'>
     <button type="button"
-            @click="$refs.deleteModal.showModal(); deleteConfirmName = ''"
+            @click="deleteConfirmName = ''" data-open-dialog="deleteModal"
             class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-status-danger text-status-danger hover:bg-surface-raised"
             aria-label="{{ t('gallery.delete_button') }}">
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -11,9 +10,10 @@
         </svg>
     </button>
 
-    <dialog x-ref="deleteModal"
-            class="w-full max-w-md rounded-md border border-border-subtle bg-surface-raised p-0 shadow-2xl backdrop:bg-black/70"
-            @click.self="$refs.deleteModal.close()">
+    <dialog id="deleteModal"
+            data-backdrop-close
+            {% if delete_error is defined and delete_error %}data-auto-open{% endif %}
+            class="w-full max-w-md rounded-md border border-border-subtle bg-surface-raised p-0 shadow-2xl backdrop:bg-black/70">
         <div class="p-6">
             <h3 class="text-lg font-semibold text-status-danger">{{ t('gallery.delete_title') }}</h3>
             <p class="mt-2 text-sm text-text-muted">{{ t('gallery.delete_warning') }}</p>
@@ -36,7 +36,7 @@
                        placeholder="{{ t('gallery.delete_confirm_placeholder') }}"
                        class="mb-4 w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-sm text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus">
                 <div class="flex items-center justify-end gap-3">
-                    {% call button(variant='ghost', size='sm', type='button', attrs={'@click': '$refs.deleteModal.close()'}) %}{{ t('gallery.cancel') }}{% endcall %}
+                    {% call button(variant='ghost', size='sm', type='button', attrs={'data-close-dialog': ''}) %}{{ t('gallery.cancel') }}{% endcall %}
                     <button type="submit"
                             :disabled="deleteConfirmName !== galleryName"
                             :class="deleteConfirmName === galleryName

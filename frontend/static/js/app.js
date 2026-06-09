@@ -75,6 +75,23 @@ document.addEventListener('click', (e) => {
     }
 });
 
+/* Auto-open a <dialog data-auto-open> (e.g. to re-show a form that came back
+ * with server-side validation errors). Replaces inline
+ * x-init="$nextTick(() => $refs.x.showModal())". Runs on load and after HTMX
+ * swaps that may bring in a flagged dialog.
+ */
+function openAutoDialogs() {
+    document.querySelectorAll('dialog[data-auto-open]').forEach((d) => {
+        if (!d.open) d.showModal();
+    });
+}
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', openAutoDialogs);
+} else {
+    openAutoDialogs();
+}
+document.addEventListener('htmx:afterSwap', openAutoDialogs);
+
 /* Close a dialog after a successful HTMX request (replaces inline hx-on and
  * @submit="$refs.x.close()"). Put [data-close-dialog-on-success] on the form;
  * a form is also reset so it's clean when reopened.
