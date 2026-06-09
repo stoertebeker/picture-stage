@@ -23,7 +23,7 @@ RUN mkdir -p js fonts && \
     curl -fsSL -o js/htmx.min.js \
         "https://unpkg.com/htmx.org@${HTMX_VERSION}/dist/htmx.min.js" && \
     curl -fsSL -o js/alpine.min.js \
-        "https://cdn.jsdelivr.net/npm/alpinejs@${ALPINE_VERSION}/dist/cdn.min.js"
+        "https://cdn.jsdelivr.net/npm/@alpinejs/csp@${ALPINE_VERSION}/dist/cdn.min.js"
 
 # Web fonts via Fontsource (WOFF2, self-hostable, OFL-licensed).
 RUN curl -fsSL -o fonts/fraunces-variable.woff2 \

@@ -74,10 +74,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "default-src 'self'",
             "img-src 'self' blob: data:",
             "style-src 'self' 'unsafe-inline'",
-            # 'unsafe-eval' required by Alpine.js standard build (Function ctor).
-            # TODO: migrate to @alpinejs/csp build + Alpine.data() registrations
-            # in ps-ux-40 (hardening pass) and drop 'unsafe-eval' again.
-            "script-src 'self' 'unsafe-eval'",
+            # No 'unsafe-eval': the @alpinejs/csp build evaluates expressions
+            # without the Function constructor (all inline expressions migrated
+            # to Alpine.data() registrations + delegated listeners in u3s).
+            "script-src 'self'",
             "frame-ancestors 'none'",
             "base-uri 'self'",
             "form-action 'self'",
