@@ -31,6 +31,12 @@ function uploadZoneComponent() {
             }
         },
 
+        // Math.round lives here in JS — globals are forbidden in inline
+        // expressions under the @alpinejs/csp build.
+        onProgress(event) {
+            this.uploadProgress = Math.round((event.detail.loaded / event.detail.total) * 100);
+        },
+
         startUpload() {
             this.uploading = true;
             this.uploadProgress = 0;
@@ -286,6 +292,38 @@ function cookieBannerComponent() {
     };
 }
 
+// Audit-log event-type filter. window.location navigation lives here in JS
+// (not in an inline expression, which the @alpinejs/csp build forbids).
+function auditFilterComponent() {
+    return {
+        navigate(value) {
+            const base = this.$root.dataset.auditUrl || '';
+            window.location.href = value ? `${base}?event_type=${encodeURIComponent(value)}` : base;
+        },
+    };
+}
+
+// Share-URL copy button. navigator.clipboard + setTimeout live here in JS.
+function shareUrlComponent() {
+    return {
+        copied: false,
+        shareUrl: '',
+
+        init() {
+            this.shareUrl = this.$root.dataset.shareUrl || '';
+        },
+
+        copy() {
+            navigator.clipboard.writeText(this.shareUrl).then(() => {
+                this.copied = true;
+                setTimeout(() => {
+                    this.copied = false;
+                }, 2000);
+            });
+        },
+    };
+}
+
 // Register components before Alpine boots. components.js is loaded before
 // alpine.min.js (see base.html / guest_base.html), so the alpine:init event
 // fires after this listener is attached.
@@ -295,4 +333,6 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('galleryManager', galleryManagerComponent);
     Alpine.data('langSwitcher', langSwitcherComponent);
     Alpine.data('cookieBanner', cookieBannerComponent);
+    Alpine.data('auditFilter', auditFilterComponent);
+    Alpine.data('shareUrl', shareUrlComponent);
 });

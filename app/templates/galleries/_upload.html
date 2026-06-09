@@ -7,7 +7,7 @@
           hx-swap="innerHTML"
           hx-encoding="multipart/form-data"
           x-ref="uploadForm"
-          @htmx:xhr:progress.window="uploadProgress = Math.round((event.detail.loaded / event.detail.total) * 100)"
+          @htmx:xhr:progress.window="onProgress($event)"
           @htmx:after-request.window="uploadProgress = 0; uploading = false">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 

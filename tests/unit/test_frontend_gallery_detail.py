@@ -66,7 +66,11 @@ def test_gallery_detail_escapes_alpine_embedded_values() -> None:
     delete = _template("_delete_modal.html")
 
     assert "| tojson" in image_grid
-    assert "| tojson" in share
+    # _share_modal now passes the share URL via a data-* attribute: Jinja
+    # autoescapes attribute values and Alpine reads it through $root.dataset
+    # (as data, never evaluated as code) — u3s CSP migration.
+    assert 'data-share-url="{{ share_url' in share
+    assert 'x-data="shareUrl"' in share
     assert "gallery.name | tojson" in delete
 
 

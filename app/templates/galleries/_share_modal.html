@@ -14,7 +14,7 @@
     </div>
 
     {% if has_share_token %}
-    <div x-data='{ "copied": false, "shareUrl": {{ (share_url | default("")) | tojson }} }' class="mt-4">
+    <div x-data="shareUrl" data-share-url="{{ share_url | default('') }}" class="mt-4">
         {% if share_url is defined and share_url %}
         <div class="flex items-center gap-2">
             <input type="text"
@@ -22,7 +22,7 @@
                    :value="shareUrl"
                    class="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface-base px-3 py-2 font-mono text-xs text-text-secondary">
             <button type="button"
-                    @click="navigator.clipboard.writeText(shareUrl).then(() => { $data.copied = true; setTimeout(() => $data.copied = false, 2000) })"
+                    @click="copy()"
                     class="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent text-text-on-accent hover:bg-accent-hover"
                     aria-label="{{ t('gallery.share_copy') }}">
                 <svg x-show="!copied" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
