@@ -242,6 +242,37 @@ function galleryManagerComponent() {
     };
 }
 
+// Language switcher in the top nav. Reads the active language from the `lang`
+// cookie. document.* access lives here in JS (not in an inline expression),
+// which the @alpinejs/csp build forbids in templates.
+function langSwitcherComponent() {
+    return {
+        currentLang: 'de',
+
+        init() {
+            const match = document.cookie.match(/lang=(\w+)/);
+            this.currentLang = (match && match[1]) || 'de';
+        },
+    };
+}
+
+// Cookie-consent banner. localStorage access lives here in JS for the same
+// CSP reason as langSwitcher.
+function cookieBannerComponent() {
+    return {
+        show: false,
+
+        init() {
+            this.show = !localStorage.getItem('cookie_consent');
+        },
+
+        accept() {
+            localStorage.setItem('cookie_consent', 'accepted');
+            this.show = false;
+        },
+    };
+}
+
 // Register components before Alpine boots. components.js is loaded before
 // alpine.min.js (see base.html / guest_base.html), so the alpine:init event
 // fires after this listener is attached.
@@ -249,4 +280,6 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('uploadZone', uploadZoneComponent);
     Alpine.data('guestViewer', guestViewerComponent);
     Alpine.data('galleryManager', galleryManagerComponent);
+    Alpine.data('langSwitcher', langSwitcherComponent);
+    Alpine.data('cookieBanner', cookieBannerComponent);
 });
