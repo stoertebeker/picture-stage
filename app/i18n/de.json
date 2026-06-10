@@ -203,6 +203,8 @@
   },
   "guest": {
     "selected_of_total": "{selected} / {total} ausgewählt, {favorited} Favoriten",
+    "sort_by_label": "Sortieren nach",
+    "sort_dir_label": "Sortierrichtung",
     "sort_order": "Reihenfolge",
     "sort_filename": "Dateiname",
     "sort_exif_date": "Aufnahmedatum",

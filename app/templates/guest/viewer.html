@@ -46,6 +46,7 @@
                             hx-swap="innerHTML"
                             hx-include="[name='sort_dir'],[name='filter'],[name='session_id']"
                             name="sort_by"
+                            aria-label="{{ t('guest.sort_by_label') }}"
                             class="text-xs px-3 py-1.5 border border-border-subtle hover:border-border-strong rounded-md bg-surface-base text-text-secondary focus:outline-none focus-visible:ring focus-visible:ring-focus">
                         <option value="sort_order" {% if sort_by == "sort_order" %}selected{% endif %}>{{ t('guest.sort_order') }}</option>
                         <option value="filename" {% if sort_by == "filename" %}selected{% endif %}>{{ t('guest.sort_filename') }}</option>
@@ -56,6 +57,7 @@
                             hx-swap="innerHTML"
                             hx-include="[name='sort_by'],[name='filter'],[name='session_id']"
                             name="sort_dir"
+                            aria-label="{{ t('guest.sort_dir_label') }}"
                             class="text-xs px-3 py-1.5 border border-border-subtle hover:border-border-strong rounded-md bg-surface-base text-text-secondary focus:outline-none focus-visible:ring focus-visible:ring-focus">
                         <option value="asc" {% if sort_dir == "asc" %}selected{% endif %}>{{ t('guest.sort_asc') }}</option>
                         <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>{{ t('guest.sort_desc') }}</option>
