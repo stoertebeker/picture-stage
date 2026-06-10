@@ -129,3 +129,17 @@ def test_nav_settings_i18n_key_exists():
     for locale in ("de", "en"):
         data = json.loads((PROJECT_ROOT / "app" / "i18n" / f"{locale}.json").read_text())
         assert data["nav"]["settings"]
+
+
+def test_guest_pages_have_theme_toggle():
+    """dd1: guest viewer + guest_base (expired page) ship a theme toggle
+    button using the generic [data-theme-toggle] wiring from app.js, with
+    the p07.1 ARIA pattern and both theme-label icon spans."""
+    for parts in (("guest", "viewer.html"), ("guest_base.html",)):
+        html = (PROJECT_ROOT / "app" / "templates").joinpath(*parts).read_text()
+        assert "data-theme-toggle" in html, f"theme toggle missing in {parts}"
+        toggle = html[html.index("data-theme-toggle") :]
+        assert 'aria-pressed="true"' in toggle, parts
+        assert "nav.toggle_theme" in html, parts
+        assert 'data-theme-label="light"' in toggle, parts
+        assert 'data-theme-label="dark"' in toggle, parts
