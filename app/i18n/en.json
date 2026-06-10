@@ -220,6 +220,7 @@
     "complete_text": "You have selected {selected} of {total} images and marked {favorited} as favorites. No further changes can be made after completing.",
     "complete_cancel": "Cancel",
     "complete_confirm": "Complete review",
+    "open_image": "Open image",
     "lightbox_selected": "Selected",
     "lightbox_select": "Select",
     "lightbox_favorited": "Favorite",

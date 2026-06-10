@@ -220,6 +220,7 @@
     "complete_text": "Du hast {selected} von {total} Bildern ausgewählt und {favorited} als Favoriten markiert. Nach dem Abschließen können keine weiteren Änderungen vorgenommen werden.",
     "complete_cancel": "Abbrechen",
     "complete_confirm": "Bewertung abschließen",
+    "open_image": "Bild öffnen",
     "lightbox_selected": "Ausgewählt",
     "lightbox_select": "Auswählen",
     "lightbox_favorited": "Favorit",

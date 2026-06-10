@@ -5,6 +5,7 @@
          :class="images[{{ loop.index0 }}]?.selected ? 'ring-2 ring-inset ring-accent' : ''">
         <button type="button"
                 @click="openLightbox({{ loop.index0 }})"
+                aria-label="{{ t('guest.open_image') }}: {{ img.filename }}"
                 class="absolute inset-0 focus:outline-none focus-visible:ring focus-visible:ring-focus">
             <img src="{{ img.thumb_md_url or img.thumb_sm_url }}"
                  alt="{{ img.filename }}"
