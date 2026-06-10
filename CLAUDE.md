@@ -118,12 +118,18 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-10
-**Wachwechsel-Tag:** `handover-2026-06-10-a11y` (zeigt auf `92e80a7`, letzter grüner Stand: A11y-Voll-Audit + Guest-Fixes `p07.4/5/6` — **deployed + prod-abgenommen 2026-06-10 abends**, Build `?v=20260610192441`)
-**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP ist seit 2026-06-08 produktiv konfiguriert (Mailjet) — Mailversand prod-verifiziert.**
+**Datum:** 2026-06-10 (abends)
+**Wachwechsel-Tag:** `handover-2026-06-10-ux` (zeigt auf `00e9b94`, letzter grüner Stand: p07 komplett verifiziert; dxj/dd1/qdz.15 umgesetzt + gebaut, **Abnahmen offen**; CI-Filter-Fix `frontend/**`)
+**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod läuft auf Build `?v=20260610200248`** (p07-Stand) — der neuere `:dev`-Build mit dxj/dd1/Spike/CI-Fix liegt auf Docker Hub, **noch nicht deployed**. **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP ist seit 2026-06-08 produktiv konfiguriert (Mailjet) — Mailversand prod-verifiziert.**
 
-### Nachricht vom scheidenden Wachoffizier (2026-06-10)
-> ~~Vorsicht beim Re-Deploy — `p07.5` visuell abnehmen, sonst Doppel-Header-Risiko.~~ ✅ Erledigt: Re-Deploy + visuelle Prod-Abnahme `p07.5` bestanden (s.u.).
+### Nachricht vom scheidenden Wachoffizier (2026-06-10, abends)
+> Meine heutigen Umsetzungen (dxj, dd1, qdz.15) sind committed, getestet (Unit) und im `:dev`-Image — aber **NICHT live abgenommen**. Erst die drei offenen Abnahmen unten abschließen, bevor neue Arbeit beginnt (ausdrücklicher Kapitäns-Auftrag). Für dxj braucht ihr Login-Credentials, für dd1 einen Guest-Magic-Link — beides nur vom Kapitän zu bekommen. Vor JEDEM Prod-Test fragen, ob schon deployt ist.
+
+### Offene Abnahmen für die nächste Wache (Pflicht vor neuer Arbeit)
+1. **Deploy durch Kapitän** (`docker compose pull && up -d`), Asset-Version muss neuer als `20260610200248` sein.
+2. **`dxj` abnehmen** (Top-Nav, **Login nötig**): Einstellungen-Dropdown öffnen/schließen per Klick, ESC schließt, Klick außerhalb schließt, `aria-expanded` wechselt, Theme-Wechsel + Sprachwechsel aus dem Menü funktionieren, Admin-Badge/HTMX unbeeinträchtigt, Optik Desktop+Mobile.
+3. **`dd1` abnehmen** (Guest-Viewer, **Magic-Link nötig**): Sonne/Mond-Toggle im Header klicken, Light-Mode-Lesbarkeit von Grid/Chips/Countern, Persistenz über Reload, Icon-Wechsel korrekt.
+4. **`qdz.15`-Mockup-Review durch den Kapitän:** `https://picture.stoertes.cloud/static/spikes/guest_password.html` (4 Zustände: Default/Fehler/Mobile/Light). **`qdz.16` erst nach seiner Freigabe umsetzen.**
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
@@ -250,7 +256,9 @@ Zwei Workflows, gated über Job-Graph `changes → ci → build-and-push`:
   Versions-Tag `v*` → semver + `:latest` (via `latest=auto`, nur bei Release-Tags). Saubere
   Trennung dev/stable über `is_default_branch`.
 - **Path-Filter (`dorny/paths-filter`):** `main` baut nur bei Änderungen an `app/`, `alembic/`,
-  `Dockerfile`, `pyproject.toml` oder den Workflow-Dateien — spart Action-Minuten bei Doku-Commits.
+  `frontend/` (seit `00e9b94`, 2026-06-10 — fehlte vorher: frontend-only-Commits bauten still KEIN
+  Image, siehe `docs/lessons-learned.md`), `tests/`, `Dockerfile`, `pyproject.toml` oder den
+  Workflow-Dateien — spart Action-Minuten bei Doku-Commits.
   Tags `v*` bauen **immer** (Filter wird bei Tag-Push übersprungen via `startsWith(github.ref,…)`).
 - **Verifiziert:** Live-Run auf `bb03bc6` grün (2m 22s, Cache-Hit 74%), Job-Graph wie geplant.
 
