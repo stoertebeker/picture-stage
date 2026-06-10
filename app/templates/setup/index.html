@@ -10,7 +10,9 @@
     <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex items-center justify-center">
-    <div class="w-full max-w-md px-6">
+    <a href="#main"
+       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-md focus:bg-surface-raised focus:text-text-primary focus:shadow-lg focus:outline-none focus:ring focus:ring-focus">{{ t('common.skip_to_content') }}</a>
+    <main id="main" class="w-full max-w-md px-6">
         <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
             <div class="flex items-center justify-between mb-2">
                 <h1 class="text-2xl font-bold">{{ t('nav.brand') }}</h1>
@@ -59,7 +61,7 @@
                 </button>
             </form>
         </div>
-    </div>
+    </main>
 
     <script src="{{ asset('js/alpine.min.js') }}"></script>
 </body>

@@ -304,6 +304,7 @@
     "create": "Create",
     "language_de": "Deutsch",
     "language_en": "English",
-    "language_switch": "Language"
+    "language_switch": "Language",
+    "skip_to_content": "Skip to content"
   }
 }

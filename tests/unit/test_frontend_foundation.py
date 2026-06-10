@@ -67,3 +67,34 @@ def test_app_js_has_dark_mode():
 def test_tailwind_config_exists():
     """Check that tailwind.config.js exists at project root."""
     assert (PROJECT_ROOT / "tailwind.config.js").is_file()
+
+
+def test_skip_link_on_all_standalone_pages():
+    """WCAG 2.4.1 (p07.8): every template with its own <body> ships a skip
+    link to #main as first focusable element, and a matching id="main"
+    landmark. Covers base/guest_base (inherited by all pages) plus the
+    standalone auth/setup heads."""
+    pages = [
+        ("base.html",),
+        ("guest_base.html",),
+        ("auth", "login.html"),
+        ("auth", "signup.html"),
+        ("auth", "verify.html"),
+        ("setup", "index.html"),
+    ]
+    for parts in pages:
+        html = (PROJECT_ROOT / "app" / "templates").joinpath(*parts).read_text()
+        assert 'href="#main"' in html, f"skip link missing in {parts}"
+        assert "skip_to_content" in html, f"skip link not i18n'd in {parts}"
+        assert 'id="main"' in html, f"#main target missing in {parts}"
+        # Skip link must come before the target so it is the first tab stop.
+        assert html.index('href="#main"') < html.index('id="main"'), parts
+
+
+def test_skip_to_content_i18n_key_exists():
+    """The skip-link label exists in both locales."""
+    import json
+
+    for locale in ("de", "en"):
+        data = json.loads((PROJECT_ROOT / "app" / "i18n" / f"{locale}.json").read_text())
+        assert data["common"]["skip_to_content"]

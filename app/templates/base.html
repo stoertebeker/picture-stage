@@ -13,6 +13,8 @@
 <body x-data
       class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen"
       hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
+    <a href="#main"
+       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-md focus:bg-surface-raised focus:text-text-primary focus:shadow-lg focus:outline-none focus:ring focus:ring-focus">{{ t('common.skip_to_content') }}</a>
     <nav>
         <div>
             <a href="/dashboard"><strong>Picture-Stage</strong></a>
@@ -43,7 +45,7 @@
             </form>
         </div>
     </nav>
-    <main>
+    <main id="main">
         {% block content %}{% endblock %}
     </main>
     <footer class="border-t border-gray-200 dark:border-gray-700 mt-12 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
