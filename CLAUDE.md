@@ -118,9 +118,19 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-08
-**Wachwechsel-Tag:** `handover-2026-06-08-smtp` (zeigt auf `af3d85f`, letzter grüner Stand: SMTP live + Admin-Signup-Mail + Account-Enumeration-Fix, CI-verifiziert)
+**Datum:** 2026-06-10
+**Wachwechsel-Tag:** `handover-2026-06-10` (zeigt auf `765762a`, letzter grüner Stand: CSP-Hardening komplett — `unsafe-eval` raus, `@alpinejs/csp` 3.15.12 live + prod-verifiziert)
 **Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP ist seit 2026-06-08 produktiv konfiguriert (Mailjet) — Mailversand prod-verifiziert.**
+
+### CSP-Hardening abgeschlossen (2026-06-10) — Epic `picture-stage-u3s`, closed, prod-verifiziert
+- **`unsafe-eval` aus der CSP entfernt:** `script-src 'self'` (vorher `'self' 'unsafe-eval'`, `app/security/middleware.py`). Vendored Alpine-Build von Standard auf **`@alpinejs/csp` 3.15.12** umgestellt (evaluiert Expressions ohne `Function`-Konstruktor → kein `unsafe-eval` mehr nötig). Defense-in-Depth gegen XSS (CHANGELOG → Security).
+- **~20 Inline-Expressions migriert (u3s.1/4/5):** Globals (`document`/`localStorage`/`window`/`navigator`/`Math`) + Arrow-Functions + `$refs`/`$el`-DOM-Methoden raus aus Inline-Attributen → `Alpine.data()`-Komponenten (`langSwitcher`, `cookieBanner`, `auditFilter`, `shareUrl` + Methoden in `uploadZone`/`guestViewer`/`galleryManager`) + **delegierte `data-*`-Listener in `app.js`** (`data-open-dialog`/`data-close-dialog`/`data-backdrop-close`/`data-close-dialog-on-success`/`data-auto-open`). Modal-Macro (`_macros/modal.html`) entkoppelt von `$refs`. Läuft seit u3s.1 unter Standard-Build identisch (jeder Zwischenstand deploybar).
+- **Stolpersteine in `docs/lessons-learned.md`:** (1) `@alpinejs/csp` 3.14.8 hatte einen restriktiven Parser (nur Property-/Methoden-Zugriff, KEINE Ternäre/`{}`); erst **3.15+** versteht Ternäre/Arithmetik/Objekt-Literale — context7-Doku spiegelt `main`, NICHT die gepinnte Version (gegen `gh api .../ref=v<VERSION>` prüfen). (2) **3-Schichten-Cache-Falle:** GHA-Layer-Cache (ARG-Default-Change bustet ihn NICHT → Version **inline in die RUN/URL** pinnen), Origin-Image (`docker compose up -d` **ohne `pull`** läuft alt weiter), Cloudflare-Cache (statische Assets `max-age=14400` = 4h → purgen). **Diagnose von innen nach außen: Build-Log → Container (`grep version`) → CDN-Header.**
+- **Cloudflare-Insights CSP-Warnungen (`picture-stage-z4c`, closed):** externes `beacon.min.js` + inline-Loader (Hash wechselt pro Request) von `script-src 'self'` geblockt = **Non-Issue** (extern, nicht u3s; `script-src` war schon immer `'self'`). Lösung: CF Web Analytics für die Zone deaktivieren. CSP NICHT mit `unsafe-inline` aufweichen.
+- **Offen:** `picture-stage-d33` (P2) — **Cache-Busting für statische Assets + Deploy-Runbook**. Verhindert die 3-Schichten-Falle bei künftigen Frontend-Updates (Versions-Hash im Dateinamen ODER CF-Page-Rule + Runbook `pull → up -d → grep version → CF-Purge`). **Vor dem nächsten Frontend-Deploy angehen.**
+
+### Verifizierungsmail beim Signup (2026-06-10) — `picture-stage-x8t`, closed, CI-verifiziert
+- Beide Signup-Pfade (`app/auth/router.py` API + `app/frontend/auth.py` Web-Form) verschicken jetzt eine Verifizierungsmail mit Bestätigungslink. Neue config-freie `send_verification_email()` (`app/notifications/service.py`) nach dem `notify_admins_signup`-Muster: gated über Setting `SEND_VERIFICATION_EMAIL_ENABLED` (default true) + gesetztem `SMTP_HOST`, per-Empfänger try/except (Mail-Fehler bricht Signup nie ab). Link aus `APP_URL` (HTTPS), Token im Klartext in der Mail / SHA-256+Salt in DB. **Mail nur im echten Neu-Signup-Pfad → Account-Enumeration-Guard (`42q`) bleibt intakt.** Templates `verify_email.{html,txt}`. 9 Unit-Tests. (Hinweis: alter TODO-Marker referenzierte fälschlich das geschlossene `ebm.7` = Share-Link-System.)
 
 ### SMTP-Inbetriebnahme + Admin-Signup-Mail + Enumeration-Fix (2026-06-08) — alles prod/CI-verifiziert
 - **SMTP provisioniert (Mailjet):** `.env` befüllt (HOST=`in-v3.mailjet.com`, PORT=587, USER=API-Key,
