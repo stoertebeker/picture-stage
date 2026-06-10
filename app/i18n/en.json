@@ -4,6 +4,7 @@
     "logout": "Logout",
     "dark_mode": "Dark",
     "light_mode": "Light",
+    "toggle_theme": "Toggle light/dark theme",
     "impressum": "Legal Notice",
     "datenschutz": "Privacy Policy",
     "brand": "Picture-Stage"

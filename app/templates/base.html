@@ -23,9 +23,9 @@
             <a href="/admin/users">{{ t('admin.nav_admin') }}</a>
             <span hx-get="/admin/nav-badge" hx-trigger="load, every 60s" hx-swap="innerHTML"></span>
             {% endif %}
-            <button type="button" data-theme-toggle>
-                <span data-theme-label="dark">{{ t('nav.dark_mode') }}</span>
-                <span data-theme-label="light">{{ t('nav.light_mode') }}</span>
+            <button type="button" data-theme-toggle aria-label="{{ t('nav.toggle_theme') }}" aria-pressed="true">
+                <span data-theme-label="dark" aria-hidden="true">{{ t('nav.dark_mode') }}</span>
+                <span data-theme-label="light" aria-hidden="true">{{ t('nav.light_mode') }}</span>
             </button>
             <!-- Language Switcher -->
             <div x-data="langSwitcher" class="inline-flex items-center gap-1 text-sm">

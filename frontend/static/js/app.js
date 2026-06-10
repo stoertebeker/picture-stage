@@ -14,11 +14,21 @@
     document.documentElement.setAttribute('data-theme', theme);
 })();
 
+// Reflect the current theme into aria-pressed on every toggle button so screen
+// readers expose the toggle state (aria-pressed="true" === dark mode active).
+function syncThemeToggleState() {
+    const pressed = document.documentElement.getAttribute('data-theme') === 'dark';
+    document.querySelectorAll('[data-theme-toggle]').forEach((btn) => {
+        btn.setAttribute('aria-pressed', String(pressed));
+    });
+}
+
 function toggleTheme() {
     const html = document.documentElement;
     const next = html.getAttribute('data-theme') === 'dark' ? 'light' : 'dark';
     html.setAttribute('data-theme', next);
     localStorage.setItem('theme', next);
+    syncThemeToggleState();
 }
 
 // Wire any [data-theme-toggle] button to toggleTheme.
@@ -28,6 +38,9 @@ function wireThemeToggles() {
         btn.addEventListener('click', toggleTheme);
         btn.dataset.themeWired = '1';
     });
+    // Align aria-pressed with the theme the IIFE restored from localStorage
+    // (also covers toggles swapped in via HTMX, which re-calls this function).
+    syncThemeToggleState();
 }
 
 if (document.readyState === 'loading') {
