@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
 </head>
 <body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen">
+    {% block guest_header %}
     <header style="padding: 1rem 1.5rem; border-bottom: 1px solid var(--color-border);">
         <div style="display: flex; align-items: center; justify-content: space-between;">
             <h1>{% block gallery_name %}Gallery{% endblock %}</h1>
@@ -17,13 +18,14 @@
                 <a href="/set-lang/de"
                    :class="currentLang === 'de' ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
                    class="px-1">DE</a>
-                <span class="text-gray-300 dark:text-gray-600">|</span>
+                <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">|</span>
                 <a href="/set-lang/en"
                    :class="currentLang === 'en' ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
                    class="px-1">EN</a>
             </div>
         </div>
     </header>
+    {% endblock %}
     <main>
         {% block content %}{% endblock %}
     </main>

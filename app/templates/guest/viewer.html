@@ -1,7 +1,9 @@
 {% extends "guest_base.html" %}
 
 {% block title %}{{ gallery_name }}{% endblock %}
-{% block gallery_name %}{{ gallery_name }}{% endblock %}
+{# Suppress the legacy guest_base header — the viewer has its own Editorial-Dark
+   sticky header below (incl. language switcher). Avoids a duplicate header/<h1>. #}
+{% block guest_header %}{% endblock %}
 
 {% block content %}
 <div x-data="guestViewer"
@@ -26,6 +28,17 @@
             <div class="flex flex-col gap-0.5 min-w-0">
                 <span class="text-xs uppercase tracking-widest text-text-muted">{{ t('guest.gallery_eyebrow') }}</span>
                 <h1 class="font-display text-xl sm:text-2xl text-text-primary leading-tight truncate">{{ gallery_name }}</h1>
+            </div>
+            <div class="flex items-center gap-3">
+            <!-- Language Switcher (Editorial Dark) -->
+            <div x-data="langSwitcher" class="inline-flex items-center gap-1 text-sm">
+                <a href="/set-lang/de"
+                   :class="currentLang === 'de' ? 'font-semibold text-text-primary' : 'text-text-muted hover:text-text-secondary'"
+                   class="px-1">DE</a>
+                <span class="text-text-muted" aria-hidden="true">|</span>
+                <a href="/set-lang/en"
+                   :class="currentLang === 'en' ? 'font-semibold text-text-primary' : 'text-text-muted hover:text-text-secondary'"
+                   class="px-1">EN</a>
             </div>
             <!-- Settings / sort toggle -->
             <div class="flex items-center gap-2" x-data="{ showFilters: false }">
@@ -63,6 +76,7 @@
                         <option value="desc" {% if sort_dir == "desc" %}selected{% endif %}>{{ t('guest.sort_desc') }}</option>
                     </select>
                 </div>
+            </div>
             </div>
         </div>
 
