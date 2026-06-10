@@ -26,6 +26,7 @@ jobs:
             build:
               - 'app/**'
               - 'alembic/**'
+              - 'frontend/**'
               - 'tests/**'
               - 'Dockerfile'
               - 'pyproject.toml'
