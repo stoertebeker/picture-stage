@@ -324,6 +324,28 @@ function shareUrlComponent() {
     };
 }
 
+// "Einstellungen" dropdown in the top nav (theme toggle + language switcher).
+// Logic lives in methods/getters because the @alpinejs/csp build forbids
+// inline expressions. `expanded` returns a string so :aria-expanded renders
+// "false" instead of dropping the attribute when closed.
+function settingsMenuComponent() {
+    return {
+        open: false,
+
+        toggle() {
+            this.open = !this.open;
+        },
+
+        close() {
+            this.open = false;
+        },
+
+        get expanded() {
+            return this.open ? 'true' : 'false';
+        },
+    };
+}
+
 // Register components before Alpine boots. components.js is loaded before
 // alpine.min.js (see base.html / guest_base.html), so the alpine:init event
 // fires after this listener is attached.
@@ -335,4 +357,5 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('cookieBanner', cookieBannerComponent);
     Alpine.data('auditFilter', auditFilterComponent);
     Alpine.data('shareUrl', shareUrlComponent);
+    Alpine.data('settingsMenu', settingsMenuComponent);
 });

@@ -98,3 +98,34 @@ def test_skip_to_content_i18n_key_exists():
     for locale in ("de", "en"):
         data = json.loads((PROJECT_ROOT / "app" / "i18n" / f"{locale}.json").read_text())
         assert data["common"]["skip_to_content"]
+
+
+def test_nav_settings_dropdown():
+    """dxj: top nav has brand left and a settings dropdown that owns the
+    theme toggle and the language switcher (CSP-safe Alpine component)."""
+    base_html = (PROJECT_ROOT / "app" / "templates" / "base.html").read_text()
+    nav = base_html[base_html.index("<nav") : base_html.index("</nav>")]
+    # Brand stays first, settings dropdown wraps toggle + language switcher.
+    assert nav.index("Picture-Stage") < nav.index('x-data="settingsMenu"')
+    dropdown = nav[nav.index('x-data="settingsMenu"') :]
+    assert "nav.settings" in dropdown
+    assert "data-theme-toggle" in dropdown
+    assert 'x-data="langSwitcher"' in dropdown
+    # A11y: expanded state bound + safe initial value, ESC and outside close.
+    assert ':aria-expanded="expanded"' in dropdown
+    assert 'aria-expanded="false"' in dropdown
+    assert "@keydown.escape.window" in dropdown
+    assert "@click.outside" in dropdown
+
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+    assert "settingsMenuComponent" in components_js
+    assert "Alpine.data('settingsMenu', settingsMenuComponent)" in components_js
+
+
+def test_nav_settings_i18n_key_exists():
+    """nav.settings exists in both locales."""
+    import json
+
+    for locale in ("de", "en"):
+        data = json.loads((PROJECT_ROOT / "app" / "i18n" / f"{locale}.json").read_text())
+        assert data["nav"]["settings"]
