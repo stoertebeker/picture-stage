@@ -17,7 +17,9 @@ RUN apk add --no-cache curl ca-certificates
 WORKDIR /vendor
 
 ARG HTMX_VERSION=2.0.4
-ARG ALPINE_VERSION=3.14.8
+# 3.15+ ships the extended CSP-build parser (ternaries, arithmetic, object
+# literals); 3.14.8's parser was property/method-access only (u3s.7 fix).
+ARG ALPINE_VERSION=3.15.12
 
 RUN mkdir -p js fonts && \
     curl -fsSL -o js/htmx.min.js \
