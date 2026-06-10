@@ -128,3 +128,25 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Kontext:** Die Signup-Enumeration-Integration-Tests (`42q`) posteten `@test.local`-Adressen an `POST /api/v1/auth/signup`. In CI: 3× `assert 422 == 201`.
 **Problem:** `SignupRequest.email` ist ein Pydantic `EmailStr` (via `email-validator`), das reservierte TLDs wie `.local`/`.test` zurückweist → die Request-Validierung wirft 422, **bevor** der Handler läuft. Die DB-Insert-basierten Fixtures (`make_user`) gehen direkt an `EmailStr` vorbei, deshalb fiel es lokal/in Unit-Tests (die `@example.com` nutzten) nicht auf — nur der echte HTTP-Flow stolperte.
 **Lösung/Regel:** In HTTP-Tests, die durch `EmailStr` gehen, **gültige Domains** (`@example.com`) verwenden, nie `@test.local`/`@foo.test`. Wenn ein „negativer" Test (z.B. zu kurzes Passwort → 422) zufällig grün ist, prüfen, ob der erwartete Statuscode wirklich aus dem getesteten Grund kommt und nicht aus einem vorgelagerten Validierungsfehler.
+
+## CSP-Hardening & Deploy-/Cache-Schichten (2026-06-10, u3s)
+
+### Library-Doku (context7/main) gilt evtl. NICHT für die gepinnte Version
+**Kontext:** Bei der `@alpinejs/csp`-Migration zeigte die context7-Doku, dass Ternäre/Arithmetik/Objekt-Literale im CSP-Build unterstützt sind. Ich stufte alle `:class="x ? a : b"`-Ausdrücke als CSP-konform ein. Live auf Prod warf der CSP-Build aber „Alpine is unable to interpret … CSP-friendly build" für genau diese Ausdrücke.
+**Problem:** Die context7/GitHub-`main`-Doku beschreibt den **neuen** CSP-Parser (ab 3.15). Wir pinnten **3.14.8**, dessen Parser nur Property-/Methoden-Zugriff konnte. Der Doku-Stand und der Release-Stand klafften auseinander.
+**Lösung/Regel:** Doku-Aussagen gegen die **konkret gepinnte Version** prüfen, nicht gegen `main`. Konkret ging das per `gh api ".../contents/<datei>?ref=v<VERSION>"` — die `csp.md` in `v3.14.8` hatte die „What's Supported"-Sektion noch gar nicht, in `v3.15.12` schon. Fix war ein Versions-Upgrade (3.14.8 → 3.15.12), kein Auslagern von ~20 Ausdrücken.
+
+### GHA-Layer-Cache bustet NICHT zuverlässig bei reiner ARG-Default-Änderung
+**Kontext:** Das Versions-Upgrade `ARG ALPINE_VERSION=3.14.8` → `3.15.12` wurde gebaut & deployt — Prod zeigte trotzdem das alte 3.14.8-Verhalten.
+**Problem:** Mit `cache-from/to: type=gha` hat BuildKit den `assets`-Stage-curl-Layer aus dem Cache wiederverwendet (Build-Log: `assets 4/5` = `CACHED`), obwohl der ARG-Wert sich änderte. Der RUN-Befehl-**Text** (`curl …@alpinejs/csp@${ALPINE_VERSION}/…`) blieb identisch → derselbe Cache-Key → 3.14.8 wurde erneut „geliefert".
+**Lösung/Regel:** Asset-Versionen, die den Cache busten sollen, **inline in den RUN-Text** schreiben (`@alpinejs/csp@3.15.12/…`), nicht über ein ARG-Default. So ändert ein Versions-Bump den Layer-Hash und erzwingt einen echten Re-Download. Verifizieren: im Build-Log muss der curl-Step `DONE Xs` zeigen, **nicht** `CACHED`. Build-Logs liest man aus der Sandbox mit `XDG_CACHE_HOME="$TMPDIR" gh run view --job=<id> --log` (gh schreibt sonst nach `~/.cache`).
+
+### Ein „Deploy" ohne `docker compose pull` läuft auf dem alten Image weiter
+**Kontext:** Nach mehreren „deploys" lief Prod weiter auf einem tagealten Image — `window.Alpine.version` = `3.14.8`, und die `last-modified` der ausgelieferten `alpine.min.js` war über alle Deploys hinweg eingefroren auf die Bauzeit des allerersten Images.
+**Problem:** `docker compose up -d` zieht ein bereits lokal vorhandenes Tag (`:dev`) **nicht** neu. Das Registry-`:dev` wird bei jedem Build überschrieben, der Server kennt das aber nicht — der alte Container lief einfach weiter.
+**Lösung/Regel:** Deploy-Reihenfolge: `docker compose pull` **vor** `up -d`. Danach IM Container verifizieren, was wirklich drin liegt, bevor man weiter debuggt: `docker compose exec <svc> grep -o 'version:"[^"]*"' /app/frontend/static/js/alpine.min.js`. Die ausgelieferte `last-modified` ist ein guter „lebt das Image überhaupt?"-Indikator — friert sie über Deploys ein, wurde kein neues Image gezogen.
+
+### Cache-Bugs von innen nach außen jagen: Build → Origin → CDN
+**Kontext:** Derselbe Symptom-Stack (alte Alpine-Version) hatte nacheinander DREI Ursachen: GHA-Layer-Cache, nicht-gezogenes Origin-Image, Cloudflare-Edge-Cache (`cf-cache-status: HIT`, `max-age=14400` = 4h auf `/static/js/*`).
+**Problem:** Wir haben mehrfach die äußerste Schicht (Cloudflare-Purge) behandelt, während die inneren (Build-Cache, Origin-Image) noch alt waren — jeder Purge holte sich prompt wieder die alte Datei vom alten Origin.
+**Lösung/Regel:** Schichten **von innen nach außen** verifizieren: (1) Build-Log — lief der Schritt wirklich? (2) Origin/Container — `exec … grep version`. (3) CDN — `cf-cache-status`/`last-modified`/`age` am Response-Header. Erst wenn (1) und (2) den neuen Stand zeigen, ist ein CDN-Purge sinnvoll. Statische Assets ohne Versions-Hash im Namen sind hierfür eine Dauerfalle → Cache-Busting als Härtung (`picture-stage-d33`).
