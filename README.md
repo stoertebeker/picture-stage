@@ -52,11 +52,31 @@ docker compose up -d
 
 ### Update auf eine neue Version
 
+Reihenfolge ist wichtig — `pull` **vor** `up -d`, sonst läuft das alte
+Origin-Image weiter (eine der drei Cache-Schichten, siehe unten):
+
 ```bash
-# Image-Tag in docker-compose.yml anpassen oder :latest verwenden, dann:
+# 1. Neues Image ziehen (Tag in docker-compose.yml: :latest = stable, :dev = main)
 docker compose pull
 docker compose up -d
+
+# 2. Origin verifizieren: fährt der Container wirklich den neuen Asset-Stand?
+docker compose exec app grep -o "Alpine.js v[0-9.]*" /app/frontend/static/js/alpine.min.js
+
+# 3. End-to-End verifizieren: welche Asset-Version liefert die Instanz aus?
+#    (zeigt den ?v=-Token der laufenden Auslieferung — prüft Origin + CDN zugleich)
+curl -s https://DEINE-DOMAIN/login | grep -o "/static/css/styles.css?v=[^\"]*"
+
+# 4. Hinter Cloudflare: Edge-Cache für /static/* purgen, falls Schritt 3 noch alt ist
+#    Dashboard -> Caching -> Configuration -> Purge (Everything oder per API /static/*)
 ```
+
+> **Cache-Busting:** JS/CSS-Assets werden mit `?v=<ASSET_VERSION>` ausgeliefert
+> (im CI-Build der Zeitstempel). Ein neues Image = neue URL = automatischer Bust
+> von Browser- und CDN-Cache. Voraussetzung: Cloudflare-Caching-Level **Standard**
+> (Query-String bleibt Teil des Cache-Keys). Fonts sind bewusst un-versioniert
+> (vermeidet Preload/`url()`-Mismatch). Hintergrund: die drei Cache-Schichten in
+> `docs/lessons-learned.md` (GHA-Layer / Origin-Image / Cloudflare).
 
 > **Tag-Wahl:** `:latest` für die Produktion (nur stabile Releases), `:dev` für
 > einen Test-Server (folgt jedem `main`-Commit). Details siehe [Docker Hub](#docker-hub).
