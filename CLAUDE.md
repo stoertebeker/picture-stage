@@ -301,11 +301,12 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 | Ausstehend | Beads-ID |
 |------------|----------|
 | ~~Guest-Lightbox Mockup + Impl~~ ✅ done (2026-06-08) | ~~`qdz.13`, `qdz.14`~~ |
-| Guest-Password-Gate Mockup + Impl | `qdz.15`, `qdz.16` |
+| ~~Guest-Password-Gate Mockup~~ ✅ done (2026-06-10, `c7f0d65`) — **Kapitäns-Review ausstehend** (nach Deploy: `/static/spikes/guest_password.html`) | ~~`qdz.15`~~ |
+| Guest-Password-Gate Impl (**erst nach Mockup-Freigabe**) | `qdz.16` |
 | i18n-Lücken schließen | `qdz.17` |
 | Mobile-Tuning Guest-Pages (375/768/1280px) | `qdz.18` |
 
-Einstieg: `bd ready` → `qdz.15` (PS-UX-22a, Guest-Password-Gate Mockup) oder `dd1` (Light-Mode-Toggle).
+Einstieg: `bd ready` → `qdz.16` (nach Mockup-Review) oder `qdz.17` (i18n-Lücken).
 **Hinweis Frontend-Verifikation:** Lokal kein Tailwind-Build (styles.css = Stub) → visuelle Abnahme
 gegen Spike oder live auf Prod (`https://picture.stoertes.cloud`, via Playwright erreichbar).
 
