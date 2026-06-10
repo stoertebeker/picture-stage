@@ -68,9 +68,15 @@ RUN mkdir -p /app/uploads && chown -R app:app /app
 
 USER app
 
+# Per-build cache-busting token for static assets (?v=...). Passed in by CI as a
+# build timestamp; falls back to "dev" for local builds. A fresh value per image
+# busts GHA-layer, origin and CDN caches together (the u3s.7 deploy trap).
+ARG ASSET_VERSION=dev
+
 ENV PATH="/opt/venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    ASSET_VERSION=${ASSET_VERSION}
 
 EXPOSE 8000
 

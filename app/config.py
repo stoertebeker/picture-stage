@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     legal_impressum_path: str = "/data/legal/impressum.md"
     legal_datenschutz_path: str = "/data/legal/datenschutz.md"
 
+    # Cache-busting token appended as ?v=<asset_version> to static asset URLs
+    # (JS/CSS). Set to a per-build value (build timestamp) via the ASSET_VERSION
+    # env in the Dockerfile so every image ships a fresh query string — busting
+    # GHA-layer, origin-image and CDN caches at once (the u3s.7 deploy trap).
+    # The static default still varies per release for local/dev builds.
+    asset_version: str = "0.1.0"
+
     @model_validator(mode="after")
     def _reject_default_secrets_in_production(self) -> "Settings":
         """Fail fast if crypto secrets are left at their insecure default in production.

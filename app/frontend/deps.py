@@ -4,9 +4,21 @@ from typing import Any
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
+from app.config import settings
 from app.i18n import t as _translate
 
 templates = Jinja2Templates(directory="app/templates")
+
+
+def _asset_url(path: str) -> str:
+    """Build a cache-busted URL for a static asset.
+
+    Appends ?v=<asset_version> so a fresh build (new ASSET_VERSION) yields a new
+    URL, busting browser, CDN and origin caches together. Only JS/CSS use this;
+    fonts intentionally stay un-versioned to avoid preload/url() mismatches.
+    Usage in templates: {{ asset('js/alpine.min.js') }}.
+    """
+    return f"/static/{path}?v={settings.asset_version}"
 
 
 def _t_for_request(request: Request, key: str, **kwargs: Any) -> str:
@@ -44,3 +56,4 @@ templates.TemplateResponse = _patched_template_response  # type: ignore[assignme
 
 # Also register in Jinja2 globals for templates that might use it outside TemplateResponse
 templates.env.globals["supported_locales"] = ("de", "en")
+templates.env.globals["asset"] = _asset_url
