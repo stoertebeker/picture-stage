@@ -26,6 +26,12 @@ All notable changes to Picture-Stage are documented in this file.
   - Gallery-level `watermark_config.opacity` already uses float (0.0-1.0)
   - Conversion to PIL alpha (0-255) happens internally in `app/images/processing.py`
 
+### Fixed
+
+- **Guest grid selection/favorite UI restored under the CSP build** (`picture-stage-2gb`). The `@alpinejs/csp` build cannot parse optional chaining (`images[N]?.selected`), so the seven affected grid bindings threw at runtime (112 console errors) and selection rings, check badges, hover toggles and favorite hearts never rendered. The grid now calls null-safe `isSelected(idx)`/`isFavorited(idx)` helpers on the `guestViewer` component instead. Live prod-verified.
+- **Status-color opacity modifiers now render** (`picture-stage-toj`). Tailwind 3.4 cannot compose opacity modifiers (`bg-status-danger/10`, `border-status-danger/40`) from hex-based `var()` color tokens — the classes were never generated, so the guest password-gate error alert and `form_error` had no red tint. The four `status-*` tokens are now defined as space-separated RGB components with `rgb(var(--color-status-X) / <alpha-value>)`. Also fixes the `form_error` `text-red-300` legacy (unreadable in light mode). Live prod-verified in both themes.
+- **Upload progress no longer breaks the CSP parser** (`picture-stage-3uh`). The inline handler `@htmx:after-request.window="uploadProgress = 0; uploading = false"` is a multi-statement expression the `@alpinejs/csp` build cannot parse (`Unexpected token: uploading`), so the upload-progress state never reset. The reset is now wrapped in `uploadZone.onUploadComplete()`. (Pending live prod-verification.)
+
 ### Added
 
 - **Gallery password can now be set, changed or removed after sharing** (`picture-stage-1y5`). Previously the password could only be chosen while creating the share link; changing it required revoking and re-creating the link, which rotated the token and invalidated the magic link already sent to the model. The share modal now offers a password section for active links, backed by `POST /galleries/{id}/password` (HTML frontend) — the share token stays untouched. Note: guests who already unlocked the gallery in an open tab keep their session; the gate applies from the next page load.

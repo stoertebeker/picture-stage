@@ -118,33 +118,40 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-11 (mittags)
-**Wachwechsel-Tag:** `handover-2026-06-11` (zeigt auf `ebe3092`, letzter grüner Stand: qdz.16 + a2d + 1y5 umgesetzt UND live abgenommen; alle Abnahmen der Vorwache erledigt)
-**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod läuft auf Build `?v=20260611084643`** (enthält qdz.16-Gate, a2d-Rate-Limit, 1y5-Passwortschutz). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP ist seit 2026-06-08 produktiv konfiguriert (Mailjet).**
+**Datum:** 2026-06-11 (nachmittags)
+**Wachwechsel-Tag:** `handover-2026-06-11-csp-fixes` (zeigt auf `99637ab`, letzter grüner Stand: 2gb + toj live abgenommen & closed, 3uh gepusht, zs5 closed)
+**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod lief während dieser Wache auf Build `?v=20260611121356`** (enthält 2gb + toj — beide darauf live abgenommen; 3uh ist NOCH NICHT auf Prod). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP produktiv (Mailjet).** **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung) — für Live-Tests nutzbar.
 
-### Nachricht vom scheidenden Wachoffizier (2026-06-11)
-> Alles aus meiner Wache ist umgesetzt UND live abgenommen — es gibt KEIN offenes WIP, ihr könnt direkt mit `2gb` (P1) anfangen. Zwei Dinge haben mich heute am meisten gekostet: (1) haiku-Playwright-Berichte waren mehrfach unzuverlässig (byte-identische „vorher/nachher"-Screenshots, falsch klassifizierte Konsolen-Fehler, ein VERBOTENER toggleSelect-Klick in der echten Galerie, den ich manuell rückgängig machen musste) — sichtet Screenshots IMMER selbst und gebt Test-Agenten explizite Verbote mit. (2) Die Browser-Konsole ist euer bester Regressionsdetektor: die 112 CSP-Parser-Fehler (`2gb`) liefen seit der u3s-Migration unbemerkt durch alle „grünen" Abnahmen. Für `toj` habe ich Fix-Option A (Palette-Klassen) vorgeschlagen — der Kapitän hat sie noch NICHT freigegeben, erst fragen. Der temporäre Admin-Login (stoertebeker@kkb-clan.de) ist noch aktiv — den Kapitän ans Deaktivieren erinnern.
+### ⚠️ OFFENE PROD-ABNAHME — ZUERST ERLEDIGEN
+**`3uh` (Commit `20634c1`, in_progress) ist gepusht, aber NOCH NICHT live abgenommen.** Nach dem nächsten Deploy (sobald Prod den 3uh-Commit zieht) testen:
+1. Fotografen-Galerie → Bild-Upload → **Progress-Balken erscheint und wird sauber zurückgesetzt** (uploading-Flag), kein Hängen.
+2. **Browser-Konsole frei von `CSP Parser Error: Unexpected token: uploading`** (war der Bug).
+3. Bei Erfolg: `bd close picture-stage-3uh`. Test-Galerie + Bilder danach restlos löschen.
 
-### Erledigt in dieser Wache (2026-06-11) — alle Abnahmen + 3 Umsetzungen
-**Abnahmen der Vorwache (alle ✅):** Deploy → `?v=20260610214612`; `dxj` Desktop ✅ (Dropdown/ESC/outside/aria/Theme/Sprache), Mobile ❌ → Bug `zgf`; `dd1` ✅ (Toggle, Light-Lesbarkeit, Persistenz); `qdz.15`-Mockup vom Kapitän freigegeben.
-- **`qdz.16` Guest-Password-Gate (`35ce1c1`, closed, prod-abgenommen):** `_password.html` neu nach Mockup (Eyebrow + Galerie-Name, Lock-Mark, Token-Karte, status-danger-Alert mit `role=alert`, sr-only-Label, Privacy-Zeile; i18n freundlicher + `password_privacy_note`, `password_title` entfernt). **Flow-Fix:** Verify-POST rendert Full-Page statt HTMX-Grid-Swap — der alte Swap lieferte die entsperrte Galerie OHNE Header/Counter/Lightbox und mit leerem Alpine-State (`session_id=None` → Auswahl funktionslos). Erfolg → voller Viewer mit Session (live verifiziert: UUID + 16 Bilder im State); Fehler → Gate mit Alert (401, Login-Pattern). Helper `_render_password_gate`/`_render_gallery_viewer` dedupen `guest_viewer`. Live abgenommen: Dark/Light/Mobile (kein Overflow), Fehler- und Erfolgsfall.
-- **`a2d` SECURITY Rate-Limit (`010f267`, closed, live bewiesen):** HTML-Endpoint `POST /g/{token}/verify-password` hatte KEIN Rate-Limit (API-Pendant: 5/min) → Brute-Force aufs Galerie-Passwort möglich. Fix: `@limiter.limit("5/minute")`. Live-Beweis: Sequenz `401×5 → 429`.
-- **`1y5` Galerie-Passwort nachträglich (`82c88d0`, closed, Set+Remove vom Kapitän abgenommen):** Neuer Endpoint `POST /galleries/{id}/password` — tauscht nur den `password_hash`, **Share-Token bleibt unangetastet** (Re-Share hätte den verteilten Magic-Link invalidiert; leer = entfernen). Share-Modal: Abschnitt „Passwortschutz" bei aktivem Link (Status-Badge, Speichern `required`, Entfernen mit Confirm). 6 i18n-Keys.
-- **Doku:** CHANGELOG (`3542937`) + 3 neue Lessons (`docs/lessons-learned.md`): CSP-Build kann kein `?.`, Tailwind-Opacity-Modifier vs. var()-Tokens, Playwright-Profil persistiert localStorage.
-- **237 Unit-Tests grün** (von 231 → 237), ruff + mypy strict grün.
+*Test-Setup-Hinweise (aus dieser Wache):* haiku-Playwright unzuverlässig → **selbst testen / Screenshots selbst sichten**. Galerie-Löschen-Button ist ein **Icon ohne Text** (`aria-label="Galerie loeschen"`) und braucht **Namens-Bestätigung** (Galeriename ins `confirm_name`-Feld tippen, dann „Endgueltig loeschen"). Konsole `all=true` abrufen, dann selbst klassifizieren (Cloudflare-Beacon = Non-Issue).
 
-### Neue Befunde dieser Wache (offene Tickets)
+### Nachricht vom scheidenden Wachoffizier (2026-06-11 nachm.)
+> Führe als Erstes die offene Prod-Abnahme von `3uh` aus (siehe Block oben) — der Code ist gepusht, es fehlt nur der Live-Test nach dem nächsten Deploy. Zwei Dinge: (1) Die Browser-Konsole ist der wahre Regressionsdetektor — die CSP-Parser-Fehler (`2gb` Optional Chaining, `3uh` Multi-Statement) liefen seit u3s unbemerkt durch „grüne" Abnahmen. Ruf bei jeder Guest-/Upload-Abnahme `browser_console_messages(all=true)` ab und klassifiziere die Roh-Logs SELBST — haiku klassifiziert sie falsch. (2) `zs5` (nav-badge-500) habe ich als Deploy-transient geschlossen: Code liefert lokal sauber 200 (count=0 UND count=5), die 500er standen nur im Deploy-Fenster. Falls sie wiederkehren: Prod-Server-Logs prüfen, nicht den Code (er ist korrekt).
+
+### Erledigt in dieser Wache (2026-06-11 nachm.) — 3 CSP/Token-Fixes + 1 Diagnose
+- **`2gb` (P1, `dc7a635`, closed, PROD-ABGENOMMEN):** Guest-Grid-Reaktivität. `?.` → null-safe `isSelected(idx)`/`isFavorited(idx)` auf `guestViewer` (`components.js`), 7 Bindungen in `_image_grid.html` umgestellt. Konsole frei von Parser-Fehlern, Ring/Badge/Herz rendern reaktiv (selbst per DOM + visuell live verifiziert).
+- **`toj` (P3, `9360b05`, closed, PROD-ABGENOMMEN):** Status-Tokens auf RGB-Komponenten (`--color-status-danger: 220 38 38`) + `rgb(var() / <alpha-value>)`. Opacity-Modifier liefern jetzt in Dark+Light echte rgba (live per computed style verifiziert). `form_error`-Altlast `text-red-300` mitgefixt.
+- **`3uh` (P2, `20634c1`, in_progress — siehe OFFEN-Block oben):** Upload-Handler-Multi-Statement → `uploadZone.onUploadComplete()`. **Code gepusht, Live-Abnahme offen.**
+- **`zs5` (P2, closed):** nav-badge-500 als Deploy-transient diagnostiziert (kein Code-Bug, lokal 200-verifiziert).
+- **240 Unit-Tests grün** (von 237), ruff format+check sauber. CHANGELOG + lessons-learned aktualisiert.
+
+### Offene Tickets (Stand Wachwechsel)
 | Ticket | Prio | Befund |
 |--------|------|--------|
-| `picture-stage-2gb` | **P1** | **Guest-Grid-Regression aus u3s:** `_image_grid.html` nutzt `images[N]?.selected` — der `@alpinejs/csp`-Build parst KEIN Optional Chaining → 112 Konsolen-Fehler (7 Expressions × 16 Bilder), Auswahl-Ringe/Check-Badges/Hover-Toggles im Grid funktionslos. Lightbox sauber (kein `?.`). Fix-Vorschlag im Ticket: Helper `isSelected(idx)`/`isFavorited(idx)` in `components.js`. |
-| `picture-stage-zgf` | P2 | Top-Nav (dxj) auf 375px: 504px breit → „Einstellungen"/„Logout" außerhalb des Viewports, nur per Horizontal-Scroll erreichbar. |
-| `picture-stage-toj` | P3 | `bg-status-danger/10`-Klassen fehlen im Build (Tailwind 3.4 + var()-Token) → Gate-Fehler-Alert ohne rote Tönung. Option A (Palette-Klassen, Template-only) **wartet auf Kapitäns-Freigabe**; Option B (RGB-Komponenten-Token-Refactor, fixt auch `form_error`-Altlast `text-red-300`). |
+| `picture-stage-3uh` | **P2** | **in_progress — Code gepusht, Live-Prod-Abnahme offen** (siehe OFFEN-Block). |
+| `picture-stage-zgf` | P2 | Top-Nav auf 375px: horizontaler Overflow, „Einstellungen"/„Logout" außerhalb Viewport. |
+| `picture-stage-typ` | P3 | `Identifier 'TOAST_KIND_CLASS' has already been declared` — Doppel-Deklaration in `app.js` nach HTMX-Swap (Konsolen-Rauschen). |
+| `picture-stage-bbj` | P3 | Kontrast `text-status-danger` auf `/10`-Tönung nur ~3.9:1 (unter AA 4.5 für Normaltext) — aus dem toj-Fix; Optionen im Ticket. |
 
 ### Offene Punkte für die nächste Wache
-1. **Empfohlener Einstieg: `2gb`** (P1, Kernfunktionalität für Models, die nur das Grid nutzen). Danach `zgf` oder `qdz.17` (i18n).
-2. **`toj`-Fix erst nach Kapitäns-Freigabe** (Option A vs. B, siehe Ticket).
-3. **Temporären Admin-Login deaktivieren** (`stoertebeker@kkb-clan.de`, Credentials standen im Chat) — Kapitän erinnern.
-4. Abnahme-Standard ab jetzt: **Browser-Konsole fehlerfrei** (Cloudflare-Beacon = bekanntes Non-Issue) + Screenshots selbst sichten.
+1. **ZUERST: Prod-Abnahme `3uh`** nach nächstem Deploy (siehe OFFEN-Block oben).
+2. Danach freie Wahl aus `bd ready`: `zgf` (P2 Mobile-Nav), `qdz.17` (P2 i18n), oder die P3-Befunde `typ`/`bbj`.
+3. Abnahme-Standard: **Browser-Konsole `all=true` selbst klassifizieren** (Cloudflare-Beacon = Non-Issue) + Screenshots selbst sichten + Test-Galerien/-Bilder restlos löschen.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
