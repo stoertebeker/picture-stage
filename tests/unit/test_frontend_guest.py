@@ -150,6 +150,78 @@ def test_guest_password_template_exists():
     assert (PROJECT_ROOT / "app" / "templates" / "guest" / "_password.html").is_file()
 
 
+def test_guest_password_gate_matches_editorial_mockup():
+    """qdz.16: the gate follows the approved spike (guest_password.html).
+
+    Editorial-Dark tokens only (theme-safe in dark AND light), gallery identity
+    above the card, status-danger error alert, accessible form controls."""
+    gate = (PROJECT_ROOT / "app" / "templates" / "guest" / "_password.html").read_text()
+
+    # Gallery identity + trust mark per mockup.
+    assert "guest.gallery_eyebrow" in gate
+    assert "{{ gallery_name }}" in gate
+    assert "font-display" in gate
+
+    # Token-based styling — no legacy gray/blue utilities left.
+    assert "bg-surface-raised" in gate
+    assert "border-border-subtle" in gate
+    assert "bg-accent" in gate
+    assert "text-text-on-accent" in gate
+    assert "dark:bg-gray-800" not in gate
+    assert "bg-blue-600" not in gate
+
+    # Error state: theme-safe status-danger alert, announced to AT.
+    assert 'role="alert"' in gate
+    assert "border-status-danger/40" in gate
+    assert "bg-status-danger/10" in gate
+    assert "text-status-danger" in gate
+
+    # A11y: sr-only label tied to the input, visible focus.
+    assert 'class="sr-only" for="gallery-password"' in gate
+    assert 'id="gallery-password"' in gate
+    assert "focus-visible:ring" in gate
+
+    # Trust line below the card.
+    assert "guest.password_privacy_note" in gate
+
+
+def test_guest_password_gate_uses_plain_form_post():
+    """qdz.16: the gate submits as a regular form POST (no HTMX grid swap).
+
+    The old hx-post swap left the unlocked page without header, counters,
+    lightbox and Alpine images state. Success/error now render full pages."""
+    gate = (PROJECT_ROOT / "app" / "templates" / "guest" / "_password.html").read_text()
+    guest_py = (PROJECT_ROOT / "app" / "frontend" / "guest.py").read_text()
+
+    assert "hx-post" not in gate
+    assert 'action="/g/{{ token }}/verify-password"' in gate
+    # Both outcomes render the full viewer template, never the bare grid.
+    assert "_render_gallery_viewer" in guest_py
+    assert "_render_password_gate" in guest_py
+    assert 'error_key="guest.password_error"' in guest_py
+    assert "HTTP_401_UNAUTHORIZED" in guest_py
+
+
+def test_guest_password_i18n_keys_exist():
+    """All i18n keys referenced by the gate exist in DE and EN."""
+    import json
+
+    de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())["guest"]
+    en = json.loads((PROJECT_ROOT / "app" / "i18n" / "en.json").read_text())["guest"]
+    for key in (
+        "password_text",
+        "password_placeholder",
+        "password_submit",
+        "password_error",
+        "password_privacy_note",
+        "gallery_eyebrow",
+    ):
+        assert key in de, f"DE missing guest.{key}"
+        assert key in en, f"EN missing guest.{key}"
+    # Friendly, full-sentence error per mockup (not the old curt 'Falsches Passwort').
+    assert de["password_error"] != "Falsches Passwort"
+
+
 def test_guest_complete_modal_exists():
     """Complete modal partial exists."""
     assert (PROJECT_ROOT / "app" / "templates" / "guest" / "_complete_modal.html").is_file()

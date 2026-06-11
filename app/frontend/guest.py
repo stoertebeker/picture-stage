@@ -198,30 +198,41 @@ async def guest_viewer(
             status_code=410,
         )
 
-    requires_password = gallery.password_hash is not None
+    if gallery.password_hash is not None:
+        # Show password gate — no session until the password is verified
+        return _render_password_gate(request, gallery, token)
 
-    if requires_password:
-        # Show password prompt — no session yet
-        return templates.TemplateResponse(
-            request,
-            "guest/viewer.html",
-            {
-                "request": request,
-                "gallery_name": gallery.name,
-                "token": token,
-                "requires_password": True,
-                "images": [],
-                "session_id": None,
-                "total_images": 0,
-                "selected_count": 0,
-                "favorited_count": 0,
-                "sort_by": "sort_order",
-                "sort_dir": "asc",
-                "filter": "all",
-            },
-        )
+    return await _render_gallery_viewer(request, gallery, token, db)
 
-    # No password required — create session and show gallery
+
+def _render_password_gate(
+    request: Request, gallery: Gallery, token: str, error_key: str | None = None, status_code: int = 200
+) -> HTMLResponse:
+    """Render the password gate full-page (qdz.16), optionally with an error alert."""
+    return templates.TemplateResponse(
+        request,
+        "guest/viewer.html",
+        {
+            "request": request,
+            "gallery_name": gallery.name,
+            "token": token,
+            "requires_password": True,
+            "error_key": error_key,
+            "images": [],
+            "session_id": None,
+            "total_images": 0,
+            "selected_count": 0,
+            "favorited_count": 0,
+            "sort_by": "sort_order",
+            "sort_dir": "asc",
+            "filter": "all",
+        },
+        status_code=status_code,
+    )
+
+
+async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str, db: AsyncSession) -> HTMLResponse:
+    """Create a share session and render the full gallery viewer page."""
     session = ShareSession(
         gallery_id=gallery.id,
         ip_address=request.client.host if request.client else None,
@@ -305,7 +316,13 @@ async def guest_verify_password(
     password: str = Form(...),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    """Verify gallery password and swap in the image grid via HTMX."""
+    """Verify the gallery password (plain form POST, qdz.16).
+
+    Success renders the full viewer page so header, counters, lightbox and the
+    Alpine images state are all present (the previous HTMX grid-only swap left
+    the page without them). Failure re-renders the gate with an error alert,
+    mirroring the login form pattern (full page, 401).
+    """
     gallery = await _resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -313,44 +330,8 @@ async def guest_verify_password(
     _check_gallery_accessible(gallery)
 
     if not gallery.password_hash or not verify_password(password, gallery.password_hash):
-        return templates.TemplateResponse(
-            request,
-            "guest/_password.html",
-            {
-                "request": request,
-                "token": token,
-                "error_key": "guest.password_error",
-            },
+        return _render_password_gate(
+            request, gallery, token, error_key="guest.password_error", status_code=status.HTTP_401_UNAUTHORIZED
         )
 
-    session = ShareSession(
-        gallery_id=gallery.id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent", "")[:512],
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
-
-    images = await _load_images(gallery, db)
-    total = len(images)
-    selected_count = sum(1 for img in images if img["selected"])
-    favorited_count = sum(1 for img in images if img["favorited"])
-
-    return templates.TemplateResponse(
-        request,
-        "guest/_image_grid.html",
-        {
-            "request": request,
-            "images": images,
-            "token": token,
-            "session_id": str(session.id),
-            "total_images": total,
-            "selected_count": selected_count,
-            "favorited_count": favorited_count,
-            "session_completed": gallery.status == GalleryStatus.completed,
-            "sort_by": "sort_order",
-            "sort_dir": "asc",
-            "filter": "all",
-        },
-    )
+    return await _render_gallery_viewer(request, gallery, token, db)
