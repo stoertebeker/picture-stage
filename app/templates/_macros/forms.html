@@ -119,10 +119,7 @@ Sanitization note:
 {%- endmacro -%}
 
 {%- macro form_error(message) -%}
-  {#- Note: bg-red-* used directly here. Once tokens.md gets opacity-modifier
-      friendly RGB-component variables (e.g. --color-status-danger: 220 38 38),
-      this can switch to bg-status-danger/10. -#}
-  <div class="bg-red-500/10 border border-red-500/40 text-red-300 px-4 py-3 rounded-md text-sm" role="alert">
+  <div class="bg-status-danger/10 border border-status-danger/40 text-status-danger px-4 py-3 rounded-md text-sm" role="alert">
     {{ message }}
   </div>
 {%- endmacro -%}

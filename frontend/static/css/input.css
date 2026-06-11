@@ -45,10 +45,14 @@
     --color-favorite-hover:  #fda4af;
     --color-favorite-muted:  rgb(251 113 133 / 0.15);
 
-    --color-status-success:  #059669;
-    --color-status-warn:     #f59e0b;
-    --color-status-danger:   #dc2626;
-    --color-status-info:     #0ea5e9;
+    /* Status colors as space-separated RGB components so Tailwind can compose
+       opacity modifiers (bg-status-danger/10, border-status-danger/40) via
+       rgb(var(--color-status-danger) / <alpha-value>). Plain hex cannot carry
+       an alpha-value in Tailwind 3.4 — the modifier classes never get built. */
+    --color-status-success:  5 150 105;
+    --color-status-warn:     245 158 11;
+    --color-status-danger:   220 38 38;
+    --color-status-info:     14 165 233;
 
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
@@ -81,10 +85,10 @@
     --color-favorite-hover:  #e11d48;
     --color-favorite-muted:  rgb(244 63 94 / 0.12);
 
-    --color-status-success:  #10b981;
-    --color-status-warn:     #d97706;
-    --color-status-danger:   #dc2626;
-    --color-status-info:     #0284c7;
+    --color-status-success:  16 185 129;
+    --color-status-warn:     217 119 6;
+    --color-status-danger:   220 38 38;
+    --color-status-info:     2 132 199;
 
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.08);
