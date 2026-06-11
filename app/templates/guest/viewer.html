@@ -41,14 +41,14 @@
                 </span>
             </button>
             <!-- Language Switcher (Editorial Dark) -->
-            <div x-data="langSwitcher" class="inline-flex items-center gap-1 text-sm">
+            <div x-data="langSwitcher" class="inline-flex items-center gap-0.5 text-sm">
                 <a href="/set-lang/de"
                    :class="currentLang === 'de' ? 'font-semibold text-text-primary' : 'text-text-muted hover:text-text-secondary'"
-                   class="px-1">DE</a>
+                   class="px-2 py-2">DE</a>
                 <span class="text-text-muted" aria-hidden="true">|</span>
                 <a href="/set-lang/en"
                    :class="currentLang === 'en' ? 'font-semibold text-text-primary' : 'text-text-muted hover:text-text-secondary'"
-                   class="px-1">EN</a>
+                   class="px-2 py-2">EN</a>
             </div>
             <!-- Settings / sort toggle -->
             <div class="flex items-center gap-2" x-data="{ showFilters: false }">
@@ -63,7 +63,7 @@
                 </button>
 
                 <!-- Sort options (only shown when filter bar is open) -->
-                <div x-show="showFilters" x-transition class="hidden sm:flex items-center gap-2" style="display: none;">
+                <div x-show="showFilters" x-transition class="flex items-center gap-2" style="display: none;">
                     <select hx-get="/g/{{ token }}/gallery-images"
                             hx-target="#image-grid"
                             hx-swap="innerHTML"

@@ -27,14 +27,14 @@
                 </span>
             </button>
             <!-- Language Switcher (Guest) -->
-            <div x-data="langSwitcher" class="inline-flex items-center gap-1 text-sm">
+            <div x-data="langSwitcher" class="inline-flex items-center gap-0.5 text-sm">
                 <a href="/set-lang/de"
                    :class="currentLang === 'de' ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
-                   class="px-1">DE</a>
+                   class="px-2 py-2">DE</a>
                 <span class="text-gray-300 dark:text-gray-600" aria-hidden="true">|</span>
                 <a href="/set-lang/en"
                    :class="currentLang === 'en' ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'"
-                   class="px-1">EN</a>
+                   class="px-2 py-2">EN</a>
             </div>
             </div>
         </div>
