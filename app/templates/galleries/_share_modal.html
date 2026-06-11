@@ -38,6 +38,49 @@
         <p class="text-sm text-text-muted">{{ t('gallery.share_active_text') }}</p>
         {% endif %}
 
+        <!-- Password protection (1y5): set/change/remove without rotating the
+             share token — re-sharing would invalidate the model's magic link. -->
+        <form class="mt-4"
+              method="post"
+              action="/galleries/{{ gallery.id }}/password"
+              hx-post="/galleries/{{ gallery.id }}/password"
+              hx-target="#share-section"
+              hx-swap="innerHTML">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="rounded-md border border-border-subtle bg-surface-base p-3">
+                <div class="flex items-center justify-between gap-2">
+                    <span class="text-sm text-text-secondary">{{ t('gallery.share_password_label') }}</span>
+                    {% if gallery.password_hash %}
+                    <span class="rounded-full border border-status-success bg-surface-raised px-2 py-1 text-xs text-status-success">{{ t('gallery.password_set_badge') }}</span>
+                    {% else %}
+                    <span class="rounded-full border border-border-subtle bg-surface-raised px-2 py-1 text-xs text-text-muted">{{ t('gallery.password_not_set_badge') }}</span>
+                    {% endif %}
+                </div>
+                <p class="mt-2 text-xs text-text-muted">{{ t('gallery.password_update_hint') }}</p>
+                <div class="mt-3 flex items-center gap-2">
+                    <label class="sr-only" for="gallery-password-update">{{ t('gallery.share_password_placeholder') }}</label>
+                    <input type="password"
+                           id="gallery-password-update"
+                           name="password"
+                           required
+                           autocomplete="new-password"
+                           placeholder="{{ t('gallery.share_password_placeholder') }}"
+                           class="min-w-0 flex-1 rounded-md border border-border-subtle bg-surface-raised px-3 py-2 text-sm text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus">
+                    {% call button(variant='secondary', size='sm', type='submit') %}{{ t('gallery.password_save') }}{% endcall %}
+                </div>
+            </div>
+        </form>
+        {% if gallery.password_hash %}
+        <form class="mt-2"
+              hx-post="/galleries/{{ gallery.id }}/password"
+              hx-target="#share-section"
+              hx-swap="innerHTML"
+              hx-confirm="{{ t('gallery.password_remove_confirm') }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            {% call button(variant='ghost', size='sm', type='submit', extra_class='w-full') %}{{ t('gallery.password_remove') }}{% endcall %}
+        </form>
+        {% endif %}
+
         <form class="mt-4"
               hx-delete="/galleries/{{ gallery.id }}/share"
               hx-target="#share-section"

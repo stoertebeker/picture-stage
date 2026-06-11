@@ -341,6 +341,33 @@ async def revoke_share_link(
     return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
 
 
+@router.post("/galleries/{gallery_id}/password", response_class=HTMLResponse)
+async def set_gallery_password(
+    gallery_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(require_authenticated_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Set, change or remove the gallery password without touching the share token.
+
+    Re-sharing would rotate the token and kill the magic link already sent to
+    the model; this endpoint only swaps the password hash. An empty password
+    removes the protection (used by the explicit remove form in the modal).
+    """
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    form = await request.form()
+    password = str(form.get("password", "")).strip() or None
+    gallery.password_hash = hash_password(password) if password else None
+
+    await db.commit()
+    await db.refresh(gallery)
+
+    images = await _load_images_with_signed_urls(gallery_id, db)
+    ctx = _build_context(request, gallery, images, user)
+    return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
+
+
 @router.post("/galleries/{gallery_id}/expiry", response_class=HTMLResponse)
 async def set_gallery_expiry(
     gallery_id: uuid.UUID,

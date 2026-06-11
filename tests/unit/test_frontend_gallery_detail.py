@@ -101,3 +101,45 @@ def test_image_grid_branches_on_processing_status() -> None:
     # Status semantics for assistive tech.
     assert 'role="status"' in image_grid
     assert 'role="alert"' in image_grid
+
+
+def test_share_modal_can_update_password_without_rotating_token() -> None:
+    """1y5: with an active share link the modal offers set/change/remove of the
+    gallery password via its own endpoint — NOT via re-share, which would
+    rotate the token and kill the magic link already sent to the model."""
+    share = _template("_share_modal.html")
+    galleries_py = (PROJECT_ROOT / "app" / "frontend" / "galleries.py").read_text()
+
+    # Update + remove forms post to the dedicated password endpoint.
+    assert 'hx-post="/galleries/{{ gallery.id }}/password"' in share
+    assert "gallery.password_remove_confirm" in share
+    assert "gallery.password_set_badge" in share
+    assert "gallery.password_not_set_badge" in share
+    assert "gallery.password_update_hint" in share
+
+    # Endpoint exists, is owner-scoped and never touches the share token.
+    assert '@router.post("/galleries/{gallery_id}/password"' in galleries_py
+    endpoint_start = galleries_py.index("async def set_gallery_password")
+    endpoint_end = galleries_py.index("@router.post", endpoint_start)
+    endpoint_block = galleries_py[endpoint_start:endpoint_end]
+    assert "_get_owned_gallery" in endpoint_block
+    assert "share_token" not in endpoint_block
+    assert "hash_password(password) if password else None" in endpoint_block
+
+
+def test_share_modal_password_i18n_keys_exist() -> None:
+    """All i18n keys referenced by the password section exist in DE and EN."""
+    import json
+
+    de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())["gallery"]
+    en = json.loads((PROJECT_ROOT / "app" / "i18n" / "en.json").read_text())["gallery"]
+    for key in (
+        "password_set_badge",
+        "password_not_set_badge",
+        "password_update_hint",
+        "password_save",
+        "password_remove",
+        "password_remove_confirm",
+    ):
+        assert key in de, f"DE missing gallery.{key}"
+        assert key in en, f"EN missing gallery.{key}"
