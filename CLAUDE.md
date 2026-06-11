@@ -118,40 +118,31 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-11 (nachmittags)
-**Wachwechsel-Tag:** `handover-2026-06-11-csp-fixes` (zeigt auf `99637ab`, letzter grüner Stand: 2gb + toj live abgenommen & closed, 3uh gepusht, zs5 closed)
-**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod lief während dieser Wache auf Build `?v=20260611121356`** (enthält 2gb + toj — beide darauf live abgenommen; 3uh ist NOCH NICHT auf Prod). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP produktiv (Mailjet).** **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung) — für Live-Tests nutzbar.
+**Datum:** 2026-06-11 (abends)
+**Wachwechsel-Tag:** `handover-2026-06-11-features` (zeigt auf `b5c9459`, letzter grüner Stand: `3uh`/`zgf`/`5gi`/`bsr` alle prod-abgenommen & closed, CI grün)
+**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod lief während dieser Wache auf Build `?v=20260611181007`** (enthält alle u.g. Features — alle darauf live abgenommen). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP produktiv (Mailjet).** **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung) — für Live-Tests nutzbar.
 
-### ⚠️ OFFENE PROD-ABNAHME — ZUERST ERLEDIGEN
-**`3uh` (Commit `20634c1`, in_progress) ist gepusht, aber NOCH NICHT live abgenommen.** Nach dem nächsten Deploy (sobald Prod den 3uh-Commit zieht) testen:
-1. Fotografen-Galerie → Bild-Upload → **Progress-Balken erscheint und wird sauber zurückgesetzt** (uploading-Flag), kein Hängen.
-2. **Browser-Konsole frei von `CSP Parser Error: Unexpected token: uploading`** (war der Bug).
-3. Bei Erfolg: `bd close picture-stage-3uh`. Test-Galerie + Bilder danach restlos löschen.
+### Erledigt in dieser Wache (2026-06-11 abends) — 1 Nach-Abnahme + 3 Features (alle prod-abgenommen & closed)
+- **`3uh` (P2, closed, PROD-ABGENOMMEN):** Offene Upload-CSP-Abnahme der Vorwache nachgeholt — Upload sauber, kein `CSP Parser Error: Unexpected token: uploading` (Konsole `all=false` nach frischer Navigation + harte Gegenprobe: alle Alt-Fehler trugen Build `121356`, der neue `130746` keinen).
+- **`zgf` (P2, `42a67a3`, closed, PROD-ABGENOMMEN):** Mobile-Nav-Overflow @375px. Nav-Container + Aktionsgruppe `flex-wrap` (+ `justify-end gap-2 sm:gap-4`) → Items brechen um statt aus dem Viewport zu laufen. Reiner CSS-Fix; echte Burger-Nav bleibt v0.6 (`2j2`). Prod: navScrollWidth=375=innerWidth (war 504), Desktop @1280px einzeilig.
+- **`5gi` Schritt 1 (P2, `9ceecef`, closed, PROD-ABGENOMMEN):** Konfigurierbares Galerie-Limit. Setting `MAX_GALLERIES_PER_USER` (Default 5, `0`=unbegrenzt), gemeinsamer Helper `app/galleries/quota.py` auf BEIDEN Erstellungspfaden (API → 409, Frontend → Fehler-Toast `HX-Reswap:none`). Greift nur bei Neuanlage → kein Bestands-Lockout. Prod: 6. Galerie blockiert, korrekter DE-Toast. **Schritt 2 (per-User-Override Admin-UI) = `56k` (P3, offen).**
+- **`bsr` (P2, `854d287`+`3ec1a95`, closed, PROD-ABGENOMMEN):** Wasserzeichen pro Galerie. `WatermarkConfig.enabled` + beide Upload-Pfade reichen `gallery.watermark_config` durch (vorher hardcoded `PREVIEW · {id}` und ignoriert); UI-Formular (Freitext + Checkbox „anzeigen") + Endpoint `POST /galleries/{id}/watermark` (nach `/expiry`-Muster). **Keine DB-Migration** (JSON-Feld existierte). Nur neue Uploads (kein Rebuild bestehender Previews). Security: Tenant-Isolation, CSRF, control-char-strip + 200-Zeichen-Cap + Schema-Validierung. Prod: custom Text auf 1280px-Preview sichtbar, deaktiviert ohne Overlay, Persistenz.
+- **CI-Stolperstein gefixt (`484900a`):** Watermark-Pixel-Tests waren font-/opacity-abhängig (lokal grün, CI rot) → `opacity: 1.0` explizit. Siehe `docs/lessons-learned.md` → „Tests & CI".
+- **254 Unit-Tests grün** (von 240), ruff format+check + mypy sauber, **CI grün**. CHANGELOG (`bsr`+`5gi`) + `.env.example` (`MAX_GALLERIES_PER_USER`) aktualisiert.
 
-*Test-Setup-Hinweise (aus dieser Wache):* haiku-Playwright unzuverlässig → **selbst testen / Screenshots selbst sichten**. Galerie-Löschen-Button ist ein **Icon ohne Text** (`aria-label="Galerie loeschen"`) und braucht **Namens-Bestätigung** (Galeriename ins `confirm_name`-Feld tippen, dann „Endgueltig loeschen"). Konsole `all=true` abrufen, dann selbst klassifizieren (Cloudflare-Beacon = Non-Issue).
-
-### Nachricht vom scheidenden Wachoffizier (2026-06-11 nachm.)
-> Führe als Erstes die offene Prod-Abnahme von `3uh` aus (siehe Block oben) — der Code ist gepusht, es fehlt nur der Live-Test nach dem nächsten Deploy. Zwei Dinge: (1) Die Browser-Konsole ist der wahre Regressionsdetektor — die CSP-Parser-Fehler (`2gb` Optional Chaining, `3uh` Multi-Statement) liefen seit u3s unbemerkt durch „grüne" Abnahmen. Ruf bei jeder Guest-/Upload-Abnahme `browser_console_messages(all=true)` ab und klassifiziere die Roh-Logs SELBST — haiku klassifiziert sie falsch. (2) `zs5` (nav-badge-500) habe ich als Deploy-transient geschlossen: Code liefert lokal sauber 200 (count=0 UND count=5), die 500er standen nur im Deploy-Fenster. Falls sie wiederkehren: Prod-Server-Logs prüfen, nicht den Code (er ist korrekt).
-
-### Erledigt in dieser Wache (2026-06-11 nachm.) — 3 CSP/Token-Fixes + 1 Diagnose
-- **`2gb` (P1, `dc7a635`, closed, PROD-ABGENOMMEN):** Guest-Grid-Reaktivität. `?.` → null-safe `isSelected(idx)`/`isFavorited(idx)` auf `guestViewer` (`components.js`), 7 Bindungen in `_image_grid.html` umgestellt. Konsole frei von Parser-Fehlern, Ring/Badge/Herz rendern reaktiv (selbst per DOM + visuell live verifiziert).
-- **`toj` (P3, `9360b05`, closed, PROD-ABGENOMMEN):** Status-Tokens auf RGB-Komponenten (`--color-status-danger: 220 38 38`) + `rgb(var() / <alpha-value>)`. Opacity-Modifier liefern jetzt in Dark+Light echte rgba (live per computed style verifiziert). `form_error`-Altlast `text-red-300` mitgefixt.
-- **`3uh` (P2, `20634c1`, in_progress — siehe OFFEN-Block oben):** Upload-Handler-Multi-Statement → `uploadZone.onUploadComplete()`. **Code gepusht, Live-Abnahme offen.**
-- **`zs5` (P2, closed):** nav-badge-500 als Deploy-transient diagnostiziert (kein Code-Bug, lokal 200-verifiziert).
-- **240 Unit-Tests grün** (von 237), ruff format+check sauber. CHANGELOG + lessons-learned aktualisiert.
-
-### Offene Tickets (Stand Wachwechsel)
+### Offene Tickets (Stand Wachwechsel) — keine dringenden, alle Prod-Abnahmen erledigt
 | Ticket | Prio | Befund |
 |--------|------|--------|
-| `picture-stage-3uh` | **P2** | **in_progress — Code gepusht, Live-Prod-Abnahme offen** (siehe OFFEN-Block). |
-| `picture-stage-zgf` | P2 | Top-Nav auf 375px: horizontaler Overflow, „Einstellungen"/„Logout" außerhalb Viewport. |
+| `picture-stage-56k` | P3 | Per-User-Galerie-Limit-Override in Admin-UI (Schritt 2 von `5gi`) — nullable Feld am User-Model + Migration + `quota.py`-Override-Vorrang + Admin-UI. |
 | `picture-stage-typ` | P3 | `Identifier 'TOAST_KIND_CLASS' has already been declared` — Doppel-Deklaration in `app.js` nach HTMX-Swap (Konsolen-Rauschen). |
-| `picture-stage-bbj` | P3 | Kontrast `text-status-danger` auf `/10`-Tönung nur ~3.9:1 (unter AA 4.5 für Normaltext) — aus dem toj-Fix; Optionen im Ticket. |
+| `picture-stage-bbj` | P3 | Kontrast `text-status-danger` auf `/10`-Tönung nur ~3.9:1 (unter AA 4.5) — aus dem `toj`-Fix; Optionen im Ticket. |
+| `picture-stage-ugu` | P3 | Benutzerverwaltung zu schmal → horizontales Scrollen nötig. |
+| `picture-stage-1zz` | P3 | „Light"-Label auf Login-Seite ohne Funktion. |
 
 ### Offene Punkte für die nächste Wache
-1. **ZUERST: Prod-Abnahme `3uh`** nach nächstem Deploy (siehe OFFEN-Block oben).
-2. Danach freie Wahl aus `bd ready`: `zgf` (P2 Mobile-Nav), `qdz.17` (P2 i18n), oder die P3-Befunde `typ`/`bbj`.
-3. Abnahme-Standard: **Browser-Konsole `all=true` selbst klassifizieren** (Cloudflare-Beacon = Non-Issue) + Screenshots selbst sichten + Test-Galerien/-Bilder restlos löschen.
+1. **Freie Wahl aus `bd ready`** — kein Ticket dringend, alle Prod-Abnahmen sind durch. Naheliegend: P2 `qdz.17` (i18n-Lücken Guest) oder `2j2` (Mobile-Tuning/Burger-Nav, nimmt `zgf` thematisch auf), sonst die P3-Befunde (`56k`/`typ`/`bbj`/`ugu`/`1zz`).
+2. Abnahme-Standard: **Browser-Konsole `all=false` nach frischer Navigation selbst klassifizieren** (Cloudflare-Beacon + `TOAST_KIND_CLASS` = bekannte Non-Issues) + Screenshots selbst sichten + Test-Galerien/-Bilder restlos löschen. **Effizienz-Trick:** Galerien per `fetch('/dashboard/galleries', …)` mit CSRF aus `<meta name="csrf-token">` anlegen, per `POST /galleries/{id}/delete` mit `confirm_name`=Galeriename löschen — schneller als der UI-Klickpfad.
+3. **Bildverarbeitende Tests:** CI-Lauf abwarten — Pillow rendert lokal (macOS, `load_default`) anders als Linux/CI (DejaVu); „lokal grün" ist kein CI-Beleg (siehe lessons-learned).
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
