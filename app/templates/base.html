@@ -15,11 +15,11 @@
       hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
     <a href="#main"
        class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-md focus:bg-surface-raised focus:text-text-primary focus:shadow-lg focus:outline-none focus:ring focus:ring-focus">{{ t('common.skip_to_content') }}</a>
-    <nav class="flex items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border-subtle">
+    <nav class="flex flex-wrap items-center justify-between gap-4 px-4 sm:px-6 py-3 border-b border-border-subtle">
         <div>
             <a href="/dashboard"><strong>Picture-Stage</strong></a>
         </div>
-        <div class="flex items-center gap-4">
+        <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
             <a href="/dashboard">Dashboard</a>
             {% if current_user and (current_user.status | string) == 'admin' %}
             <a href="/admin/users">{{ t('admin.nav_admin') }}</a>
