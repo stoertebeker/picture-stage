@@ -245,6 +245,24 @@ def test_guest_image_grid_exists():
     assert "grid" in grid_html
 
 
+def test_guest_image_grid_avoids_optional_chaining():
+    """Grid Alpine expressions must not use optional chaining (picture-stage-2gb).
+
+    The @alpinejs/csp build cannot parse `images[N]?.selected`; such expressions
+    throw at runtime and silently kill grid reactivity (selection ring, check
+    badge, hover toggles, favorite heart). The grid must call the null-safe
+    isSelected()/isFavorited() helpers on guestViewer instead.
+    """
+    grid_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "_image_grid.html").read_text()
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+
+    assert "?." not in grid_html, "optional chaining is not CSP-compatible"
+    assert "isSelected(" in grid_html
+    assert "isFavorited(" in grid_html
+    assert "isSelected(idx)" in components_js
+    assert "isFavorited(idx)" in components_js
+
+
 def test_guest_router_registered():
     """Frontend guest router is included in main.py before API guest router."""
     main_py = (PROJECT_ROOT / "app" / "main.py").read_text()

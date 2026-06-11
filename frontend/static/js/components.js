@@ -80,6 +80,20 @@ function guestViewerComponent() {
             return this.images[this.lightboxIndex] || null;
         },
 
+        // Null-safe grid lookups by index. The @alpinejs/csp build rejects
+        // optional chaining (images[N]?.selected), so the grid template calls
+        // these instead. Reading this.images[idx].selected keeps Alpine's
+        // reactivity intact.
+        isSelected(idx) {
+            const img = this.images[idx];
+            return !!(img && img.selected);
+        },
+
+        isFavorited(idx) {
+            const img = this.images[idx];
+            return !!(img && img.favorited);
+        },
+
         openLightbox(index) {
             this.lightboxIndex = index;
             this.lightboxOpen = true;
