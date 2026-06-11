@@ -118,31 +118,30 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-11 (abends)
-**Wachwechsel-Tag:** `handover-2026-06-11-features` (zeigt auf `b5c9459`, letzter grüner Stand: `3uh`/`zgf`/`5gi`/`bsr` alle prod-abgenommen & closed, CI grün)
-**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod lief während dieser Wache auf Build `?v=20260611181007`** (enthält alle u.g. Features — alle darauf live abgenommen). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP produktiv (Mailjet).** **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung) — für Live-Tests nutzbar.
+**Datum:** 2026-06-11 (abends, 2. Wache)
+**Wachwechsel-Tag:** `handover-2026-06-11-v05-complete` (zeigt auf `c3cac65`, letzter grüner Stand: `qdz.17`/`qdz.18` prod-abgenommen & closed, **Epic `qdz` v0.5 geschlossen**)
+**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP produktiv (Mailjet).** **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung) — für Live-Tests nutzbar.
 
-### Erledigt in dieser Wache (2026-06-11 abends) — 1 Nach-Abnahme + 3 Features (alle prod-abgenommen & closed)
-- **`3uh` (P2, closed, PROD-ABGENOMMEN):** Offene Upload-CSP-Abnahme der Vorwache nachgeholt — Upload sauber, kein `CSP Parser Error: Unexpected token: uploading` (Konsole `all=false` nach frischer Navigation + harte Gegenprobe: alle Alt-Fehler trugen Build `121356`, der neue `130746` keinen).
-- **`zgf` (P2, `42a67a3`, closed, PROD-ABGENOMMEN):** Mobile-Nav-Overflow @375px. Nav-Container + Aktionsgruppe `flex-wrap` (+ `justify-end gap-2 sm:gap-4`) → Items brechen um statt aus dem Viewport zu laufen. Reiner CSS-Fix; echte Burger-Nav bleibt v0.6 (`2j2`). Prod: navScrollWidth=375=innerWidth (war 504), Desktop @1280px einzeilig.
-- **`5gi` Schritt 1 (P2, `9ceecef`, closed, PROD-ABGENOMMEN):** Konfigurierbares Galerie-Limit. Setting `MAX_GALLERIES_PER_USER` (Default 5, `0`=unbegrenzt), gemeinsamer Helper `app/galleries/quota.py` auf BEIDEN Erstellungspfaden (API → 409, Frontend → Fehler-Toast `HX-Reswap:none`). Greift nur bei Neuanlage → kein Bestands-Lockout. Prod: 6. Galerie blockiert, korrekter DE-Toast. **Schritt 2 (per-User-Override Admin-UI) = `56k` (P3, offen).**
-- **`bsr` (P2, `854d287`+`3ec1a95`, closed, PROD-ABGENOMMEN):** Wasserzeichen pro Galerie. `WatermarkConfig.enabled` + beide Upload-Pfade reichen `gallery.watermark_config` durch (vorher hardcoded `PREVIEW · {id}` und ignoriert); UI-Formular (Freitext + Checkbox „anzeigen") + Endpoint `POST /galleries/{id}/watermark` (nach `/expiry`-Muster). **Keine DB-Migration** (JSON-Feld existierte). Nur neue Uploads (kein Rebuild bestehender Previews). Security: Tenant-Isolation, CSRF, control-char-strip + 200-Zeichen-Cap + Schema-Validierung. Prod: custom Text auf 1280px-Preview sichtbar, deaktiviert ohne Overlay, Persistenz.
-- **CI-Stolperstein gefixt (`484900a`):** Watermark-Pixel-Tests waren font-/opacity-abhängig (lokal grün, CI rot) → `opacity: 1.0` explizit. Siehe `docs/lessons-learned.md` → „Tests & CI".
-- **254 Unit-Tests grün** (von 240), ruff format+check + mypy sauber, **CI grün**. CHANGELOG (`bsr`+`5gi`) + `.env.example` (`MAX_GALLERIES_PER_USER`) aktualisiert.
+### Erledigt in dieser Wache (2026-06-11 abends, 2. Wache) — v0.5 Epic abgeschlossen
+- **`qdz.17` (P2, `353aef3`, closed, PROD-ABGENOMMEN):** Alle verbleibenden hardcoded Strings auf `t()`-Keys. `deps.py`: `ContextVar`-basiertes `_global_t()` in `env.globals` — Jinja2-Macros können jetzt `t()` aufrufen ohne Context-Zugriff. `html[lang]` dynamisch via `{{ locale }}`. Cookie-Banner, Nav-Links (Dashboard/Logout/Impressum/Datenschutz), Modal+Toast `aria-label` vollständig i18n-fähig.
+- **`qdz.18` (P2, `aec59e4`+`c3cac65`, closed, PROD-ABGENOMMEN):** Mobile-Tuning Guest-Pages. (1) `hidden sm:flex`-Bug auf Sort-Dropdown: Alpine `x-show` kann `!important` nicht überschreiben → `flex` statt `hidden sm:flex`. (2) Touch-Targets Lang-Switcher: `px-1` → `px-2 py-2`. (3) Sort-Panel auf Mobile als absolutes Dropdown unter dem Header (verhindert H-Scroll bei geöffnetem Panel, scrollWidth=375 verifiziert). Siehe `docs/lessons-learned.md` → „i18n & Templates".
+- **Epic `qdz` v0.5 geschlossen** — alle Guest-Pages (Viewer, Lightbox, Password-Gate, i18n, Mobile) prod-abgenommen.
+- **254 Unit-Tests grün**, ruff+mypy sauber, CI grün.
 
-### Offene Tickets (Stand Wachwechsel) — keine dringenden, alle Prod-Abnahmen erledigt
+### Offene Tickets (Stand Wachwechsel) — kein P1/P2 offen außer v0.6
 | Ticket | Prio | Befund |
 |--------|------|--------|
-| `picture-stage-56k` | P3 | Per-User-Galerie-Limit-Override in Admin-UI (Schritt 2 von `5gi`) — nullable Feld am User-Model + Migration + `quota.py`-Override-Vorrang + Admin-UI. |
-| `picture-stage-typ` | P3 | `Identifier 'TOAST_KIND_CLASS' has already been declared` — Doppel-Deklaration in `app.js` nach HTMX-Swap (Konsolen-Rauschen). |
-| `picture-stage-bbj` | P3 | Kontrast `text-status-danger` auf `/10`-Tönung nur ~3.9:1 (unter AA 4.5) — aus dem `toj`-Fix; Optionen im Ticket. |
-| `picture-stage-ugu` | P3 | Benutzerverwaltung zu schmal → horizontales Scrollen nötig. |
-| `picture-stage-1zz` | P3 | „Light"-Label auf Login-Seite ohne Funktion. |
+| `picture-stage-2j2` | P2 | Mobile-Tuning Photographer-Pages (375/768/1280px) — v0.6-Einstieg |
+| `picture-stage-56k` | P3 | Per-User-Galerie-Limit-Override in Admin-UI (Schritt 2 von `5gi`) |
+| `picture-stage-typ` | P3 | `Identifier 'TOAST_KIND_CLASS' has already been declared` — Doppel-Deklaration in `app.js` |
+| `picture-stage-bbj` | P3 | Kontrast `text-status-danger` auf `/10`-Tönung nur ~3.9:1 (unter AA 4.5) |
+| `picture-stage-ugu` | P3 | Benutzerverwaltung zu schmal → horizontales Scrollen nötig |
+| `picture-stage-1zz` | P3 | „Light"-Label auf Login-Seite ohne Funktion |
 
 ### Offene Punkte für die nächste Wache
-1. **Freie Wahl aus `bd ready`** — kein Ticket dringend, alle Prod-Abnahmen sind durch. Naheliegend: P2 `qdz.17` (i18n-Lücken Guest) oder `2j2` (Mobile-Tuning/Burger-Nav, nimmt `zgf` thematisch auf), sonst die P3-Befunde (`56k`/`typ`/`bbj`/`ugu`/`1zz`).
-2. Abnahme-Standard: **Browser-Konsole `all=false` nach frischer Navigation selbst klassifizieren** (Cloudflare-Beacon + `TOAST_KIND_CLASS` = bekannte Non-Issues) + Screenshots selbst sichten + Test-Galerien/-Bilder restlos löschen. **Effizienz-Trick:** Galerien per `fetch('/dashboard/galleries', …)` mit CSRF aus `<meta name="csrf-token">` anlegen, per `POST /galleries/{id}/delete` mit `confirm_name`=Galeriename löschen — schneller als der UI-Klickpfad.
-3. **Bildverarbeitende Tests:** CI-Lauf abwarten — Pillow rendert lokal (macOS, `load_default`) anders als Linux/CI (DejaVu); „lokal grün" ist kein CI-Beleg (siehe lessons-learned).
+1. **Einstieg: `2j2` (P2)** — Mobile-Tuning Photographer-Pages, natürliche Fortsetzung nach v0.5. Oder freie Wahl aus P3-Bugs (`typ`/`bbj`/`ugu`/`1zz`/`56k`).
+2. **QEMU-Flakiness:** Docker-Build schlägt gelegentlich mit `exit code: 132` (SIGILL) fehl — `gh run rerun --failed` reicht, kein Code-Problem. Hardwaremigration auf x86 geplant.
+3. Abnahme-Standard: Browser-Konsole `all=false` nach frischer Navigation selbst klassifizieren (Cloudflare-Beacon + `TOAST_KIND_CLASS` = bekannte Non-Issues). **Effizienz-Trick:** Galerien via HTMX-Header anlegen/löschen (`X-CSRF-Token` + `HX-Request: true`), nicht über FormData-CSRF.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
@@ -315,20 +314,11 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 
 > `picture-stage-7kr` (JWT-Invalidierung) ✅ closed 2026-06-08 — siehe Abschnitt „Security-Härtung" oben.
 
-### v0.5 – Noch offen (Epic `picture-stage-qdz`)
+### v0.5 – ✅ ABGESCHLOSSEN (2026-06-11)
 
-**Scope:** Nur Guest-Pages. Photographer-Pages (Dashboard, Auth, Admin, Audit-Log etc.) → v0.6+.
+Alle Sub-Tickets erledigt und prod-abgenommen. Epic `picture-stage-qdz` geschlossen.
 
-| Ausstehend | Beads-ID |
-|------------|----------|
-| ~~Guest-Lightbox Mockup + Impl~~ ✅ done (2026-06-08) | ~~`qdz.13`, `qdz.14`~~ |
-| ~~Guest-Password-Gate Mockup + Impl~~ ✅ done (2026-06-11, `35ce1c1`, prod-abgenommen) | ~~`qdz.15`, `qdz.16`~~ |
-| i18n-Lücken schließen | `qdz.17` |
-| Mobile-Tuning Guest-Pages (375/768/1280px) | `qdz.18` |
-
-Einstieg: `bd ready` → **`2gb` zuerst (P1, Grid-Regression)**, danach `qdz.17` (i18n) oder `zgf`.
-**Hinweis Frontend-Verifikation:** Lokal kein Tailwind-Build (styles.css = Stub) → visuelle Abnahme
-gegen Spike oder live auf Prod (`https://picture.stoertes.cloud`, via Playwright erreichbar).
+**Hinweis Frontend-Verifikation:** Lokal kein Tailwind-Build (styles.css = Stub) → visuelle Abnahme immer gegen Prod (`https://picture.stoertes.cloud`, via Playwright erreichbar).
 
 ### Kleinere offene Punkte
 - ~~Docker-Build verifizieren~~ ✅ erledigt 2026-06-08 (Pipeline live, siehe CI/CD-Abschnitt oben)
@@ -343,7 +333,7 @@ gegen Spike oder live auf Prod (`https://picture.stoertes.cloud`, via Playwright
 | v0.2 Lifecycle & Komfort | `picture-stage-9q3` | closed (1 deferred) |
 | v0.3 Produktion & Compliance | `picture-stage-fbr` | closed |
 | v0.4 Frontend (funktional) | `picture-stage-gza` | closed |
-| v0.5 UX-Redesign – Editorial Dark (Guest-Focused) | `picture-stage-qdz` | Foundation + Komponenten + Viewer + **Lightbox** ✅, PW-Gate/i18n/Mobile offen |
+| v0.5 UX-Redesign – Editorial Dark (Guest-Focused) | `picture-stage-qdz` | ✅ **CLOSED** (2026-06-11) — alle Sub-Tickets erledigt und prod-abgenommen |
 | Admin-User-Verwaltung (API + Frontend) | `picture-stage-uwy` | closed (`7kr` ✅ done; 2 Follow-ups offen: `52s`/`cxs`) |
 
 ### Verifikation für neue Sessions

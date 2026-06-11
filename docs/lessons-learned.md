@@ -189,6 +189,20 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Problem:** Das MCP-Browserprofil ist über Sub-Agenten und Stunden hinweg dasselbe; Theme-/Sprach-/Cookie-Zustand früherer Tests verfälscht spätere „Default"-Belege. Benennung der Screenshots (`…-dark.png`) suggeriert dann falsche Evidenz.
 **Regel:** Vor Theme-/Zustands-Belegen den gewünschten Zustand **explizit setzen** (`localStorage.setItem('theme-preference', …)` + `data-theme`) statt sich auf „frischen" Browser zu verlassen. Generell: Sub-Agent-Screenshots vor der Abnahme-Meldung selbst sichten — heute waren u.a. zwei byte-identische „vorher/nachher"-Bilder und ein falsch klassifizierter Konsolen-Fehlerblock darunter.
 
+## i18n & Templates (2026-06-11)
+
+### Jinja2-importierte Macros haben keinen Zugriff auf Template-Context-Variablen
+**Kontext:** `t()` wird via `context.setdefault("t", partial(...))` in jeden Template-Render injiziert. In `_macros/modal.html` und `_macros/toast.html` war daher `aria-label="{{ 'Schließen' }}"` (Literal-String-Workaround) statt `t('common.close')`.
+**Problem:** Bei `{% from "_macros/modal.html" import modal %}` hat die Macro-Ausführung keinen Zugriff auf Context-Variablen des aufrufenden Templates — nur auf Jinja2-`env.globals`. Context-Variablen sind pro Render, Globals sind pro Environment.
+**Lösung:** `_locale_ctx: ContextVar[str]` in `app/frontend/deps.py` speichert die aktuelle Locale. `_global_t()` liest daraus und wird in `env.globals["t"]` registriert. Templates nutzen das context-gebundene (request-aware) `t()`, Macros fallen auf den globalen `_global_t()` zurück — beide lesen dieselbe Locale. Schlüssel: `_locale_ctx.set(locale)` muss **vor** dem Template-Render aufgerufen werden (in `_patched_template_response`).
+**Regel:** Alles, was in Macros verfügbar sein muss, gehört in `env.globals` — nicht in den Context. Async-sicher via `ContextVar` (FastAPI: eine Coroutine pro Request).
+
+### Alpine `x-show` kann Tailwind `hidden` (`display:none !important`) nicht überschreiben
+**Kontext:** Sort-Dropdowns im Guest-Viewer hatten `class="hidden sm:flex ..."` + `x-show="showFilters"`. Das Gear-Icon öffnete auf Mobile scheinbar nichts.
+**Problem:** Tailwind `hidden` = `display: none !important`. Alpine's `x-show` setzt `style="display: none"` (Inline-Style, Specificity 1,0,0,0) — kann `!important` nicht überschreiben. Auf `sm+`-Breakpoints überschreibt `sm:flex` zwar `hidden`, aber auch da gewinnt Alpines Inline-Style. Resultat: auf Mobile immer hidden, auf Desktop immer sichtbar — der Toggle funktioniert auf keinem Breakpoint korrekt.
+**Lösung:** `hidden sm:flex` → `flex` entfernen. Alpine's `x-show` allein steuert die Sichtbarkeit auf allen Breakpoints. Das initiale `style="display: none;"` auf dem Element verhindert FOUC bis Alpine hydratisiert.
+**Regel:** Nie `x-show` mit `hidden`/`block`/`flex` Tailwind-Klassen auf demselben Element mischen. Entweder Alpine steuert visibility (dann nur `style="display:none"` als FOUC-Guard) oder CSS (dann kein `x-show`).
+
 ## Tests & CI (2026-06-11)
 
 ### Pillow-Font-Fallback: lokal grün ≠ CI grün bei Pixel-Assertions
