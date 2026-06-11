@@ -22,6 +22,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.security.rate_limit import limiter
 from app.security.signing import sign_url
 from app.selections.service import get_current_selections
 
@@ -310,6 +311,7 @@ async def guest_gallery_images(
 
 
 @router.post("/{token}/verify-password", response_class=HTMLResponse)
+@limiter.limit("5/minute")
 async def guest_verify_password(
     token: str,
     request: Request,

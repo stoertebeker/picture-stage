@@ -202,6 +202,17 @@ def test_guest_password_gate_uses_plain_form_post():
     assert "HTTP_401_UNAUTHORIZED" in guest_py
 
 
+def test_guest_verify_password_is_rate_limited():
+    """a2d: the HTML verify-password endpoint must be rate-limited like its
+    JSON-API counterpart (5/minute), or the bcrypt gallery password can be
+    brute-forced through the web form."""
+    guest_py = (PROJECT_ROOT / "app" / "frontend" / "guest.py").read_text()
+
+    handler_pos = guest_py.index("async def guest_verify_password")
+    decorator_block = guest_py[:handler_pos].rsplit("@router.post", 1)[1]
+    assert '@limiter.limit("5/minute")' in decorator_block
+
+
 def test_guest_password_i18n_keys_exist():
     """All i18n keys referenced by the gate exist in DE and EN."""
     import json
