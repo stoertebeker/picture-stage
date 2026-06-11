@@ -167,3 +167,20 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 ### Path-Filter muss ALLE ins Image kopierten Pfade abdecken — sonst stille Stale-Asset-Deploys (2026-06-10)
 **Problem:** `frontend/**` fehlte im `docker-publish.yml`-Path-Filter, obwohl `frontend/` (JS, CSS, Spikes, Fonts) ins Image kopiert wird. Ein frontend-only-Commit (qdz.15-Spike) lief als „grüner" 10-Sekunden-Run durch — das war der Skip, **kein Build**; Prod wäre still auf alten Assets sitzen geblieben. Gleiche Falle wie der frühere `tests/**`-Fund, andere Richtung.
 **Regel:** Beim Anlegen/Ändern von Path-Filtern gegen das `Dockerfile` (alle `COPY`-Quellen) abgleichen, nicht gegen das Bauchgefühl. Verdächtig schnelle „grüne" Runs (≈10s) sind fast immer Skips — Job-Liste prüfen. Fix: `00e9b94`.
+
+## Guest-Gate-Abnahme + Grid-Regression (2026-06-11)
+
+### `@alpinejs/csp` versteht KEIN Optional Chaining (`?.`) — stille Render-Ausfälle
+**Kontext:** Live-Abnahme deckte 112 Konsolen-Fehler `CSP Parser Error: Unexpected token: PUNCTUATION "."` im Guest-Viewer auf — exakt 7 Expressions × 16 Bilder aus `_image_grid.html` (`images[N]?.selected` / `?.favorited`).
+**Problem:** Der CSP-Build (3.15.12) parst Ternäre/Arithmetik/Methodenaufrufe, aber **kein `?.`**. Die betroffenen Bindings (`:class`, `x-show`, `x-if`) fallen still aus: Auswahl-Ringe, Check-Badges und Hover-Toggles im Grid waren auf Prod funktionslos, obwohl die Seite „lief". Unter dem Standard-Alpine-Build (vor u3s) war `?.` gültig — eine **stille Regression durch den Build-Wechsel**, von keinem Test bemerkt (Ticket `picture-stage-2gb`).
+**Regel:** In Alpine-Inline-Expressions nur das CSP-sichere Subset verwenden: Property-Zugriff, Ternäre, Methodenaufrufe mit Argumenten — **kein `?.`**, keine Arrow-Functions, keine Globals. Bei Abnahmen gilt: **Browser-Konsole muss fehlerfrei sein** (bis auf dokumentierte Non-Issues wie den Cloudflare-Beacon); „Seite sieht gut aus" reicht nicht.
+
+### Tailwind 3.4: Opacity-Modifier (`/10`, `/40`) funktionieren NICHT mit `var()`-Farbtokens
+**Kontext:** Der Fehler-Alert des neuen Password-Gates (qdz.16) rendert ohne die rötliche Border-/BG-Tönung aus dem abgenommenen Mockup — nur `text-status-danger` (ohne Modifier) greift.
+**Problem:** Farben, die in `tailwind.config.js` als String `var(--color-status-danger)` definiert sind, kann Tailwind 3.4 nicht mit Alpha komponieren — Klassen wie `bg-status-danger/10` werden **gar nicht generiert** und fehlen still im Build. Im Spike fiel das nicht auf, weil dort manuelle CSS-Regeln im `<style>`-Block dieselben Klassennamen nachbauten (Spike-Optik ≠ Build-Realität).
+**Regel:** Token-Klassen mit Opacity-Modifier nur verwenden, wenn der Token als RGB-Komponenten-Variable + `rgb(var(…) / <alpha-value>)` definiert ist. Bis dahin: Palette-Klassen mit Alpha (`bg-red-600/10`) oder Voll-Ton-Token. Spike-eigene `<style>`-Helfer beim Implementieren IMMER daraufhin prüfen, ob die Utility im echten Build existiert (Ticket `picture-stage-toj`, Option B = RGB-Komponenten-Refactor, fixt auch `form_error`).
+
+### Playwright-MCP-Browserprofil persistiert localStorage über Agent-Sessions
+**Kontext:** Ein Abnahme-Screenshot, der den Dark-Default belegen sollte, zeigte Light — der Browser hatte `theme-preference=light` im localStorage aus einer **früheren** Agent-Session (Theme-Toggle-Test am Vormittag).
+**Problem:** Das MCP-Browserprofil ist über Sub-Agenten und Stunden hinweg dasselbe; Theme-/Sprach-/Cookie-Zustand früherer Tests verfälscht spätere „Default"-Belege. Benennung der Screenshots (`…-dark.png`) suggeriert dann falsche Evidenz.
+**Regel:** Vor Theme-/Zustands-Belegen den gewünschten Zustand **explizit setzen** (`localStorage.setItem('theme-preference', …)` + `data-theme`) statt sich auf „frischen" Browser zu verlassen. Generell: Sub-Agent-Screenshots vor der Abnahme-Meldung selbst sichten — heute waren u.a. zwei byte-identische „vorher/nachher"-Bilder und ein falsch klassifizierter Konsolen-Fehlerblock darunter.

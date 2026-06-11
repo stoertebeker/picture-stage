@@ -118,18 +118,33 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-10 (abends)
-**Wachwechsel-Tag:** `handover-2026-06-10-ux` (zeigt auf `00e9b94`, letzter grüner Stand: p07 komplett verifiziert; dxj/dd1/qdz.15 umgesetzt + gebaut, **Abnahmen offen**; CI-Filter-Fix `frontend/**`)
-**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod läuft auf Build `?v=20260610200248`** (p07-Stand) — der neuere `:dev`-Build mit dxj/dd1/Spike/CI-Fix liegt auf Docker Hub, **noch nicht deployed**. **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP ist seit 2026-06-08 produktiv konfiguriert (Mailjet) — Mailversand prod-verifiziert.**
+**Datum:** 2026-06-11 (mittags)
+**Wachwechsel-Tag:** `handover-2026-06-11` (zeigt auf `ebe3092`, letzter grüner Stand: qdz.16 + a2d + 1y5 umgesetzt UND live abgenommen; alle Abnahmen der Vorwache erledigt)
+**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod läuft auf Build `?v=20260611084643`** (enthält qdz.16-Gate, a2d-Rate-Limit, 1y5-Passwortschutz). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP ist seit 2026-06-08 produktiv konfiguriert (Mailjet).**
 
-### Nachricht vom scheidenden Wachoffizier (2026-06-10, abends)
-> Meine heutigen Umsetzungen (dxj, dd1, qdz.15) sind committed, getestet (Unit) und im `:dev`-Image — aber **NICHT live abgenommen**. Erst die drei offenen Abnahmen unten abschließen, bevor neue Arbeit beginnt (ausdrücklicher Kapitäns-Auftrag). Für dxj braucht ihr Login-Credentials, für dd1 einen Guest-Magic-Link — beides nur vom Kapitän zu bekommen. Vor JEDEM Prod-Test fragen, ob schon deployt ist.
+### Nachricht vom scheidenden Wachoffizier (2026-06-11)
+> Alles aus meiner Wache ist umgesetzt UND live abgenommen — es gibt KEIN offenes WIP, ihr könnt direkt mit `2gb` (P1) anfangen. Zwei Dinge haben mich heute am meisten gekostet: (1) haiku-Playwright-Berichte waren mehrfach unzuverlässig (byte-identische „vorher/nachher"-Screenshots, falsch klassifizierte Konsolen-Fehler, ein VERBOTENER toggleSelect-Klick in der echten Galerie, den ich manuell rückgängig machen musste) — sichtet Screenshots IMMER selbst und gebt Test-Agenten explizite Verbote mit. (2) Die Browser-Konsole ist euer bester Regressionsdetektor: die 112 CSP-Parser-Fehler (`2gb`) liefen seit der u3s-Migration unbemerkt durch alle „grünen" Abnahmen. Für `toj` habe ich Fix-Option A (Palette-Klassen) vorgeschlagen — der Kapitän hat sie noch NICHT freigegeben, erst fragen. Der temporäre Admin-Login (stoertebeker@kkb-clan.de) ist noch aktiv — den Kapitän ans Deaktivieren erinnern.
 
-### Offene Abnahmen für die nächste Wache (Pflicht vor neuer Arbeit)
-1. **Deploy durch Kapitän** (`docker compose pull && up -d`), Asset-Version muss neuer als `20260610200248` sein.
-2. **`dxj` abnehmen** (Top-Nav, **Login nötig**): Einstellungen-Dropdown öffnen/schließen per Klick, ESC schließt, Klick außerhalb schließt, `aria-expanded` wechselt, Theme-Wechsel + Sprachwechsel aus dem Menü funktionieren, Admin-Badge/HTMX unbeeinträchtigt, Optik Desktop+Mobile.
-3. **`dd1` abnehmen** (Guest-Viewer, **Magic-Link nötig**): Sonne/Mond-Toggle im Header klicken, Light-Mode-Lesbarkeit von Grid/Chips/Countern, Persistenz über Reload, Icon-Wechsel korrekt.
-4. **`qdz.15`-Mockup-Review durch den Kapitän:** `https://picture.stoertes.cloud/static/spikes/guest_password.html` (4 Zustände: Default/Fehler/Mobile/Light). **`qdz.16` erst nach seiner Freigabe umsetzen.**
+### Erledigt in dieser Wache (2026-06-11) — alle Abnahmen + 3 Umsetzungen
+**Abnahmen der Vorwache (alle ✅):** Deploy → `?v=20260610214612`; `dxj` Desktop ✅ (Dropdown/ESC/outside/aria/Theme/Sprache), Mobile ❌ → Bug `zgf`; `dd1` ✅ (Toggle, Light-Lesbarkeit, Persistenz); `qdz.15`-Mockup vom Kapitän freigegeben.
+- **`qdz.16` Guest-Password-Gate (`35ce1c1`, closed, prod-abgenommen):** `_password.html` neu nach Mockup (Eyebrow + Galerie-Name, Lock-Mark, Token-Karte, status-danger-Alert mit `role=alert`, sr-only-Label, Privacy-Zeile; i18n freundlicher + `password_privacy_note`, `password_title` entfernt). **Flow-Fix:** Verify-POST rendert Full-Page statt HTMX-Grid-Swap — der alte Swap lieferte die entsperrte Galerie OHNE Header/Counter/Lightbox und mit leerem Alpine-State (`session_id=None` → Auswahl funktionslos). Erfolg → voller Viewer mit Session (live verifiziert: UUID + 16 Bilder im State); Fehler → Gate mit Alert (401, Login-Pattern). Helper `_render_password_gate`/`_render_gallery_viewer` dedupen `guest_viewer`. Live abgenommen: Dark/Light/Mobile (kein Overflow), Fehler- und Erfolgsfall.
+- **`a2d` SECURITY Rate-Limit (`010f267`, closed, live bewiesen):** HTML-Endpoint `POST /g/{token}/verify-password` hatte KEIN Rate-Limit (API-Pendant: 5/min) → Brute-Force aufs Galerie-Passwort möglich. Fix: `@limiter.limit("5/minute")`. Live-Beweis: Sequenz `401×5 → 429`.
+- **`1y5` Galerie-Passwort nachträglich (`82c88d0`, closed, Set+Remove vom Kapitän abgenommen):** Neuer Endpoint `POST /galleries/{id}/password` — tauscht nur den `password_hash`, **Share-Token bleibt unangetastet** (Re-Share hätte den verteilten Magic-Link invalidiert; leer = entfernen). Share-Modal: Abschnitt „Passwortschutz" bei aktivem Link (Status-Badge, Speichern `required`, Entfernen mit Confirm). 6 i18n-Keys.
+- **Doku:** CHANGELOG (`3542937`) + 3 neue Lessons (`docs/lessons-learned.md`): CSP-Build kann kein `?.`, Tailwind-Opacity-Modifier vs. var()-Tokens, Playwright-Profil persistiert localStorage.
+- **237 Unit-Tests grün** (von 231 → 237), ruff + mypy strict grün.
+
+### Neue Befunde dieser Wache (offene Tickets)
+| Ticket | Prio | Befund |
+|--------|------|--------|
+| `picture-stage-2gb` | **P1** | **Guest-Grid-Regression aus u3s:** `_image_grid.html` nutzt `images[N]?.selected` — der `@alpinejs/csp`-Build parst KEIN Optional Chaining → 112 Konsolen-Fehler (7 Expressions × 16 Bilder), Auswahl-Ringe/Check-Badges/Hover-Toggles im Grid funktionslos. Lightbox sauber (kein `?.`). Fix-Vorschlag im Ticket: Helper `isSelected(idx)`/`isFavorited(idx)` in `components.js`. |
+| `picture-stage-zgf` | P2 | Top-Nav (dxj) auf 375px: 504px breit → „Einstellungen"/„Logout" außerhalb des Viewports, nur per Horizontal-Scroll erreichbar. |
+| `picture-stage-toj` | P3 | `bg-status-danger/10`-Klassen fehlen im Build (Tailwind 3.4 + var()-Token) → Gate-Fehler-Alert ohne rote Tönung. Option A (Palette-Klassen, Template-only) **wartet auf Kapitäns-Freigabe**; Option B (RGB-Komponenten-Token-Refactor, fixt auch `form_error`-Altlast `text-red-300`). |
+
+### Offene Punkte für die nächste Wache
+1. **Empfohlener Einstieg: `2gb`** (P1, Kernfunktionalität für Models, die nur das Grid nutzen). Danach `zgf` oder `qdz.17` (i18n).
+2. **`toj`-Fix erst nach Kapitäns-Freigabe** (Option A vs. B, siehe Ticket).
+3. **Temporären Admin-Login deaktivieren** (`stoertebeker@kkb-clan.de`, Credentials standen im Chat) — Kapitän erinnern.
+4. Abnahme-Standard ab jetzt: **Browser-Konsole fehlerfrei** (Cloudflare-Beacon = bekanntes Non-Issue) + Screenshots selbst sichten.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
@@ -309,12 +324,11 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 | Ausstehend | Beads-ID |
 |------------|----------|
 | ~~Guest-Lightbox Mockup + Impl~~ ✅ done (2026-06-08) | ~~`qdz.13`, `qdz.14`~~ |
-| ~~Guest-Password-Gate Mockup~~ ✅ done (2026-06-10, `c7f0d65`) — **Kapitäns-Review ausstehend** (nach Deploy: `/static/spikes/guest_password.html`) | ~~`qdz.15`~~ |
-| Guest-Password-Gate Impl (**erst nach Mockup-Freigabe**) | `qdz.16` |
+| ~~Guest-Password-Gate Mockup + Impl~~ ✅ done (2026-06-11, `35ce1c1`, prod-abgenommen) | ~~`qdz.15`, `qdz.16`~~ |
 | i18n-Lücken schließen | `qdz.17` |
 | Mobile-Tuning Guest-Pages (375/768/1280px) | `qdz.18` |
 
-Einstieg: `bd ready` → `qdz.16` (nach Mockup-Review) oder `qdz.17` (i18n-Lücken).
+Einstieg: `bd ready` → **`2gb` zuerst (P1, Grid-Regression)**, danach `qdz.17` (i18n) oder `zgf`.
 **Hinweis Frontend-Verifikation:** Lokal kein Tailwind-Build (styles.css = Stub) → visuelle Abnahme
 gegen Spike oder live auf Prod (`https://picture.stoertes.cloud`, via Playwright erreichbar).
 
