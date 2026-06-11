@@ -67,7 +67,9 @@ async def upload_images(
     sort_offset = len(existing_count_result.scalars().all())
 
     uploaded_images: list[ImageResponse] = []
-    watermark_text = f"PREVIEW · {str(gallery.id)[:8].upper()}"
+    # Resolve text / opacity / position / enabled from the gallery's own config
+    # (empty -> global default); honour an explicit watermark-disabled setting.
+    watermark_config = gallery.watermark_config
 
     for idx, file in enumerate(files):
         if file.content_type not in ALLOWED_CONTENT_TYPES:
@@ -109,7 +111,13 @@ async def upload_images(
             file_buf.seek(0)
 
             if variant_name == "preview":
-                preview_buf, pw, ph = generate_preview_with_watermark(file_buf, max_width, watermark_text)
+                preview_buf, pw, ph = generate_preview_with_watermark(
+                    file_buf,
+                    max_width,
+                    "",
+                    watermark_config=watermark_config,
+                    gallery_id=str(gallery.id),
+                )
             else:
                 preview_buf, pw, ph = generate_thumbnail(file_buf, max_width)
 

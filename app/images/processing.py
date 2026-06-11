@@ -145,6 +145,15 @@ def generate_preview_with_watermark(
         new_height = int(img.height * ratio)
         img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
 
+    # Watermark explicitly disabled for this gallery: emit the resized preview
+    # without any overlay (NULL/true keep the watermark on).
+    if (watermark_config or {}).get("enabled") is False:
+        plain = img.convert("RGB")
+        plain_buf = io.BytesIO()
+        plain.save(plain_buf, format="WEBP", quality=85)
+        plain_buf.seek(0)
+        return plain_buf, plain.width, plain.height
+
     wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(watermark_config, gallery_id, img.width)
     # Legacy: explicit watermark_text parameter overrides config-resolved text
     if watermark_text:

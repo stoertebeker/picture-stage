@@ -221,7 +221,9 @@ async def upload_images(
     existing_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id))
     sort_offset = len(existing_result.scalars().all())
 
-    watermark_text = f"PREVIEW · {str(gallery.id)[:8].upper()}"
+    # Snapshot the gallery's watermark config now; the worker resolves text /
+    # opacity / position / enabled from it (empty -> global default).
+    watermark_config = gallery.watermark_config
 
     # Persist originals + Image rows only. Preview generation is dispatched to a
     # background worker (below) so the request returns immediately.
@@ -269,7 +271,7 @@ async def upload_images(
     # Dispatch preview generation after commit so the worker's own session sees
     # the committed rows. Each image is processed independently.
     for image_uuid in queued:
-        background_tasks.add_task(process_image_previews, image_uuid, gallery_id, watermark_text)
+        background_tasks.add_task(process_image_previews, image_uuid, gallery_id, watermark_config)
 
     # Return refreshed image grid (queued images render as polling spinner tiles).
     images = await _load_images_with_signed_urls(gallery_id, db)

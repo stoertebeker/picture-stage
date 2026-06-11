@@ -12,6 +12,7 @@ import asyncio
 import io
 import logging
 import uuid
+from typing import Any
 
 from sqlalchemy import select
 
@@ -58,9 +59,13 @@ async def _mark_failed(image_id: uuid.UUID, gallery_id: uuid.UUID) -> None:
 async def process_image_previews(
     image_id: uuid.UUID,
     gallery_id: uuid.UUID,
-    watermark_text: str,
+    watermark_config: dict[str, Any] | None = None,
 ) -> None:
     """Generate all preview variants for one image and update its status.
+
+    ``watermark_config`` is the owning gallery's per-gallery watermark settings
+    (text/position/opacity/font_size/enabled); ``None`` or an empty dict falls
+    back to the global defaults, and ``enabled: false`` skips the overlay.
 
     Tenant isolation: the image is loaded by (image_id, gallery_id) so a worker
     can never touch an image outside its gallery. On success the status becomes
@@ -85,7 +90,12 @@ async def process_image_previews(
                 src = io.BytesIO(original_bytes)
                 if variant_name == "preview":
                     preview_buf, pw, ph = await asyncio.to_thread(
-                        generate_preview_with_watermark, src, max_width, watermark_text
+                        generate_preview_with_watermark,
+                        src,
+                        max_width,
+                        "",
+                        watermark_config=watermark_config,
+                        gallery_id=str(gallery_id),
                     )
                 else:
                     preview_buf, pw, ph = await asyncio.to_thread(generate_thumbnail, src, max_width)

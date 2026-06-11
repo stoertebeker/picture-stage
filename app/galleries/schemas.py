@@ -33,6 +33,10 @@ class WatermarkConfig(BaseModel):
         le=200,
         description="Absolute font size in pixels. If not set, calculated from image width.",
     )
+    enabled: bool | None = Field(
+        default=None,
+        description="Whether to render a watermark at all. NULL/true = watermark on; false = no overlay.",
+    )
 
 
 class GalleryCreate(BaseModel):

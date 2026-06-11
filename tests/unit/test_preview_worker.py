@@ -78,7 +78,7 @@ async def test_success_sets_ready_and_uploads_all_variants() -> None:
         patch.object(preview_worker, "async_session", return_value=session),
         patch.object(preview_worker, "get_storage", return_value=storage),
     ):
-        await preview_worker.process_image_previews(image.id, gallery_id, "PREVIEW · TEST")
+        await preview_worker.process_image_previews(image.id, gallery_id, None)
 
     assert image.processing_status == ImageProcessingStatus.ready
     assert session.committed is True
@@ -102,7 +102,7 @@ async def test_storage_failure_sets_failed() -> None:
         patch.object(preview_worker, "async_session", side_effect=lambda: next(sessions)),
         patch.object(preview_worker, "get_storage", return_value=storage),
     ):
-        await preview_worker.process_image_previews(image.id, gallery_id, "PREVIEW · TEST")
+        await preview_worker.process_image_previews(image.id, gallery_id, None)
 
     assert image.processing_status == ImageProcessingStatus.failed
     assert fail_session.committed is True
@@ -118,7 +118,7 @@ async def test_missing_image_is_a_noop() -> None:
         patch.object(preview_worker, "async_session", return_value=session),
         patch.object(preview_worker, "get_storage", return_value=storage),
     ):
-        await preview_worker.process_image_previews(uuid.uuid4(), gallery_id, "PREVIEW · TEST")
+        await preview_worker.process_image_previews(uuid.uuid4(), gallery_id, None)
 
     assert session.committed is False
     assert storage.upload.call_count == 0
@@ -142,7 +142,7 @@ async def test_worker_scopes_query_by_image_and_gallery() -> None:
         patch.object(preview_worker, "async_session", return_value=session),
         patch.object(preview_worker, "get_storage", return_value=storage),
     ):
-        await preview_worker.process_image_previews(image.id, gallery_id, "PREVIEW · TEST")
+        await preview_worker.process_image_previews(image.id, gallery_id, None)
 
     # The compiled WHERE clause references both columns.
     where_sql = str(captured[0].compile()).lower()
