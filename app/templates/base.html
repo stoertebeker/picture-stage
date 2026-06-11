@@ -1,6 +1,6 @@
 {% from "_macros/toast.html" import toast_container %}
 <!DOCTYPE html>
-<html lang="de" data-theme="dark">
+<html lang="{{ locale }}" data-theme="dark">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -20,7 +20,7 @@
             <a href="/dashboard"><strong>Picture-Stage</strong></a>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
-            <a href="/dashboard">Dashboard</a>
+            <a href="/dashboard">{{ t('nav.dashboard') }}</a>
             {% if current_user and (current_user.status | string) == 'admin' %}
             <a href="/admin/users">{{ t('admin.nav_admin') }}</a>
             <span hx-get="/admin/nav-badge" hx-trigger="load, every 60s" hx-swap="innerHTML"></span>
@@ -62,7 +62,7 @@
             </div>
             <form method="post" action="/api/v1/auth/logout" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <button type="submit">Logout</button>
+                <button type="submit">{{ t('nav.logout') }}</button>
             </form>
         </div>
     </nav>
@@ -70,9 +70,9 @@
         {% block content %}{% endblock %}
     </main>
     <footer class="border-t border-gray-200 dark:border-gray-700 mt-12 py-6 text-center text-sm text-gray-500 dark:text-gray-400">
-        <a href="/legal/impressum" class="hover:underline">Impressum</a>
+        <a href="/legal/impressum" class="hover:underline">{{ t('nav.impressum') }}</a>
         <span class="mx-2">|</span>
-        <a href="/legal/datenschutz" class="hover:underline">Datenschutz</a>
+        <a href="/legal/datenschutz" class="hover:underline">{{ t('nav.datenschutz') }}</a>
     </footer>
     <!-- Cookie Consent Banner -->
     <div x-data="cookieBanner"
@@ -81,14 +81,13 @@
          class="fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-300 dark:border-gray-600 shadow-lg p-4">
         <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <p class="text-sm text-gray-700 dark:text-gray-300">
-                Diese Website verwendet technisch notwendige Cookies f&uuml;r die Sitzungsverwaltung.
-                Weitere Informationen finden Sie in unserer
-                <a href="/legal/datenschutz" class="underline">Datenschutzerkl&auml;rung</a>.
+                {{ t('cookie_banner.text') }}
+                <a href="/legal/datenschutz" class="underline">{{ t('cookie_banner.privacy_link') }}</a>.
             </p>
             <button @click="accept()"
                     type="button"
                     class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded">
-                Verstanden
+                {{ t('cookie_banner.accept') }}
             </button>
         </div>
     </div>

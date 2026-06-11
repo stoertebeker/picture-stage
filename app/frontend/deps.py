@@ -1,3 +1,4 @@
+from contextvars import ContextVar
 from functools import partial
 from typing import Any
 
@@ -6,6 +7,16 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.i18n import t as _translate
+
+# Stores the current request's locale so imported Jinja2 macros (which have no
+# access to the template context) can still call t() via the env global.
+_locale_ctx: ContextVar[str] = ContextVar("locale", default="de")
+
+
+def _global_t(key: str, **kwargs: Any) -> str:
+    """Jinja2 env-global t() for imported macros — reads locale from ContextVar."""
+    return _translate(key, locale=_locale_ctx.get(), **kwargs)
+
 
 templates = Jinja2Templates(directory="app/templates")
 
@@ -44,6 +55,7 @@ def _patched_template_response(
     context.setdefault("request", request)
     locale = getattr(request.state, "locale", "de") if hasattr(request, "state") else "de"
     context.setdefault("locale", locale)
+    _locale_ctx.set(locale)
     # Provide request-aware t() bound to the current request
     context.setdefault("t", partial(_t_for_request, request))
     # Expose the logged-in user (set by get_user_from_cookie) for the nav/admin menu.
@@ -57,3 +69,4 @@ templates.TemplateResponse = _patched_template_response  # type: ignore[assignme
 # Also register in Jinja2 globals for templates that might use it outside TemplateResponse
 templates.env.globals["supported_locales"] = ("de", "en")
 templates.env.globals["asset"] = _asset_url
+templates.env.globals["t"] = _global_t
