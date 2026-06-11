@@ -36,6 +36,39 @@ def test_gallery_partials_preserve_share_upload_delete_contracts() -> None:
     assert 'name="csrf_token"' in delete
 
 
+def test_upload_handler_avoids_multi_statement_inline_expression() -> None:
+    """Upload reset must call a method, not inline multi-statements (picture-stage-3uh).
+
+    The @alpinejs/csp build cannot parse multi-statement inline expressions
+    (uploadProgress = 0; uploading = false threw "CSP Parser Error: Unexpected
+    token: uploading"), silently breaking the upload-progress reset. The reset
+    must go through uploadZone.onUploadComplete() instead.
+    """
+    upload = _template("_upload.html")
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+
+    assert "uploadProgress = 0; uploading = false" not in upload
+    assert "onUploadComplete()" in upload
+    assert "onUploadComplete(" in components_js
+
+
+def test_gallery_templates_have_no_multi_statement_alpine_handlers() -> None:
+    """No @-handler in the owner templates may chain statements with ';'.
+
+    Multi-statement inline expressions are rejected by the @alpinejs/csp parser
+    (see picture-stage-3uh). Single assignments like ``open = !open`` are fine;
+    only ';'-separated chains break. Guards the whole owner template tree.
+    """
+    import re
+
+    offenders = []
+    for path in TEMPLATE_ROOT.glob("*.html"):
+        for m in re.finditer(r'@[\w:.@-]+="([^"]*)"', path.read_text()):
+            if ";" in m.group(1):
+                offenders.append(f"{path.name}: {m.group(1)}")
+    assert not offenders, f"multi-statement Alpine handlers (CSP-incompatible): {offenders}"
+
+
 def test_gallery_detail_uses_editorial_dark_tokens() -> None:
     detail = _template("detail.html")
     share = _template("_share_modal.html")

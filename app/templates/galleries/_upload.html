@@ -8,7 +8,7 @@
           hx-encoding="multipart/form-data"
           x-ref="uploadForm"
           @htmx:xhr:progress.window="onProgress($event)"
-          @htmx:after-request.window="uploadProgress = 0; uploading = false">
+          @htmx:after-request.window="onUploadComplete()">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <div class="rounded-md border border-dashed px-5 py-8 text-center transition-colors"

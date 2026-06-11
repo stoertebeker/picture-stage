@@ -46,6 +46,14 @@ function uploadZoneComponent() {
             // native form submission and causes a page reload.
             this.$refs.uploadForm.requestSubmit();
         },
+
+        // Reset after the HTMX upload request settles. Lives here because the
+        // @alpinejs/csp build cannot parse multi-statement inline expressions
+        // (uploadProgress = 0; uploading = false threw "Unexpected token").
+        onUploadComplete() {
+            this.uploadProgress = 0;
+            this.uploading = false;
+        },
     };
 };
 
