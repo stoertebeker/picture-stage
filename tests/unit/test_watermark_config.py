@@ -7,8 +7,11 @@ with the watermark disabled the preview stays dark.
 
 import io
 
+import pytest
 from PIL import Image
+from pydantic import ValidationError
 
+from app.galleries.schemas import WatermarkConfig
 from app.images.processing import _resolve_watermark_settings, generate_preview_with_watermark
 
 
@@ -61,3 +64,17 @@ def test_resolve_uses_custom_text() -> None:
 def test_resolve_resolves_gallery_id_placeholder() -> None:
     text, *_ = _resolve_watermark_settings({"text": "© {gallery_id}"}, "abcd1234ef", 1280)
     assert text == "© ABCD1234"
+
+
+def test_schema_accepts_enabled_flag() -> None:
+    assert WatermarkConfig(enabled=False).model_dump(exclude_none=True) == {"enabled": False}
+    assert WatermarkConfig(text="Studio", enabled=True).model_dump(exclude_none=True) == {
+        "text": "Studio",
+        "enabled": True,
+    }
+
+
+def test_schema_rejects_overlong_text() -> None:
+    """The 200-char cap (also enforced server-side) guards the rendered overlay."""
+    with pytest.raises(ValidationError):
+        WatermarkConfig(text="x" * 201)

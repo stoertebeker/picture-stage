@@ -29,6 +29,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.galleries.schemas import WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.security.signing import sign_url
 from app.storage.base import StorageBackend
@@ -393,6 +394,44 @@ async def set_gallery_expiry(
             except ValueError as err:
                 raise HTTPException(status_code=422, detail="Ungueltiges Datumsformat") from err
         # If empty string and no clear flag, do nothing (just re-render)
+
+    await db.commit()
+    await db.refresh(gallery)
+
+    images = await _load_images_with_signed_urls(gallery_id, db)
+    ctx = _build_context(request, gallery, images, user)
+    return templates.TemplateResponse(request, "galleries/detail.html", ctx)
+
+
+@router.post("/galleries/{gallery_id}/watermark", response_class=HTMLResponse)
+async def set_gallery_watermark(
+    gallery_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(require_authenticated_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Set the per-gallery watermark text and on/off toggle (applies to new uploads)."""
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    form = await request.form()
+    text_raw = str(form.get("watermark_text", "")).strip()
+    # Strip control chars / newlines so a pasted value can't break the rendered overlay.
+    text_clean = "".join(ch for ch in text_raw if ch.isprintable())[:200]
+    # A checkbox only submits its value when checked; absence means "off".
+    enabled = form.get("watermark_enabled") is not None
+
+    # Preserve any pre-existing position/opacity/font_size; only touch text + enabled.
+    cfg = dict(gallery.watermark_config or {})
+    cfg["enabled"] = enabled
+    if text_clean:
+        cfg["text"] = text_clean
+    else:
+        cfg.pop("text", None)  # empty -> fall back to the global default text
+
+    # Validate + normalise via the same schema as create/update (enforces max_length).
+    validated = WatermarkConfig(**cfg).model_dump(exclude_none=True)
+    # Reassign a fresh dict so SQLAlchemy detects the JSON column change.
+    gallery.watermark_config = validated or None
 
     await db.commit()
     await db.refresh(gallery)
