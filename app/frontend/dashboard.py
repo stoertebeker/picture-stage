@@ -22,6 +22,8 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.galleries.quota import GalleryQuotaExceeded, assert_within_gallery_quota
+from app.i18n import t
 from app.security.signing import sign_url
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,17 @@ async def create_gallery(
     if not name:
         raise HTTPException(status_code=422, detail="Gallery name is required")
 
+    locale = getattr(request.state, "locale", "de")
+    try:
+        await assert_within_gallery_quota(user.id, db)
+    except GalleryQuotaExceeded as exc:
+        # Show an error toast without swapping a card into the grid (HX-Reswap: none).
+        resp = HTMLResponse("")
+        message = t("gallery.limit_reached", locale, limit=exc.limit)
+        resp.headers["HX-Trigger"] = json.dumps({"showToast": {"kind": "error", "message": message}})
+        resp.headers["HX-Reswap"] = "none"
+        return resp
+
     gallery = Gallery(owner_id=user.id, name=name)
     db.add(gallery)
     await db.commit()
@@ -104,7 +117,6 @@ async def create_gallery(
         },
     )
     # Toast notification (ps-ux-13).
-    locale = getattr(request.state, "locale", "de")
     if locale == "de":
         message = f"Galerie {name!r} angelegt."
     else:

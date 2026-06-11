@@ -53,6 +53,12 @@ class Settings(BaseSettings):
     watermark_font_size: int = 0  # 0 = use watermark_font_size_ratio instead
     watermark_font_size_ratio: float = 0.05
 
+    # Maximum number of galleries a single user may own. Enforced only at
+    # creation time (never deletes or locks existing galleries), so raising or
+    # lowering it cannot strand a user — someone already above a lowered limit
+    # simply cannot create more until they drop below it. 0 = unlimited.
+    max_galleries_per_user: int = 5
+
     ratelimit_enabled: bool = True
 
     captcha_enabled: bool = True

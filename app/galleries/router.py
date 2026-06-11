@@ -29,6 +29,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.galleries.deletion import purge_gallery
+from app.galleries.quota import GalleryQuotaExceeded, assert_within_gallery_quota
 from app.galleries.schemas import (
     AuditLogEntry,
     AuditLogResponse,
@@ -158,6 +159,14 @@ async def create_gallery(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> GalleryResponse:
+    try:
+        await assert_within_gallery_quota(user.id, db)
+    except GalleryQuotaExceeded as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=f"Gallery limit reached ({exc.limit})",
+        ) from exc
+
     gallery = Gallery(
         owner_id=user.id,
         name=body.name,

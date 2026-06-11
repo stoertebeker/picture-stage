@@ -131,6 +131,7 @@
     "status_archived": "Archived",
     "images_count": "{count} images",
     "images_count_singular": "{count} image",
+    "limit_reached": "Gallery limit reached ({limit}). Delete an existing gallery to create a new one.",
     "selected_count": "{count} selected",
     "favorited_count": "{count} favorites",
     "commented_count": "{count} comments",
