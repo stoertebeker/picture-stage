@@ -13,6 +13,7 @@ from sqlalchemy.orm import selectinload
 from app.auth.passwords import verify_password, verify_token
 from app.config import settings
 from app.db.models import (
+    LOGIN_ALLOWED_STATUSES,
     Gallery,
     GalleryStatus,
     Image,
@@ -20,6 +21,7 @@ from app.db.models import (
     SelectionAction,
     SelectionEvent,
     ShareSession,
+    User,
 )
 from app.db.session import get_db
 from app.notifications.service import send_notification
@@ -79,10 +81,17 @@ class CompleteReviewResponse(BaseModel):
 
 
 async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
+    # Join the owner and require a login-allowed status: a disabled/pending
+    # photographer's share links must stop resolving (cxs). The check lives in
+    # the query so every guest endpoint inherits it via this single resolver,
+    # and an unlock restores access without touching share sessions.
     result = await db.execute(
-        select(Gallery).where(
+        select(Gallery)
+        .join(User, User.id == Gallery.owner_id)
+        .where(
             Gallery.share_token_hash.isnot(None),
             Gallery.status.in_([GalleryStatus.shared, GalleryStatus.completed]),
+            User.status.in_(LOGIN_ALLOWED_STATUSES),
         )
     )
     galleries = result.scalars().all()

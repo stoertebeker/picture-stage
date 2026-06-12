@@ -14,11 +14,13 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.passwords import verify_password, verify_token
 from app.db.models import (
+    LOGIN_ALLOWED_STATUSES,
     Gallery,
     GalleryStatus,
     Image,
     PreviewVariant,
     ShareSession,
+    User,
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
@@ -50,11 +52,19 @@ class ImageFilter(enum.StrEnum):
 
 
 async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
-    """Resolve a share token to a Gallery, checking hash against all shared galleries."""
+    """Resolve a share token to a Gallery, checking hash against all shared galleries.
+
+    Joins the owner and requires a login-allowed status so a disabled/pending
+    photographer's share links stop resolving (cxs) — mirrors the API resolver
+    in app/guest/router.py.
+    """
     result = await db.execute(
-        select(Gallery).where(
+        select(Gallery)
+        .join(User, User.id == Gallery.owner_id)
+        .where(
             Gallery.share_token_hash.isnot(None),
             Gallery.status.in_([GalleryStatus.shared, GalleryStatus.completed]),
+            User.status.in_(LOGIN_ALLOWED_STATUSES),
         )
     )
     galleries = result.scalars().all()
