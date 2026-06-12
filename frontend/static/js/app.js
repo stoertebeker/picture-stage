@@ -130,12 +130,14 @@ document.addEventListener('htmx:afterRequest', (e) => {
  * with id="toast-container". Toasts auto-dismiss after 5000ms unless duration
  * is overridden in the event detail.
  */
-const TOAST_KIND_CLASS = {
-    success: 'bg-emerald-700/30 border border-emerald-700/60 text-emerald-100',
-    info:    'bg-sky-700/30 border border-sky-700/60 text-sky-100',
-    warn:    'bg-amber-700/30 border border-amber-700/60 text-amber-100',
-    danger:  'bg-red-700/30 border border-red-700/60 text-red-100',
-};
+if (!window.TOAST_KIND_CLASS) {
+    window.TOAST_KIND_CLASS = {
+        success: 'bg-emerald-700/30 border border-emerald-700/60 text-emerald-100',
+        info:    'bg-sky-700/30 border border-sky-700/60 text-sky-100',
+        warn:    'bg-amber-700/30 border border-amber-700/60 text-amber-100',
+        danger:  'bg-red-700/30 border border-red-700/60 text-red-100',
+    };
+}
 
 function showToast(detail) {
     const container = document.getElementById('toast-container');
