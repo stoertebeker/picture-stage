@@ -36,16 +36,17 @@ def test_login_template_has_csrf():
 
 
 def test_login_template_has_dark_mode():
-    """Login template uses dark: utility classes and the data-theme toggle widget.
+    """Login supports theme switching via the shared auth_base layout (gmo).
 
-    After ps-ux-04 the per-template Alpine `darkMode` variable was removed in
-    favour of a global [data-theme] attribute managed by app.js. The visible
-    contract is: tailwind dark: utilities are present, and the toggle button
-    carries the data-theme-toggle attribute.
+    Editorial Dark replaced the legacy `dark:` Tailwind utilities with the
+    [data-theme] token system, and gmo moved the page chrome into auth_base.
+    The contract is now: the page extends auth_base, which carries the
+    data-theme-toggle widget (managed globally by app.js).
     """
     login_html = (PROJECT_ROOT / "app" / "templates" / "auth" / "login.html").read_text()
-    assert "dark:" in login_html
-    assert "data-theme-toggle" in login_html
+    auth_base = (PROJECT_ROOT / "app" / "templates" / "auth_base.html").read_text()
+    assert 'extends "auth_base.html"' in login_html
+    assert "data-theme-toggle" in auth_base
 
 
 def test_signup_template_has_password_confirm():
@@ -63,9 +64,14 @@ def test_signup_template_has_csrf():
 
 
 def test_signup_template_has_dark_mode():
-    """Signup template has dark: classes for dark mode support."""
+    """Signup supports theme switching via the shared auth_base layout (gmo).
+
+    See test_login_template_has_dark_mode — the [data-theme] toggle lives in
+    auth_base now, not in per-template `dark:` utilities."""
     signup_html = (PROJECT_ROOT / "app" / "templates" / "auth" / "signup.html").read_text()
-    assert "dark:" in signup_html
+    auth_base = (PROJECT_ROOT / "app" / "templates" / "auth_base.html").read_text()
+    assert 'extends "auth_base.html"' in signup_html
+    assert "data-theme-toggle" in auth_base
 
 
 def test_verify_template_exists():
@@ -74,9 +80,14 @@ def test_verify_template_exists():
 
 
 def test_verify_template_has_dark_mode():
-    """Verify template has dark: classes for dark mode support."""
+    """Verify supports theme switching via the shared auth_base layout (gmo).
+
+    See test_login_template_has_dark_mode — the [data-theme] toggle lives in
+    auth_base now, not in per-template `dark:` utilities."""
     verify_html = (PROJECT_ROOT / "app" / "templates" / "auth" / "verify.html").read_text()
-    assert "dark:" in verify_html
+    auth_base = (PROJECT_ROOT / "app" / "templates" / "auth_base.html").read_text()
+    assert 'extends "auth_base.html"' in verify_html
+    assert "data-theme-toggle" in auth_base
 
 
 def test_router_registered_in_main():
