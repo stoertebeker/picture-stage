@@ -378,3 +378,79 @@ class TestSendVerificationEmail:
         assert "Failed to send verification email" in source
         # The dead ebm.7 TODO marker must be gone.
         assert "TODO: send verification email" not in source
+
+
+class TestNotifyOwnerGalleryCompleted:
+    """Verify the guaranteed completion-alert to the gallery owner (config-free)."""
+
+    @staticmethod
+    def _payload() -> dict:
+        return {
+            "gallery_name": "Sunset Shoot",
+            "total_images": 12,
+            "selected_count": 5,
+            "favorited_count": 2,
+            "dashboard_url": "https://example.com/api/v1/galleries/dashboard",
+        }
+
+    @pytest.mark.asyncio
+    async def test_emails_owner(self) -> None:
+        from app.notifications import service
+
+        with (
+            patch.object(service.settings, "notify_owner_on_completion", True),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.settings, "smtp_from", "noreply@example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.notify_owner_gallery_completed("owner@example.com", self._payload(), MagicMock())
+
+        assert send_mock.await_count == 1
+        msg = send_mock.await_args.args[0]
+        assert msg["To"] == "owner@example.com"
+        assert "Sunset Shoot" in msg["Subject"]
+
+    @pytest.mark.asyncio
+    async def test_disabled_by_setting(self) -> None:
+        from app.notifications import service
+
+        with (
+            patch.object(service.settings, "notify_owner_on_completion", False),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.notify_owner_gallery_completed("owner@example.com", self._payload(), MagicMock())
+
+        send_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_smtp_host_skips(self) -> None:
+        from app.notifications import service
+
+        with (
+            patch.object(service.settings, "notify_owner_on_completion", True),
+            patch.object(service.settings, "smtp_host", ""),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock()) as send_mock,
+        ):
+            await service.notify_owner_gallery_completed("owner@example.com", self._payload(), MagicMock())
+
+        send_mock.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_send_failure_is_swallowed(self) -> None:
+        """A broken SMTP server must never propagate — completing a review must succeed."""
+        from app.notifications import service
+
+        with (
+            patch.object(service.settings, "notify_owner_on_completion", True),
+            patch.object(service.settings, "smtp_host", "smtp.example.com"),
+            patch.object(service.settings, "smtp_from", "noreply@example.com"),
+            patch.object(service.aiosmtplib, "send", new=AsyncMock(side_effect=OSError("smtp down"))),
+        ):
+            # Must not raise.
+            await service.notify_owner_gallery_completed("owner@example.com", self._payload(), MagicMock())
+
+    def test_complete_review_calls_notify_owner(self) -> None:
+        """The completion endpoint wires the config-free owner alert."""
+        source = Path("app/guest/router.py").read_text()
+        assert "notify_owner_gallery_completed" in source

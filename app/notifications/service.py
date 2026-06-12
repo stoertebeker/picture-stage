@@ -153,6 +153,51 @@ async def send_verification_email(email: str, token: str, db: AsyncSession) -> N
         logger.warning("verification email to %s failed: %s", email, exc)
 
 
+async def notify_owner_gallery_completed(owner_email: str, payload: dict[str, Any], db: AsyncSession) -> None:
+    """Email the gallery owner that a model finished reviewing their gallery.
+
+    Config-free like notify_admins_signup()/send_verification_email(): there is
+    no UI to populate NotificationConfig, so the config-gated send_notification()
+    path silently delivers nothing. This guarantees the photographer is alerted,
+    gated only by the notify_owner_on_completion setting and a configured SMTP
+    host. The recipient is always the owner's own address (loaded from the DB by
+    the caller) — never a guest-supplied value. Failures are logged and never
+    propagate: completing a review must succeed even when mail delivery is down.
+
+    db is accepted for signature symmetry with the other notify helpers and to
+    allow future delivery tracking; it is currently unused.
+    """
+    if not settings.notify_owner_on_completion or not settings.smtp_host:
+        return
+
+    try:
+        html_body = _jinja_env.get_template("gallery_completed.html").render(**payload)
+        text_body = _jinja_env.get_template("gallery_completed.txt").render(**payload)
+        subject = _jinja_env.from_string(SUBJECT_MAP["gallery_completed"]).render(**payload)
+    except Exception:
+        logger.exception("Failed to render gallery_completed templates")
+        return
+
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["From"] = settings.smtp_from
+        msg["To"] = owner_email
+        msg["Subject"] = subject
+        msg.attach(MIMEText(text_body, "plain", "utf-8"))
+        msg.attach(MIMEText(html_body, "html", "utf-8"))
+
+        await aiosmtplib.send(
+            msg,
+            hostname=settings.smtp_host,
+            port=settings.smtp_port,
+            username=settings.smtp_user or None,
+            password=settings.smtp_password or None,
+            start_tls=settings.smtp_starttls,
+        )
+    except Exception as exc:
+        logger.warning("gallery_completed notification to %s failed: %s", owner_email, exc)
+
+
 async def _send_email(
     config: NotificationConfig,
     event_type: str,

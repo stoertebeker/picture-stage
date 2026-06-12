@@ -24,7 +24,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_db
-from app.notifications.service import send_notification
+from app.notifications.service import notify_owner_gallery_completed, send_notification
 from app.security.rate_limit import limiter
 from app.security.signing import sign_url
 from app.selections.schemas import SelectionEventCreate, SelectionSummary
@@ -386,18 +386,27 @@ async def complete_review(
         )
         row = sel_counts.one()
 
+        payload = {
+            "gallery_name": gallery.name,
+            "total_images": total_images,
+            "selected_count": row[0],
+            "favorited_count": row[1],
+            "dashboard_url": f"{settings.app_url}/api/v1/galleries/dashboard",
+        }
+
+        # Config-gated path (webhooks / future NotificationConfig UI).
         await send_notification(
             event_type="gallery_completed",
             user_id=str(gallery.owner_id),
-            payload={
-                "gallery_name": gallery.name,
-                "total_images": total_images,
-                "selected_count": row[0],
-                "favorited_count": row[1],
-                "dashboard_url": f"{settings.app_url}/api/v1/galleries/dashboard",
-            },
+            payload=payload,
             db=db,
         )
+
+        # Guaranteed email to the photographer (config-free, bypasses the empty
+        # NotificationConfig table). Recipient is the owner's own address.
+        owner_email = await db.scalar(select(User.email).where(User.id == gallery.owner_id))
+        if owner_email:
+            await notify_owner_gallery_completed(owner_email, payload, db)
     except Exception:
         logger.exception("Failed to send gallery_completed notification")
 

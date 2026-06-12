@@ -39,6 +39,7 @@ cp .env.example .env
 #                                             USER=API-Key, PASSWORD=Secret-Key; FROM-Domain
 #                                             muss beim Provider verifiziert sein)
 #    NOTIFY_ADMINS_ON_SIGNUP=true            (Mail an alle Admins bei Neuregistrierung)
+#    NOTIFY_OWNER_ON_COMPLETION=true         (Mail an Fotograf, wenn Model die Galerie abschließt)
 #    Credentials testen: python scripts/smtp_smoke.py
 
 # 4. Starten

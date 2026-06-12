@@ -47,6 +47,11 @@ class Settings(BaseSettings):
     # smtp_host. The link carries the plaintext token (DB stores it hashed).
     send_verification_email_enabled: bool = True
 
+    # Email the gallery owner (photographer) when a model completes their review.
+    # Config-free like the alerts above (bypasses the per-user NotificationConfig,
+    # for which there is no UI); gated only by this flag and a configured smtp_host.
+    notify_owner_on_completion: bool = True
+
     watermark_text: str = "PREVIEW · {gallery_id}"
     watermark_position: str = "bottom-right"
     watermark_opacity: float = 0.3
