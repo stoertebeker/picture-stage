@@ -10,11 +10,6 @@
     "brand": "Picture-Stage",
     "settings": "Settings"
   },
-  "cookie_banner": {
-    "text": "This website uses technically necessary cookies for session management. For more information, see our",
-    "privacy_link": "Privacy Policy",
-    "accept": "Got it"
-  },
   "auth": {
     "login_title": "Login - Picture-Stage",
     "signup_title": "Sign Up - Picture-Stage",

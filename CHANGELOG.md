@@ -19,6 +19,7 @@ All notable changes to Picture-Stage are documented in this file.
 
 ### Changed
 
+- **Cookie consent banner removed** (`picture-stage-a15`). The site sets only strictly necessary cookies — `session` (login JWT) and `csrf_token` — plus a language-preference cookie (`lang`) and a `theme` entry in `localStorage`; none of these require consent under GDPR/TTDSG §25(2). The previous banner was an accept-only, no-op element (it gated no cookie, offered no rejection) — more of a liability than a safeguard. It was removed from both layouts along with its Alpine component and i18n strings. The necessary cookies are now documented in a privacy-policy template (`legal/datenschutz.example.md`) for operators to fold into their own `datenschutz.md`.
 - **BREAKING:** `WATERMARK_OPACITY` environment variable now expects **float (0.0-1.0)** instead of **int (0-255)**
   - Old format (v0.0): `WATERMARK_OPACITY=255` (opaque) → `WATERMARK_OPACITY=1.0`
   - Old format (v0.0): `WATERMARK_OPACITY=0` (transparent) → `WATERMARK_OPACITY=0.0`

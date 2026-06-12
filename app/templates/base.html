@@ -74,23 +74,6 @@
         <span class="mx-2">|</span>
         <a href="/legal/datenschutz" class="hover:underline">{{ t('nav.datenschutz') }}</a>
     </footer>
-    <!-- Cookie Consent Banner -->
-    <div x-data="cookieBanner"
-         x-show="show"
-         x-transition
-         class="fixed bottom-0 inset-x-0 z-50 bg-white dark:bg-gray-800 border-t border-gray-300 dark:border-gray-600 shadow-lg p-4">
-        <div class="max-w-4xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-            <p class="text-sm text-gray-700 dark:text-gray-300">
-                {{ t('cookie_banner.text') }}
-                <a href="/legal/datenschutz" class="underline">{{ t('cookie_banner.privacy_link') }}</a>.
-            </p>
-            <button @click="accept()"
-                    type="button"
-                    class="shrink-0 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium px-4 py-2 rounded">
-                {{ t('cookie_banner.accept') }}
-            </button>
-        </div>
-    </div>
     {{ toast_container() }}
     <script src="{{ asset('js/htmx.min.js') }}"></script>
     <script src="{{ asset('js/components.js') }}"></script>

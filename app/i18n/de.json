@@ -10,11 +10,6 @@
     "brand": "Picture-Stage",
     "settings": "Einstellungen"
   },
-  "cookie_banner": {
-    "text": "Diese Website verwendet technisch notwendige Cookies für die Sitzungsverwaltung. Weitere Informationen finden Sie in unserer",
-    "privacy_link": "Datenschutzerklärung",
-    "accept": "Verstanden"
-  },
   "auth": {
     "login_title": "Login - Picture-Stage",
     "signup_title": "Sign Up - Picture-Stage",
