@@ -8,6 +8,17 @@ from app.db.models import GalleryPhase, GalleryStatus
 
 WatermarkPosition = Literal["top-left", "top-right", "bottom-left", "bottom-right", "center"]
 
+# Max length of the optional photographer note shown to the model in the guest viewer.
+GUEST_MESSAGE_MAX_LENGTH = 1000
+
+
+def _normalise_guest_message(v: Any) -> str | None:
+    """Strip surrounding whitespace; treat blank as 'no message' (NULL)."""
+    if v is None:
+        return None
+    text = str(v).strip()
+    return text or None
+
 
 class WatermarkConfig(BaseModel):
     """Per-gallery watermark configuration. All fields optional; NULL means use global default."""
@@ -41,8 +52,11 @@ class WatermarkConfig(BaseModel):
 
 class GalleryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    guest_message: str | None = Field(default=None, max_length=GUEST_MESSAGE_MAX_LENGTH)
     watermark_config: dict[str, Any] | None = None
     expires_at: datetime | None = None
+
+    _normalise_guest_message = field_validator("guest_message", mode="before")(_normalise_guest_message)
 
     @field_validator("watermark_config", mode="before")
     @classmethod
@@ -60,8 +74,11 @@ class GalleryCreate(BaseModel):
 
 class GalleryUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=200)
+    guest_message: str | None = Field(default=None, max_length=GUEST_MESSAGE_MAX_LENGTH)
     watermark_config: dict[str, Any] | None = None
     expires_at: datetime | None = None
+
+    _normalise_guest_message = field_validator("guest_message", mode="before")(_normalise_guest_message)
 
     @field_validator("watermark_config", mode="before")
     @classmethod
@@ -83,6 +100,7 @@ class GalleryStatusTransition(BaseModel):
 class GalleryResponse(BaseModel):
     id: uuid.UUID
     name: str
+    guest_message: str | None
     phase: GalleryPhase
     status: GalleryStatus
     watermark_config: WatermarkConfig | dict[str, Any] | None

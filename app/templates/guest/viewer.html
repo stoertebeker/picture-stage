@@ -130,6 +130,16 @@
         <input type="hidden" name="filter" value="{{ filter }}">
     </header>
 
+    {# Optional photographer note (dii). Autoescaped; newlines kept via pre-line, no |safe. #}
+    {% if gallery_message %}
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4">
+        <div class="rounded-md border border-border-subtle bg-surface-raised px-4 py-3">
+            <p class="text-xs uppercase tracking-widest text-text-muted">{{ t('guest.message_eyebrow') }}</p>
+            <p class="mt-1 text-sm text-text-secondary" style="white-space: pre-line;">{{ gallery_message }}</p>
+        </div>
+    </div>
+    {% endif %}
+
     <!-- Read-only banner once the review is completed -->
     <div x-show="completed"
          class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-4"

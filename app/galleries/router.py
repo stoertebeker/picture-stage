@@ -61,6 +61,7 @@ def _gallery_to_response(gallery: Gallery, image_count: int) -> GalleryResponse:
     return GalleryResponse(
         id=gallery.id,
         name=gallery.name,
+        guest_message=gallery.guest_message,
         phase=gallery.phase,
         status=gallery.status,
         watermark_config=gallery.watermark_config,
@@ -170,6 +171,7 @@ async def create_gallery(
     gallery = Gallery(
         owner_id=user.id,
         name=body.name,
+        guest_message=body.guest_message,
         watermark_config=body.watermark_config,
         expires_at=body.expires_at,
     )
@@ -321,6 +323,7 @@ async def duplicate_gallery(
     new_gallery = Gallery(
         owner_id=user.id,
         name=body.name or f"{source.name} (Kopie)",
+        guest_message=source.guest_message,
         watermark_config=source.watermark_config,
     )
     db.add(new_gallery)

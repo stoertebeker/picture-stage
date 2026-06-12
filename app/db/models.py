@@ -106,6 +106,8 @@ class Gallery(TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Optional free-text note from the photographer, shown to the model in the guest viewer.
+    guest_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     phase: Mapped[GalleryPhase] = mapped_column(Enum(GalleryPhase), nullable=False, default=GalleryPhase.review)
     status: Mapped[GalleryStatus] = mapped_column(Enum(GalleryStatus), nullable=False, default=GalleryStatus.draft)
 

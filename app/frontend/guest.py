@@ -264,6 +264,7 @@ async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str,
         {
             "request": request,
             "gallery_name": gallery.name,
+            "gallery_message": gallery.guest_message,
             "token": token,
             "requires_password": False,
             "images": images,

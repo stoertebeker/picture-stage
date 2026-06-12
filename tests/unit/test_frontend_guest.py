@@ -51,11 +51,12 @@ def _make_image(filename: str, idx: int = 0) -> dict[str, object]:
     }
 
 
-def _render_viewer(images: list[dict[str, object]]) -> str:
+def _render_viewer(images: list[dict[str, object]], gallery_message: str | None = None) -> str:
     return templates.env.get_template("guest/viewer.html").render(
         t=_t,
         locale="de",
         gallery_name="Test Gallery",
+        gallery_message=gallery_message,
         token="tok123",
         session_id="sess123",
         images=images,
@@ -387,3 +388,25 @@ def test_guest_router_registered():
     guest_pos = main_py.index("include_router(frontend_guest_router)")
     api_guest_pos = main_py.index("include_router(guest_router)")
     assert guest_pos < api_guest_pos
+
+
+def test_guest_viewer_shows_gallery_message_when_set():
+    """The optional photographer note (dii) renders with its eyebrow when present."""
+    html = _render_viewer([_make_image("a.jpg")], gallery_message="Bitte 10 Favoriten")
+    assert "Bitte 10 Favoriten" in html
+    assert _t("guest.message_eyebrow") in html
+
+
+def test_guest_viewer_hides_gallery_message_block_when_empty():
+    """No note -> no message block (and no eyebrow) is rendered."""
+    html = _render_viewer([_make_image("a.jpg")], gallery_message=None)
+    assert _t("guest.message_eyebrow") not in html
+
+
+def test_guest_viewer_escapes_gallery_message_xss():
+    """Photographer free-text is shown to guests -> must be autoescaped, never raw."""
+    payload = "<script>alert('xss')</script>"
+    html = _render_viewer([_make_image("a.jpg")], gallery_message=payload)
+    # The raw tag must not survive; the escaped form must be present instead.
+    assert "<script>alert('xss')</script>" not in html
+    assert "&lt;script&gt;" in html

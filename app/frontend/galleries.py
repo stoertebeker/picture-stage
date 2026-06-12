@@ -29,7 +29,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
-from app.galleries.schemas import WatermarkConfig
+from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.security.signing import sign_url
 from app.storage.base import StorageBackend
@@ -432,6 +432,30 @@ async def set_gallery_watermark(
     validated = WatermarkConfig(**cfg).model_dump(exclude_none=True)
     # Reassign a fresh dict so SQLAlchemy detects the JSON column change.
     gallery.watermark_config = validated or None
+
+    await db.commit()
+    await db.refresh(gallery)
+
+    images = await _load_images_with_signed_urls(gallery_id, db)
+    ctx = _build_context(request, gallery, images, user)
+    return templates.TemplateResponse(request, "galleries/detail.html", ctx)
+
+
+@router.post("/galleries/{gallery_id}/message", response_class=HTMLResponse)
+async def set_gallery_message(
+    gallery_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(require_authenticated_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Set the optional free-text note shown to the model in the guest viewer (dii)."""
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+
+    form = await request.form()
+    # Keep newlines (multi-line note) but drop other control chars; trim + cap length.
+    raw = str(form.get("guest_message", ""))
+    cleaned = "".join(ch for ch in raw if ch == "\n" or ch.isprintable()).strip()
+    gallery.guest_message = cleaned[:GUEST_MESSAGE_MAX_LENGTH] or None
 
     await db.commit()
     await db.refresh(gallery)
