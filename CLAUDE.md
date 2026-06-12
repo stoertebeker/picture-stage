@@ -118,29 +118,33 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-12 (Abend-Wache)
-**Wachwechsel-Tag:** `handover-2026-06-12-v06-auth` (zeigt auf `d7a0bd5`)
+**Datum:** 2026-06-12 (Nacht-Wache)
+**Wachwechsel-Tag:** `handover-2026-06-12-completion-fixes` (zeigt auf `9c4bcbd`)
 **Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung).
 **Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`, Admin: `admin@local.test` / `testpass123`. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads uv run pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
 
-### Erledigt in dieser Wache (2026-06-12 Abend) — Restbugs, Compliance, v0.6-Auftakt
-- **`y53` (P2, `0a04194`, closed):** app.js gegen HTMX-`hx-target="body"`-Re-Execution gehärtet (ganzes Script in IIFE mit `window.__psAppInit`-Guard). Folge des `typ`-Fixes der Vorwache: dessen punktueller Guard verhinderte nur den SyntaxError, ließ aber Doppel-Listener (Doppel-Toasts) zu. Lessons-learned ergänzt.
-- **`0kv` (P3, `fbc9991`, closed):** Regressions-Test `data-images` valides JSON (`test_frontend_guest.py`) — browser-treu via stdlib `HTMLParser` + `json.loads`, inkl. Sonderzeichen-Filenames. Negativkontrolle gegen den 2ba-Bug verifiziert.
-- **`cxs` (P3 SECURITY, `d2a0d35`, closed):** Gesperrter Fotograf (`status=disabled`) sperrt jetzt seine Guest-Share-Links. Beide Token-Resolver (`app/guest/router.py` + `app/frontend/guest.py`) joinen den Owner + `User.status IN LOGIN_ALLOWED_STATUSES` → 404. Reversibel (Entsperren reaktiviert), keine Session-Mutation. 4 Integration-Tests + Negativkontrolle. CHANGELOG.
-- **`a15` (P3, `2995322`, closed):** Wirkungslosen Cookie-Banner entfernt (nur technisch notwendige Cookies → kein Consent nötig). Banner/Alpine-Komponente/i18n raus. + Betreiber-Vorlagen `legal/datenschutz.example.md` (`2995322`) und `legal/impressum.example.md` (`39761b5`).
-- **`aqn` (P3, `83fe043`, closed):** Legal-Footer auf den öffentlichen Auth-Seiten (login/signup/verify/setup waren ohne Link → DDG/DSGVO „unmittelbar erreichbar" verfehlt). Neues Partial `_legal_footer.html`.
-- **`3av` ausgedünnt (`1e1b451`):** 5 Mockup-Spike-Tickets geschlossen (obsolet — Design direkt am echten Template via lokalem Docker+Playwright, siehe lessons-learned). Epic 10 → 5 Sub-Tickets.
-- **`gmo` (P2, `8e3c01c`+`2b1ab74`, closed):** v0.6 **Auth-Pages auf Editorial Dark**. Neues gemeinsames Layout `auth_base.html` (head/fonts/skip-link/theme-toggle/brand/legal-footer/scripts zentralisiert), login/signup/verify als schlanke Kinder. Footer von `fixed` auf **Sticky-Footer-Pattern** (Überlappung bei hoher Karte gefixt). CHANGELOG.
-- **257 Unit-Tests grün**, ruff+mypy sauber. Vorwache (früh, P3-Bug-Sprint `2j2/typ/1zz/bbj/ugu/52s`) → Tag `handover-2026-06-12`.
+### Erledigt in dieser Wache (2026-06-12 Nacht) — Galerie-Nachricht, Abschluss-Mail-Kette, Bugfixes
+- **`dii` (P2, `3c13bfe`, closed):** Optionale **Galerie-Nachricht an das Model**. Settings-Karte in der Galerie-Detail-Seite (`name="guest_message"`, max 1000 Zeichen) → Anzeige im Guest-Viewer über dem Grid. Migration `0005` (`galleries.guest_message`, nullable), Endpoint `POST /galleries/{id}/message`, in `GalleryCreate/Update/Response` + Duplicate. **XSS:** autoescaped + `white-space: pre-line` (kein `|safe`). 3 Unit + 3 Integration. CHANGELOG.
+- **`qkh` (P2 bug, `11e1ebc`, closed):** Test-Drift seit `gmo` behoben (3× `*_has_dark_mode` prüften obsoletes `dark:`-Utility, `skip_link`-Test prüfte Kind-Templates statt `auth_base`). **Wichtig: das rote CI gated den Image-Build — seit `gmo` (14:07) lief KEIN Build, kein `:dev`-Image seit `aqn` (13:32).** Fix entsperrte die Pipeline → alle Features wieder im Image. Nur Test-Dateien.
+- **`16l` (P2, `6255dc1`, closed):** **Mail an den Fotografen bei Galerie-Abschluss.** Template + Trigger existierten, lieferten aber nichts (config-gated auf leere `NotificationConfig`). Neue config-freie `notify_owner_gallery_completed()` (Muster `notify_admins_signup`), gated über `NOTIFY_OWNER_ON_COMPLETION` (default true) + `SMTP_HOST`, Empfänger = Owner-Adresse aus DB. 5 Unit + 2 Integration. CHANGELOG, `.env.example`, README.
+- **`4gr` (P1 bug, `3a294db`, closed):** **Abschluss-Button war stumm kaputt.** `POST /g/{token}/complete` band `session_id` als Query-Param, das JS sendet ihn im Body → 422; JS prüft Status nicht → Galerie wurde über die Web-UI nie `completed` (→ Read-only-Gate + `16l`-Mail feuerten nie). Fix: `CompleteReviewRequest`-Body-Model. Regressions-Tests pinnen den Body-Vertrag. **Voraussetzung dafür, dass `16l` überhaupt wirkt.**
+- **`0d1` (P2 bug, `9c4bcbd`, closed):** Guest-Lightbox-Toolbar überdeckte Bild + Wasserzeichen. Umbau auf Flex-Column (Bild in `flex-1`-Stage via `object-contain`/`absolute inset-0`, Toolbar im Fluss darunter). **Selbst per Screenshot abgenommen** (lokaler Stack; haiku-Subagent meldete 2× falsch). Reiner CSS-Umbau, JS unberührt. CHANGELOG.
+- **Doku-Fix (`5c3a3f2`):** Prod ist **NICHT** via Playwright testbar (Cloudflare) — Annahme im Stand korrigiert.
+- **265 Unit-Tests grün**, ruff+mypy sauber, alle CI grün inkl. `build-and-push`.
 
-### ⚠️ Betrieblicher Rest (vor/nach nächstem Deploy)
-- **`aqn` + `gmo` sind NUR lokal via Docker abgenommen, NICHT auf Prod.** Nach `docker compose pull && up -d` + CF-Purge: Login/Signup/Verify (Editorial Dark, Theme-Toggle, Footer) + Auth-Footer auf `picture.stoertes.cloud` gegenprüfen.
-- Harmloser Test-Pending-Signup `smoketest-gmo@example.com` liegt in der **lokalen** DB.
+### ⚠️ Betrieblicher Rest — Prod-Deploy + Abnahme stehen aus
+Alles liegt im `:dev`-Image, ist aber **NICHT auf Prod**. Nach `docker compose pull && up -d` + CF-Purge gegenprüfen:
+- **`gmo`** (Auth-Pages Editorial Dark), **`dii`** (Galerie-Nachricht: Detail-Karte speichert → Guest-Anzeige, Dark+Light), **`0d1`** (Lightbox: Bild + Wasserzeichen frei, hohe+breite Bilder, Mobile).
+- **`16l`+`4gr` (Abschluss-Mail-Kette) — kritisch, SMTP nur auf Prod testbar (Mailjet aus Sandbox nicht erreichbar):** echter Galerie-Abschluss über die Guest-UI → Galerie wird `completed` → **Mail im Posteingang des Fotografen**. `NOTIFY_OWNER_ON_COMPLETION` default true.
+- Im lokalen Docker-Stack liegt eine „Test-Galerie Mobile" mit 2 Testbildern (aus der `0d1`-Abnahme) + harmloser Pending-Signup `smoketest-gmo@example.com`.
 
-### Offene Tickets (6) — Stand Abend-Wache 2026-06-12
+### Offene Tickets (8) — Stand Nacht-Wache 2026-06-12
 | Ticket | Prio | Befund |
 |--------|------|--------|
 | `picture-stage-3av` | P2 | v0.6 UX-Redesign Photographer-Pages — aktiver Epic (Auth-Pages ✅ via `gmo`) |
+| `picture-stage-am9` | P2 | **NEU** Bilder im Guest-Auswahl-Modus lazy-laden (Seite lädt zu lang, blockiert Bedienung). Hinweis: `<img loading="lazy"` ist gesetzt → Verdacht eher `data-images`-JSON (alle Bilder ins Alpine-State). |
+| `picture-stage-jwc` | P3 | **NEU** Mobile Swipe-Hint in der Lightbox nach ~3-4s ausblenden (`_lightbox.html`) |
+| `picture-stage-1qa` | P3 | IP-Adresse bei Pending Signups erfassen + anzeigen (DSGVO + Proxy-IP beachten) |
 | `picture-stage-026` | P3 | [Impl] Admin Pending Signups ← 3av |
 | `picture-stage-9ql` | P3 | [Impl] Guest-Expired-Page ← 3av (kleinster Happen) |
 | `picture-stage-atj` | P3 | [Impl] Audit-Log Viewer ← 3av |
@@ -148,10 +152,12 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 | `picture-stage-56k` | P3 | Per-User-Galerie-Limit-Override in Admin-UI (Schritt 2 von `5gi`) |
 
 ### Offene Punkte für die nächste Wache
-1. **Einstieg:** v0.6 weiter im `3av`-Epic — `9ql` (Guest-Expired) ist der kleinste nächste Happen, `tln` (Setup) profitiert vom schon umgestellten Sticky-Footer-Layout. Muster: `auth_base.html` + Editorial-Dark-Tokens, **kein Mockup-Spike** — direkt am Template via Docker+Playwright (s.u.).
-2. **v0.6-Frontend-Workflow:** Template ändern → `docker cp <file> picture-stage-app-1:/app/<file>` (Jinja lädt zur Laufzeit) → Playwright-Subagent (haiku) für Screenshot/DOM → **Kern-Screenshots SELBST per Read prüfen** (Subagent übersah bei `gmo` eine Footer-Überlappung) → Prod nach Deploy.
-3. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`, kein Code-Problem.
-4. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen.
+1. **Erst Prod-Deploy + Abnahme** (s. Betrieblicher Rest) — v.a. die Abschluss-Mail-Kette `16l`+`4gr` ist nur live verifizierbar.
+2. **Dann Guest-Findings:** `am9` (Lazy-Load, P2 — beeinträchtigt Nutzbarkeit) ist der wirkungsvollste nächste Happen; `jwc` (Swipe-Hint) ein kleiner kosmetischer Mitnahme-Fix im selben `_lightbox.html`.
+3. **Oder v0.6-Epic `3av`:** `9ql` (Guest-Expired) kleinster Happen, `tln` (Setup) profitiert vom Sticky-Footer-Layout. Muster: `auth_base.html` + Editorial-Dark-Tokens, **kein Mockup-Spike** — direkt am Template via Docker+Playwright (s.u.).
+4. **Frontend-Workflow:** Template ändern → `docker cp <file> picture-stage-app-1:/app/<file>` (Jinja lädt zur Laufzeit) → Playwright-Subagent (haiku) → **Kern-Screenshots SELBST per Read prüfen** (haiku meldete bei `gmo` UND `0d1` falsch) → Prod-Abnahme durch den Kapitän (Cloudflare blockt Headless).
+5. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
+6. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
