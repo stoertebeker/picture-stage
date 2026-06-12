@@ -120,7 +120,7 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 **Datum:** 2026-06-12 (Abend-Wache)
 **Wachwechsel-Tag:** `handover-2026-06-12-v06-auth` (zeigt auf `d7a0bd5`)
-**Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod via Playwright erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung).
+**Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung).
 **Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`, Admin: `admin@local.test` / `testpass123`. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads uv run pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
 
 ### Erledigt in dieser Wache (2026-06-12 Abend) — Restbugs, Compliance, v0.6-Auftakt
@@ -328,7 +328,7 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 
 Alle Sub-Tickets erledigt und prod-abgenommen. Epic `picture-stage-qdz` geschlossen.
 
-**Hinweis Frontend-Verifikation:** Lokal kein Tailwind-Build (styles.css = Stub) → visuelle Abnahme immer gegen Prod (`https://picture.stoertes.cloud`, via Playwright erreichbar).
+**Hinweis Frontend-Verifikation:** Lokal kein Tailwind-Build im eingecheckten `styles.css` (= Stub), aber der **lokale Docker-Stack** baut echtes JIT-CSS (`css-builder`) → visuelle Abnahme gegen den lokalen Stack (`http://localhost:8000`). Prod (`https://picture.stoertes.cloud`) ist via Playwright/Headless **nicht** erreichbar (Cloudflare-Challenge) — Prod-Abnahme nur durch den Kapitän.
 
 ### Kleinere offene Punkte
 - ~~Docker-Build verifizieren~~ ✅ erledigt 2026-06-08 (Pipeline live, siehe CI/CD-Abschnitt oben)
