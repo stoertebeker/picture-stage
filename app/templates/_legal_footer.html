@@ -1,0 +1,12 @@
+{# Public legal footer for the standalone auth/setup pages (aqn). These pages do
+   not extend base.html, so the Impressum/Datenschutz links must live here to
+   stay reachable without an account (DDG §5 / GDPR Art. 13: legal notice and
+   privacy policy must be directly reachable). Token-styled so it works in both
+   themes; fixed to the bottom so it never disturbs the centred auth card. #}
+<footer class="fixed bottom-0 inset-x-0 py-4 text-center text-xs text-text-muted">
+    <a href="/legal/impressum"
+       class="rounded hover:text-text-primary hover:underline focus:outline-none focus-visible:ring focus-visible:ring-focus">{{ t('nav.impressum') }}</a>
+    <span class="mx-2" aria-hidden="true">·</span>
+    <a href="/legal/datenschutz"
+       class="rounded hover:text-text-primary hover:underline focus:outline-none focus-visible:ring focus-visible:ring-focus">{{ t('nav.datenschutz') }}</a>
+</footer>
