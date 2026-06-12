@@ -1,60 +1,35 @@
+{% extends "auth_base.html" %}
 {% from "_macros/buttons.html" import button %}
 {% from "_macros/forms.html" import field, email_input, password_input, csrf_input, form_error %}
-<!DOCTYPE html>
-<html lang="{{ locale }}" data-theme="dark">
-<head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="csrf-token" content="{{ csrf_token }}">
-    <title>{{ t('auth.login_title') }}</title>
-    <link rel="preload" href="/static/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="preload" href="/static/fonts/fraunces-variable.woff2" as="font" type="font/woff2" crossorigin>
-    <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
-</head>
-<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 min-h-screen flex items-center justify-center">
-    <a href="#main"
-       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-md focus:bg-surface-raised focus:text-text-primary focus:shadow-lg focus:outline-none focus:ring focus:ring-focus">{{ t('common.skip_to_content') }}</a>
-    <main id="main" class="w-full max-w-md px-6">
-        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-md p-8">
-            <div class="flex items-center justify-between mb-6">
-                <h1 class="text-2xl font-bold">{{ t('nav.brand') }}</h1>
-                <button type="button"
-                        data-theme-toggle
-                        class="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
-                    <span data-theme-label="dark">{{ t('nav.dark_mode') }}</span>
-                    <span data-theme-label="light">{{ t('nav.light_mode') }}</span>
-                </button>
-            </div>
 
-            {% if error %}
-            <div class="mb-4">{{ form_error(t(error)) }}</div>
-            {% endif %}
+{% block title %}{{ t('auth.login_title') }}{% endblock %}
 
-            <form method="post" action="/login" class="flex flex-col gap-4">
-                {{ csrf_input(csrf_token) }}
+{% block auth_card %}
+<div class="w-full bg-surface-raised border border-border-subtle rounded-lg shadow-lg p-8 flex flex-col gap-6">
 
-                {% call field(label=t('auth.email_label'), name='email', required=true) %}
-                    {{ email_input(required=true) }}
-                {% endcall %}
+    {% if error %}
+    {{ form_error(t(error)) }}
+    {% endif %}
 
-                {% call field(label=t('auth.password_label'), name='password', required=true) %}
-                    {{ password_input(required=true) }}
-                {% endcall %}
+    <form method="post" action="/login" class="flex flex-col gap-4">
+        {{ csrf_input(csrf_token) }}
 
-                {% call button(variant='primary', type='submit', extra_class='w-full') %}
-                    {{ t('auth.login_button') }}
-                {% endcall %}
-            </form>
+        {% call field(label=t('auth.email_label'), name='email', required=true) %}
+            {{ email_input(required=true) }}
+        {% endcall %}
 
-            <p class="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
-                {{ t('auth.no_account') }} <a href="/signup" class="text-blue-600 dark:text-blue-400 hover:underline">{{ t('auth.signup_link') }}</a>
-            </p>
-        </div>
-    </main>
+        {% call field(label=t('auth.password_label'), name='password', required=true) %}
+            {{ password_input(required=true) }}
+        {% endcall %}
 
-    {% include "_legal_footer.html" %}
+        {% call button(variant='primary', type='submit', extra_class='w-full') %}
+            {{ t('auth.login_button') }}
+        {% endcall %}
+    </form>
 
-    <script src="{{ asset('js/alpine.min.js') }}"></script>
-    <script src="{{ asset('js/app.js') }}"></script>
-</body>
-</html>
+    <p class="text-center text-sm text-text-secondary">
+        {{ t('auth.no_account') }}
+        <a href="/signup" class="text-accent hover:text-accent-hover hover:underline focus:outline-none focus-visible:ring focus-visible:ring-focus rounded">{{ t('auth.signup_link') }}</a>
+    </p>
+</div>
+{% endblock %}

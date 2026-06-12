@@ -1,0 +1,42 @@
+{#- Shared layout for the standalone auth/setup pages (gmo). These pages live
+    outside base.html (no logged-in nav), so the common chrome — head, fonts,
+    skip link, theme toggle, legal footer, scripts — is centralised here instead
+    of being duplicated per page. Children fill {% block auth_card %} with their
+    card; the brand wordmark and centred layout come from here. Editorial Dark,
+    theme-safe via tokens. -#}
+<!DOCTYPE html>
+<html lang="{{ locale }}" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{% block title %}{{ t('nav.brand') }}{% endblock %}</title>
+    <link rel="preload" href="/static/fonts/inter-variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/static/fonts/fraunces-variable.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
+</head>
+<body class="bg-surface-base text-text-primary min-h-screen flex flex-col items-center justify-center px-4 py-16">
+    <a href="#main"
+       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-md focus:bg-surface-raised focus:text-text-primary focus:shadow-lg focus:outline-none focus:ring focus:ring-focus">{{ t('common.skip_to_content') }}</a>
+
+    <!-- Theme toggle: quiet, fixed top-right; wired generically via app.js. -->
+    <button type="button"
+            data-theme-toggle
+            aria-label="{{ t('nav.toggle_theme') }}"
+            aria-pressed="true"
+            class="fixed top-4 right-4 z-10 p-2 rounded-md text-text-muted hover:text-text-primary transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+        <span data-theme-label="dark" aria-hidden="true">{{ t('nav.dark_mode') }}</span>
+        <span data-theme-label="light" aria-hidden="true">{{ t('nav.light_mode') }}</span>
+    </button>
+
+    <main id="main" class="w-full max-w-md flex flex-col items-center gap-8">
+        <a href="/" class="font-display text-2xl text-text-primary leading-none">{{ t('nav.brand') }}</a>
+        {% block auth_card %}{% endblock %}
+    </main>
+
+    {% include "_legal_footer.html" %}
+
+    <script src="{{ asset('js/alpine.min.js') }}"></script>
+    <script src="{{ asset('js/app.js') }}"></script>
+</body>
+</html>
