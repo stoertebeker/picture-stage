@@ -40,10 +40,11 @@ module.exports = {
           // RGB-component vars (see input.css) so opacity modifiers work:
           // bg-status-danger/10, border-status-danger/40. Full-tone classes
           // resolve to rgb(... / 1) — identical to the previous hex value.
-          success: 'rgb(var(--color-status-success) / <alpha-value>)',
-          warn:    'rgb(var(--color-status-warn) / <alpha-value>)',
-          danger:  'rgb(var(--color-status-danger) / <alpha-value>)',
-          info:    'rgb(var(--color-status-info) / <alpha-value>)',
+          success:      'rgb(var(--color-status-success) / <alpha-value>)',
+          warn:         'rgb(var(--color-status-warn) / <alpha-value>)',
+          danger:       'rgb(var(--color-status-danger) / <alpha-value>)',
+          'danger-text':'rgb(var(--color-status-danger-text) / <alpha-value>)',
+          info:         'rgb(var(--color-status-info) / <alpha-value>)',
         },
       },
       fontFamily: {

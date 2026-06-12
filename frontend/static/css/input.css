@@ -52,6 +52,7 @@
     --color-status-success:  5 150 105;
     --color-status-warn:     245 158 11;
     --color-status-danger:   220 38 38;
+    --color-status-danger-text: 248 113 113;
     --color-status-info:     14 165 233;
 
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
@@ -88,6 +89,7 @@
     --color-status-success:  16 185 129;
     --color-status-warn:     217 119 6;
     --color-status-danger:   220 38 38;
+    --color-status-danger-text: 185 28 28;
     --color-status-info:     2 132 199;
 
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
