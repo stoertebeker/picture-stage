@@ -65,6 +65,10 @@ class PasswordVerifyRequest(BaseModel):
     password: str
 
 
+class CompleteReviewRequest(BaseModel):
+    session_id: uuid.UUID
+
+
 class GuestImageResponse(BaseModel):
     id: uuid.UUID
     filename: str
@@ -339,9 +343,10 @@ async def get_selections(
 @router.post("/{token}/complete", response_model=CompleteReviewResponse)
 async def complete_review(
     token: str,
-    session_id: uuid.UUID,
+    body: CompleteReviewRequest,
     db: AsyncSession = Depends(get_db),
 ) -> CompleteReviewResponse:
+    session_id = body.session_id
     gallery = await _resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")

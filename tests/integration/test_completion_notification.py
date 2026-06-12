@@ -32,7 +32,7 @@ async def test_complete_review_notifies_owner(client, db, owner):
     await db.refresh(session)
 
     with patch("app.guest.router.notify_owner_gallery_completed", new=AsyncMock()) as notify:
-        resp = await client.post(f"/g/{token}/complete", params={"session_id": str(session.id)})
+        resp = await client.post(f"/g/{token}/complete", json={"session_id": str(session.id)})
 
     assert resp.status_code == 200, resp.text
     notify.assert_awaited_once()
@@ -63,7 +63,7 @@ async def test_complete_review_owner_lookup_uses_correct_email(client, db, owner
     await db.refresh(session)
 
     with patch("app.guest.router.notify_owner_gallery_completed", new=AsyncMock()) as notify:
-        resp = await client.post(f"/g/{token}/complete", params={"session_id": str(session.id)})
+        resp = await client.post(f"/g/{token}/complete", json={"session_id": str(session.id)})
 
     assert resp.status_code == 200, resp.text
     assert notify.await_args.args[0] == owner.email
