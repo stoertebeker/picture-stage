@@ -1,8 +1,125 @@
 """Tests for frontend guest viewer: image grid, lightbox, selections, complete."""
 
+import json
 import pathlib
+from html.parser import HTMLParser
+
+from app.frontend.deps import templates
+from app.i18n import t as translate
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
+
+
+def _t(key: str, **kw: object) -> str:
+    return translate(key, "de", **kw)
+
+
+class _DataImagesExtractor(HTMLParser):
+    """Capture the decoded value of the first ``data-images`` attribute.
+
+    HTMLParser resolves HTML-entity/attribute encoding and respects the
+    quote boundaries exactly as a browser would before handing the string to
+    Alpine for ``JSON.parse`` — so a broken attribute surfaces as truncated or
+    malformed JSON here too.
+    """
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.value: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.value is not None:
+            return
+        for name, val in attrs:
+            if name == "data-images":
+                self.value = val or ""
+                return
+
+
+def _make_image(filename: str, idx: int = 0) -> dict[str, object]:
+    """Mirror the dict shape produced by app.frontend.guest._load_images."""
+    return {
+        "id": f"00000000-0000-0000-0000-{idx:012d}",
+        "filename": filename,
+        "sort_order": idx,
+        "thumb_sm_url": "/media/x?sig=1",
+        "thumb_md_url": "/media/x?sig=1",
+        "preview_url": "/media/x?sig=1",
+        "selected": False,
+        "favorited": False,
+        "comment": None,
+    }
+
+
+def _render_viewer(images: list[dict[str, object]]) -> str:
+    return templates.env.get_template("guest/viewer.html").render(
+        t=_t,
+        locale="de",
+        gallery_name="Test Gallery",
+        token="tok123",
+        session_id="sess123",
+        images=images,
+        total_images=len(images),
+        selected_count=0,
+        favorited_count=0,
+        session_completed=False,
+        requires_password=False,
+        sort_by="sort_order",
+        sort_dir="asc",
+        filter="all",
+    )
+
+
+def _extract_data_images(html: str) -> str | None:
+    parser = _DataImagesExtractor()
+    parser.feed(html)
+    return parser.value
+
+
+def test_guest_viewer_data_images_is_parseable_json() -> None:
+    """picture-stage-0kv (regression for picture-stage-2ba).
+
+    The guestViewer root's data-images attribute must hold valid JSON that
+    survives HTML-attribute encoding, so Alpine's JSON.parse yields the full
+    image list instead of [] (the empty-array fallback that produced the black
+    lightbox + '3/0' counter). No test caught the original break."""
+    images = [_make_image("portrait.jpg", 0), _make_image("studio.png", 1)]
+    raw = _extract_data_images(_render_viewer(images))
+
+    assert raw is not None, "data-images attribute missing from rendered viewer"
+    parsed = json.loads(raw)
+    assert [img["filename"] for img in parsed] == ["portrait.jpg", "studio.png"]
+
+
+def test_guest_viewer_data_images_survives_special_chars_in_filename() -> None:
+    """Filenames with quotes, ampersands and angle brackets must not collide
+    with the attribute quoting — that quote collision was the 2ba root cause.
+    A browser-faithful parse must still recover every filename verbatim."""
+    filenames = [
+        'a"double".jpg',
+        "o'single'.jpg",
+        "a & b.jpg",
+        "</script><img>.jpg",
+    ]
+    images = [_make_image(name, idx) for idx, name in enumerate(filenames)]
+    raw = _extract_data_images(_render_viewer(images))
+
+    assert raw is not None
+    parsed = json.loads(raw)
+    assert [img["filename"] for img in parsed] == filenames
+
+
+def test_guest_viewer_data_images_does_not_break_out_of_markup() -> None:
+    """Defense in depth: a filename carrying markup must never appear raw in the
+    rendered HTML (it would let a malicious filename inject DOM). tojson escapes
+    < > & ' to \\uXXXX, so the breakout substring stays encoded."""
+    images = [_make_image("</script><img src=x onerror=alert(1)>.jpg", 0)]
+    html = _render_viewer(images)
+
+    assert "<img src=x onerror=alert(1)>" not in html
+    # The data attribute still round-trips to the exact filename.
+    parsed = json.loads(_extract_data_images(html) or "")
+    assert parsed[0]["filename"] == "</script><img src=x onerror=alert(1)>.jpg"
 
 
 def test_guest_route_returns_html():
