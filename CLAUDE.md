@@ -118,30 +118,35 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-11 (abends, 2. Wache)
-**Wachwechsel-Tag:** `handover-2026-06-11-v05-complete` (zeigt auf `c3cac65`, letzter grüner Stand: `qdz.17`/`qdz.18` prod-abgenommen & closed, **Epic `qdz` v0.5 geschlossen**)
-**Live:** Eine produktive Instanz läuft online (`https://picture.stoertes.cloud`, via Docker-Hub-Image). **Prod ist via Playwright-Tools erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **SMTP produktiv (Mailjet).** **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung) — für Live-Tests nutzbar.
+**Datum:** 2026-06-12
+**Wachwechsel-Tag:** `handover-2026-06-12` (zeigt auf `d37630a`)
+**Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod via Playwright erreichbar** — Live-Tests möglich ohne Netzwerk-Freischaltung. **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung).
+**Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome` (Ubuntu 26.04 nicht offiziell Playwright-supported → Chrome deb). Lokaler Stack: `docker compose up -d`, Admin: `admin@local.test` / `testpass123`.
 
-### Erledigt in dieser Wache (2026-06-11 abends, 2. Wache) — v0.5 Epic abgeschlossen
-- **`qdz.17` (P2, `353aef3`, closed, PROD-ABGENOMMEN):** Alle verbleibenden hardcoded Strings auf `t()`-Keys. `deps.py`: `ContextVar`-basiertes `_global_t()` in `env.globals` — Jinja2-Macros können jetzt `t()` aufrufen ohne Context-Zugriff. `html[lang]` dynamisch via `{{ locale }}`. Cookie-Banner, Nav-Links (Dashboard/Logout/Impressum/Datenschutz), Modal+Toast `aria-label` vollständig i18n-fähig.
-- **`qdz.18` (P2, `aec59e4`+`c3cac65`, closed, PROD-ABGENOMMEN):** Mobile-Tuning Guest-Pages. (1) `hidden sm:flex`-Bug auf Sort-Dropdown: Alpine `x-show` kann `!important` nicht überschreiben → `flex` statt `hidden sm:flex`. (2) Touch-Targets Lang-Switcher: `px-1` → `px-2 py-2`. (3) Sort-Panel auf Mobile als absolutes Dropdown unter dem Header (verhindert H-Scroll bei geöffnetem Panel, scrollWidth=375 verifiziert). Siehe `docs/lessons-learned.md` → „i18n & Templates".
-- **Epic `qdz` v0.5 geschlossen** — alle Guest-Pages (Viewer, Lightbox, Password-Gate, i18n, Mobile) prod-abgenommen.
-- **254 Unit-Tests grün**, ruff+mypy sauber, CI grün.
+### Erledigt in dieser Wache (2026-06-12) — P3-Bug-Sprint + P2 Touch-Targets
+- **`2j2` (P2, `4fbce9d`, closed):** Touch-Targets Photographer-Pages. Nav-Links/Logout/Settings-Button (24→37px), Icon-Buttons Galerie-Detail + Card + Delete-Modal (36→44px), Footer-Link-Buttons (33→39px). `buttons.html`-Makro sm/md-Padding angehoben.
+- **`typ` (P3, `3a3df1f`, closed):** `TOAST_KIND_CLASS`-Redeklaration nach HTMX body-swap → `if (!window.TOAST_KIND_CLASS)` Guard in `app.js`.
+- **`1zz` (P3, `b5dca73`, closed):** Theme-Toggle auf Login/Signup/Verify/Setup funktionslos — `app.js` fehlte auf allen 4 Standalone-Seiten. Ergänzt.
+- **`bbj` (P3, `7c092e9`, closed):** Kontrast `text-status-danger` auf `/10`-Tönung (3.87–3.98:1, WCAG AA 4.5 verfehlt). Neues Token `--color-status-danger-text`: Dark=`248 113 113` (red-400, ~7:1), Light=`185 28 28` (red-700, ~5:1). `input.css` + `tailwind.config.js` + 4 Template-Stellen.
+- **`ugu` (P3, `e867b6b`, closed):** Admin-Benutzerverwaltung horizontaler Scroll. Galerien/Erstellt `hidden md:table-cell`, Email `max-w-0 overflow-hidden` + truncate-Span, Aktionen `flex-wrap`. 375/768/1280px ohne Overflow verifiziert.
+- **`52s` (P3, `d37630a`, closed):** Playwright-Smoke Admin-UI. 7/8 Tests ✅. Delete-Modal: Alpine CSP `x-model` reagiert nicht auf programmatische Playwright-Events (Tooling-Limitation, kein Code-Bug; manuell verifiziert).
+- **254 Unit-Tests grün**, ruff+mypy sauber.
 
-### Offene Tickets (Stand Wachwechsel) — kein P1/P2 offen außer v0.6
+### Offene Tickets (Stand Wachwechsel 2026-06-12)
 | Ticket | Prio | Befund |
 |--------|------|--------|
-| `picture-stage-2j2` | P2 | Mobile-Tuning Photographer-Pages (375/768/1280px) — v0.6-Einstieg |
+| `picture-stage-3av` | P2 | v0.6 UX-Redesign Photographer-Pages (Editorial Dark) — aktiver Epic |
+| `picture-stage-ay2` | P2 | [Mockup-Spike] Auth-Pages Login/Signup/Verify ← v0.6 |
 | `picture-stage-56k` | P3 | Per-User-Galerie-Limit-Override in Admin-UI (Schritt 2 von `5gi`) |
-| `picture-stage-typ` | P3 | `Identifier 'TOAST_KIND_CLASS' has already been declared` — Doppel-Deklaration in `app.js` |
-| `picture-stage-bbj` | P3 | Kontrast `text-status-danger` auf `/10`-Tönung nur ~3.9:1 (unter AA 4.5) |
-| `picture-stage-ugu` | P3 | Benutzerverwaltung zu schmal → horizontales Scrollen nötig |
-| `picture-stage-1zz` | P3 | „Light"-Label auf Login-Seite ohne Funktion |
+| `picture-stage-a15` | P3 | Cookie-Banner: Zweck klären / entfernen oder korrekt verdrahten |
+| `picture-stage-0kv` | P3 | Regressions-Test: Guest-Viewer `data-images` enthält valides JSON |
+| `picture-stage-cxs` | P3 | Share-Sessions gesperrter User invalidieren/prüfen |
 
 ### Offene Punkte für die nächste Wache
-1. **Einstieg: `2j2` (P2)** — Mobile-Tuning Photographer-Pages, natürliche Fortsetzung nach v0.5. Oder freie Wahl aus P3-Bugs (`typ`/`bbj`/`ugu`/`1zz`/`56k`).
-2. **QEMU-Flakiness:** Docker-Build schlägt gelegentlich mit `exit code: 132` (SIGILL) fehl — `gh run rerun --failed` reicht, kein Code-Problem. Hardwaremigration auf x86 geplant.
-3. Abnahme-Standard: Browser-Konsole `all=false` nach frischer Navigation selbst klassifizieren (Cloudflare-Beacon + `TOAST_KIND_CLASS` = bekannte Non-Issues). **Effizienz-Trick:** Galerien via HTMX-Header anlegen/löschen (`X-CSRF-Token` + `HX-Request: true`), nicht über FormData-CSRF.
+1. **Einstieg:** P3-Restbugs (`a15`, `0kv`, `cxs`) — oder v0.6-Epic-Start mit Mockup-Spike `ay2` (Auth-Pages) als natürlichen Auftakt für `3av`.
+2. **QEMU-Flakiness:** Docker-Build schlägt gelegentlich mit `exit code: 132` (SIGILL) fehl — `gh run rerun --failed` reicht, kein Code-Problem. Migration auf echte x86-Hardware erfolgt.
+3. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen nicht vergessen.
+4. **Abnahme-Standard:** Browser-Konsole `all=false` nach frischer Navigation selbst klassifizieren (Cloudflare-Beacon = bekanntes Non-Issue). **Effizienz-Trick:** Galerien via HTMX-Header anlegen/löschen (`X-CSRF-Token` + `HX-Request: true`), nicht über FormData-CSRF.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
@@ -306,11 +311,11 @@ Vollständige Verwaltung bestehender Accounts durch Admins — API **und** Front
 - **Tests:** 21 Integration-Tests (`tests/integration/test_admin_users.py`, CI/Postgres) +
   DB-freie Unit-Tests (`tests/unit/test_auth_disabled_status.py`, `test_frontend_admin_users.py`).
 
-**Offene Follow-ups (Beads):**
-| Punkt | Beads-ID | Prio |
-|-------|----------|------|
-| Visuelle/Playwright-UI-Verifikation `/admin/users` | `picture-stage-52s` | P3 |
-| Share-Sessions gesperrter User invalidieren/prüfen | `picture-stage-cxs` | P3 |
+**Follow-ups:**
+| Punkt | Beads-ID | Status |
+|-------|----------|--------|
+| Visuelle/Playwright-UI-Verifikation `/admin/users` | `picture-stage-52s` | ✅ closed 2026-06-12 |
+| Share-Sessions gesperrter User invalidieren/prüfen | `picture-stage-cxs` | P3 offen |
 
 > `picture-stage-7kr` (JWT-Invalidierung) ✅ closed 2026-06-08 — siehe Abschnitt „Security-Härtung" oben.
 

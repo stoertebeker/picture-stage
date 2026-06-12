@@ -61,3 +61,6 @@ node_modules/
 /*.png
 .playwright/
 user-findings.txt
+
+# beads.conf — Überrest vom falsch installierten gel-staining-Paket (apt install beads)
+beads.conf
