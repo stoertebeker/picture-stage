@@ -15,7 +15,7 @@
     <link rel="preload" href="/static/fonts/fraunces-variable.woff2" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="{{ asset('css/styles.css') }}">
 </head>
-<body class="bg-surface-base text-text-primary min-h-screen flex flex-col items-center justify-center px-4 py-16">
+<body class="bg-surface-base text-text-primary min-h-screen flex flex-col px-4">
     <a href="#main"
        class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-4 focus:py-2 focus:rounded-md focus:bg-surface-raised focus:text-text-primary focus:shadow-lg focus:outline-none focus:ring focus:ring-focus">{{ t('common.skip_to_content') }}</a>
 
@@ -29,7 +29,7 @@
         <span data-theme-label="light" aria-hidden="true">{{ t('nav.light_mode') }}</span>
     </button>
 
-    <main id="main" class="w-full max-w-md flex flex-col items-center gap-8">
+    <main id="main" class="flex-1 w-full max-w-md mx-auto flex flex-col items-center justify-center gap-8 py-12">
         <a href="/" class="font-display text-2xl text-text-primary leading-none">{{ t('nav.brand') }}</a>
         {% block auth_card %}{% endblock %}
     </main>
