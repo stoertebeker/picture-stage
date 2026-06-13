@@ -96,7 +96,16 @@
     "err_self_status": "You cannot change your own status.",
     "err_self_delete": "You cannot delete your own account.",
     "err_last_admin": "The last remaining admin cannot be demoted or deleted.",
-    "err_generic": "Action failed."
+    "err_generic": "Action failed.",
+    "err_invalid_limit": "Invalid value: gallery limit must be 0 (unlimited) or a positive number.",
+    "gallery_limit_col": "Gallery Limit",
+    "gallery_limit_default": "Default",
+    "gallery_limit_unlimited": "Unlimited",
+    "gallery_limit_title": "Set Gallery Limit",
+    "gallery_limit_info": "Leave empty to use the global default. 0 = unlimited for this user.",
+    "gallery_limit_label": "New Limit",
+    "gallery_limit_button": "Set Limit",
+    "gallery_limit_toast": "Gallery limit updated for {email}."
   },
   "dashboard": {
     "title": "Dashboard – Picture-Stage",

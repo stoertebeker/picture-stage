@@ -10,7 +10,7 @@
     'pending': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
 } %}
 <tr id="user-row-{{ user.id }}"
-    x-data='{ deleteConfirm: "", pwValue: "", targetEmail: {{ user.email | tojson }} }'>
+    x-data='{ deleteConfirm: "", pwValue: "", limitValue: "", targetEmail: {{ user.email | tojson }} }'>
     <td class="px-3 py-3 md:px-6 md:py-4 max-w-0 overflow-hidden">
         <span class="block truncate text-sm text-gray-900 dark:text-gray-100">{{ user.email }}</span>
     </td>
@@ -18,6 +18,21 @@
         <span class="inline-flex px-2 py-0.5 rounded-full text-xs font-medium {{ badge_class.get(user.status | string, badge_class['active']) }}">
             {{ t('admin.status_' ~ (user.status | string)) }}
         </span>
+    </td>
+    <td class="hidden md:table-cell px-3 py-3 md:px-6 md:py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+        <button type="button" @click="limitValue = ''" data-open-dialog="limitModal-{{ user.id }}"
+                class="inline-flex items-center gap-1 hover:text-gray-900 dark:hover:text-gray-100 transition-colors">
+            {% if user.gallery_limit_override is none %}
+                <span>{{ t('admin.gallery_limit_default') }}</span>
+            {% elif user.gallery_limit_override == 0 %}
+                <span>{{ t('admin.gallery_limit_unlimited') }}</span>
+            {% else %}
+                <span>{{ user.gallery_limit_override }}</span>
+            {% endif %}
+            <svg class="h-3 w-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15.232 5.232l3.536 3.536M9 13l6-6m-6 6H6v-3l9-9a2.121 2.121 0 013 3L9 13z"/>
+            </svg>
+        </button>
     </td>
     <td class="hidden md:table-cell px-3 py-3 md:px-6 md:py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ galleries_count }}</td>
     <td class="hidden md:table-cell px-3 py-3 md:px-6 md:py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ user.created_at.strftime('%d.%m.%Y') }}</td>
@@ -126,3 +141,27 @@
         </div>
     </td>
 </tr>
+
+{# --- Gallery-limit modal (outside the actions cell so it renders regardless of user.id == current_user.id) --- #}
+<dialog id="limitModal-{{ user.id }}" data-backdrop-close
+    class="rounded-lg p-0 backdrop:bg-black/50 w-full max-w-md bg-white dark:bg-gray-800">
+    <form class="p-6 text-left"
+        hx-post="/admin/users/{{ user.id }}/gallery-limit"
+        hx-target="#user-row-{{ user.id }}"
+        hx-swap="outerHTML"
+        data-close-dialog-on-success>
+        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{{ t('admin.gallery_limit_title') }}</h3>
+        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ t('admin.gallery_limit_info') }}</p>
+        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ t('admin.gallery_limit_label') }}</label>
+        <input type="number" name="limit" x-model="limitValue" min="0" placeholder="{{ t('admin.gallery_limit_default') }}"
+            class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-4">
+        <div class="flex justify-end gap-2">
+            <button type="button" data-close-dialog
+                class="px-3 py-1.5 text-sm rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{{ t('admin.cancel') }}</button>
+            <button type="submit"
+                class="px-3 py-1.5 text-sm rounded-md font-medium bg-blue-600 hover:bg-blue-700 text-white">
+                {{ t('admin.gallery_limit_button') }}
+            </button>
+        </div>
+    </form>
+</dialog>

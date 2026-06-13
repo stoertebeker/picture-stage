@@ -96,7 +96,16 @@
     "err_self_status": "Du kannst deinen eigenen Status nicht ändern.",
     "err_self_delete": "Du kannst dein eigenes Konto nicht löschen.",
     "err_last_admin": "Der letzte verbleibende Admin kann nicht herabgestuft oder gelöscht werden.",
-    "err_generic": "Aktion fehlgeschlagen."
+    "err_generic": "Aktion fehlgeschlagen.",
+    "err_invalid_limit": "Ungültiger Wert: Galerie-Limit muss 0 (unbegrenzt) oder eine positive Zahl sein.",
+    "gallery_limit_col": "Galerie-Limit",
+    "gallery_limit_default": "Standard",
+    "gallery_limit_unlimited": "Unbegrenzt",
+    "gallery_limit_title": "Galerie-Limit anpassen",
+    "gallery_limit_info": "Leer lassen für globalen Standard. 0 = unbegrenzt für diesen User.",
+    "gallery_limit_label": "Neues Limit",
+    "gallery_limit_button": "Limit setzen",
+    "gallery_limit_toast": "Galerie-Limit für {email} aktualisiert."
   },
   "dashboard": {
     "title": "Dashboard – Picture-Stage",

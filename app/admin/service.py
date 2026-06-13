@@ -191,3 +191,43 @@ async def reset_user_password(
     await db.commit()
     await db.refresh(target)
     return target
+
+
+async def set_gallery_limit_override(
+    db: AsyncSession,
+    *,
+    actor: User,
+    target_id: uuid.UUID,
+    override: int | None,
+) -> User:
+    """Set or clear a per-user gallery-limit override.
+
+    override=None clears the override (user falls back to global default).
+    override=0    means unlimited for this user.
+    override>0    sets a specific cap.
+    Negative values are rejected.
+    """
+    if override is not None and override < 0:
+        raise AdminActionError(
+            400, "Gallery limit must be 0 (unlimited) or a positive number", "admin.err_invalid_limit"
+        )
+
+    target = await _get_target(db, target_id)
+    old_override = target.gallery_limit_override
+    target.gallery_limit_override = override
+    db.add(
+        AuditLog(
+            gallery_id=None,
+            event_type="user_gallery_limit_changed",
+            actor_user_id=actor.id,
+            details={
+                "target_user_id": str(target.id),
+                "target_email": target.email,
+                "old_override": old_override,
+                "new_override": override,
+            },
+        )
+    )
+    await db.commit()
+    await db.refresh(target)
+    return target

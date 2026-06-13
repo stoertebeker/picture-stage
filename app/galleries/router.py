@@ -161,7 +161,7 @@ async def create_gallery(
     db: AsyncSession = Depends(get_db),
 ) -> GalleryResponse:
     try:
-        await assert_within_gallery_quota(user.id, db)
+        await assert_within_gallery_quota(user.id, db, limit_override=user.gallery_limit_override)
     except GalleryQuotaExceeded as exc:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,

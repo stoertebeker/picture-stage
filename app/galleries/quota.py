@@ -28,13 +28,18 @@ class GalleryQuotaExceeded(Exception):
         super().__init__(f"Gallery limit reached ({limit})")
 
 
-async def assert_within_gallery_quota(owner_id: uuid.UUID, db: AsyncSession) -> None:
+async def assert_within_gallery_quota(
+    owner_id: uuid.UUID,
+    db: AsyncSession,
+    *,
+    limit_override: int | None = None,
+) -> None:
     """Reject creation if the user is at or above their gallery limit.
 
-    A configured limit of 0 (or below) means unlimited and skips the count
-    query entirely.
+    limit_override (from User.gallery_limit_override) takes precedence over the
+    global settings.max_galleries_per_user when set. 0 or below means unlimited.
     """
-    limit = settings.max_galleries_per_user
+    limit = limit_override if limit_override is not None else settings.max_galleries_per_user
     if limit <= 0:
         return
 

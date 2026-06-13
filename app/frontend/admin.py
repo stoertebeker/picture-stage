@@ -224,3 +224,37 @@ async def admin_reset_user_password(
         return _toast_only(translate(err.i18n_key, locale), "danger")
 
     return _toast_only(translate("admin.password_reset_done", locale, email=target.email), "success")
+
+
+@router.post("/admin/users/{user_id}/gallery-limit", response_class=HTMLResponse)
+async def admin_set_gallery_limit(
+    user_id: uuid.UUID,
+    request: Request,
+    admin: User = Depends(require_admin_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    locale = _locale(request)
+    form = await request.form()
+    raw = str(form.get("limit", "")).strip()
+    # Empty string = clear override (back to global default).
+    override: int | None = None
+    if raw != "":
+        try:
+            override = int(raw)
+        except ValueError:
+            return _toast_only(translate("admin.err_invalid_limit", locale), "danger")
+
+    try:
+        target = await service.set_gallery_limit_override(db, actor=admin, target_id=user_id, override=override)
+    except AdminActionError as err:
+        return _toast_only(translate(err.i18n_key, locale), "danger")
+
+    galleries_count = await service.galleries_count(db, target.id)
+    resp = templates.TemplateResponse(
+        request,
+        "admin/_user_row.html",
+        {"request": request, "user": target, "current_user": admin, "galleries_count": galleries_count},
+    )
+    msg = translate("admin.gallery_limit_toast", locale, email=target.email)
+    resp.headers["HX-Trigger"] = json.dumps({"showToast": {"kind": "success", "message": msg}})
+    return resp

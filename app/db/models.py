@@ -91,6 +91,9 @@ class User(TimestampMixin, Base):
     # Set to now() on admin password-reset or account-lock to invalidate stateless JWTs
     # immediately. NULL = no invalidation point, so existing tokens stay valid.
     tokens_valid_after: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Per-user override for the global MAX_GALLERIES_PER_USER setting.
+    # None = use global default; 0 = unlimited; positive = specific cap.
+    gallery_limit_override: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     galleries: Mapped[list["Gallery"]] = relationship(back_populates="owner", cascade="all, delete-orphan")
     notification_configs: Mapped[list["NotificationConfig"]] = relationship(

@@ -82,7 +82,7 @@ async def create_gallery(
 
     locale = getattr(request.state, "locale", "de")
     try:
-        await assert_within_gallery_quota(user.id, db)
+        await assert_within_gallery_quota(user.id, db, limit_override=user.gallery_limit_override)
     except GalleryQuotaExceeded as exc:
         # Show an error toast without swapping a card into the grid (HX-Reswap: none).
         resp = HTMLResponse("")
