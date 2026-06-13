@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 {% from "_macros/buttons.html" import button %}
-{% from "_macros/modal.html" import modal %}
 
 {% block title %}{{ gallery.name }} - Picture-Stage{% endblock %}
 
 {% block content %}
 <div class="min-h-screen"
      x-data="galleryManager"
-     data-gallery-name="{{ gallery.name }}">
+     data-gallery-name="{{ gallery.name }}"
+     data-images='{{ lightbox_images | tojson }}'>
 
     <header id="gallery-header" class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
         <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 lg:px-8">
@@ -265,15 +265,7 @@
             </aside>
         </div>
 
-        {% call modal(ref='previewModal', title='', size='xl', extra_class='bg-transparent border-0') %}
-            <div class="relative -m-6">
-                <img :src="previewSrc"
-                     class="max-w-full max-h-[80vh] mx-auto rounded-md"
-                     alt="{{ t('gallery.preview_alt') }}">
-                <div class="absolute bottom-0 left-0 right-0 rounded-b-md bg-black/70 px-4 py-2 text-sm text-white"
-                     x-text="previewFilename"></div>
-            </div>
-        {% endcall %}
+        {% include "galleries/_owner_lightbox.html" %}
     </main>
 </div>
 {% endblock %}

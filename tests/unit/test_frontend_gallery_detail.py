@@ -94,17 +94,50 @@ def test_gallery_detail_uses_i18n_for_new_copy() -> None:
 
 
 def test_gallery_detail_escapes_alpine_embedded_values() -> None:
+    detail = _template("detail.html")
     image_grid = _template("_image_grid.html")
     share = _template("_share_modal.html")
     delete = _template("_delete_modal.html")
 
-    assert "| tojson" in image_grid
+    # Owner lightbox (x4o): the grid opens images by UUID id only — no
+    # user-controlled value is embedded in an inline expression. Image data,
+    # including user-controlled filenames, rides a data-* attribute as JSON
+    # (Jinja-autoescaped) and is rendered via Alpine x-text, never as code.
+    assert "openLightboxById('{{ img.id }}')" in image_grid
+    assert "data-images='{{ lightbox_images | tojson }}'" in detail
     # _share_modal now passes the share URL via a data-* attribute: Jinja
     # autoescapes attribute values and Alpine reads it through $root.dataset
     # (as data, never evaluated as code) — u3s CSP migration.
     assert 'data-share-url="{{ share_url' in share
     assert 'x-data="shareUrl"' in share
     assert "gallery.name | tojson" in delete
+
+
+def test_owner_lightbox_has_readonly_navigation() -> None:
+    """The owner lightbox (x4o) mirrors the guest viewer's navigation but is
+    read-only: no select/favorite/comment controls, only browse + close."""
+    detail = _template("detail.html")
+    lightbox = _template("_owner_lightbox.html")
+
+    # Wired into the gallery page within the galleryManager scope.
+    assert '{% include "galleries/_owner_lightbox.html" %}' in detail
+
+    # Navigation: arrows, keyboard, swipe.
+    assert 'x-show="lightboxOpen"' in lightbox
+    assert '@click="prevImage()"' in lightbox
+    assert '@click="nextImage()"' in lightbox
+    assert '@click="closeLightbox()"' in lightbox
+    assert "handleKeydown($event)" in lightbox
+    assert "handleTouchStart($event)" in lightbox
+    assert "handleTouchEnd($event)" in lightbox
+
+    # Filename via x-text (never evaluated as code).
+    assert 'x-text="currentImage.filename"' in lightbox
+
+    # Read-only: none of the guest selection controls leak in.
+    assert "toggleSelect" not in lightbox
+    assert "toggleFavorite" not in lightbox
+    assert "submitComment" not in lightbox
 
 
 def test_image_grid_polls_only_while_previews_pending() -> None:

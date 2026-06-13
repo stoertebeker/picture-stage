@@ -221,7 +221,10 @@
     "delete_confirm_suffix": " ein, um die Loeschung zu bestaetigen:",
     "delete_confirm_placeholder": "Galeriename eingeben",
     "delete_confirm_button": "Endgueltig loeschen",
-    "preview_alt": "Vorschau",
+    "lightbox_close": "Schließen",
+    "lightbox_prev": "Vorheriges Bild",
+    "lightbox_next": "Nächstes Bild",
+    "lightbox_swipe_hint": "← wischen →",
     "delete_name_mismatch": "Der eingegebene Name stimmt nicht mit dem Galerienamen überein."
   },
   "guest": {

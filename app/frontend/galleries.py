@@ -118,11 +118,25 @@ def _build_context(
             }
         )
 
+    # Slim, ready-only payload for the read-only lightbox (x4o). Pending/failed
+    # images have no previews, so they are excluded; the grid still shows them.
+    lightbox_images = [
+        {
+            "id": img["id"],
+            "filename": img["filename"],
+            "preview_url": img["previews"].get("preview") or img["previews"].get("thumb_md", ""),
+            "thumb_md_url": img["previews"].get("thumb_md", ""),
+        }
+        for img in images
+        if img["processing_status"] == "ready"
+    ]
+
     ctx = {
         "request": request,
         "user": user,
         "gallery": gallery,
         "images": images,
+        "lightbox_images": lightbox_images,
         "image_count": len(images),
         "transitions": transitions,
         "has_share_token": gallery.share_token_hash is not None,

@@ -1,0 +1,77 @@
+{#- Read-only owner lightbox (x4o). Navigation (arrows / keyboard / swipe)
+    mirrors the guest viewer, but without select/favorite/comment controls —
+    the photographer only views and browses. State lives in galleryManager. -#}
+<div x-show="lightboxOpen"
+     x-transition
+     @keydown.window="handleKeydown($event)"
+     @touchstart="handleTouchStart($event)"
+     @touchend="handleTouchEnd($event)"
+     class="fixed inset-0 z-modal bg-surface-sunken flex flex-col touch-pan-y"
+     style="display: none;">
+
+    <!-- Stage: image + overlay controls, fills all space above the filename bar. -->
+    <div class="relative flex-1 min-h-0 overflow-hidden">
+
+        <!-- Image counter (top-left) -->
+        <div class="absolute top-4 left-4 z-10 text-sm text-text-primary/70 tabular-nums">
+            <span class="text-text-primary font-medium" x-text="lightboxIndex + 1"></span> / <span x-text="images.length"></span>
+        </div>
+
+        <!-- Close button (top-right) -->
+        <button @click="closeLightbox()"
+                aria-label="{{ t('gallery.lightbox_close') }}"
+                class="absolute top-3 right-3 z-10 flex h-11 w-11 items-center justify-center rounded-full text-text-primary/70 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+            </svg>
+        </button>
+
+        <!-- Previous button (left edge, hidden on mobile — swipe instead) -->
+        <button @click="prevImage()"
+                x-show="lightboxIndex > 0"
+                aria-label="{{ t('gallery.lightbox_prev') }}"
+                class="absolute left-2 sm:left-4 top-1/2 -translate-y-1/2 z-10 hidden sm:flex h-12 w-12 items-center justify-center rounded-full text-text-primary/60 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+            <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+            </svg>
+        </button>
+
+        <!-- Image: absolutely filling the stage so object-contain reliably scales
+             it to fit (a percentage max-height on a flex child is not honoured in
+             nested flex columns). Side padding keeps wide images clear of arrows. -->
+        <template x-if="currentImage">
+            <img :src="currentImage.preview_url || currentImage.thumb_md_url"
+                 :alt="currentImage.filename"
+                 class="absolute inset-0 h-full w-full object-contain px-2 py-2 sm:px-20 sm:py-4">
+        </template>
+
+        <!-- Next button (right edge, hidden on mobile — swipe instead) -->
+        <button @click="nextImage()"
+                x-show="lightboxIndex < images.length - 1"
+                aria-label="{{ t('gallery.lightbox_next') }}"
+                class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 hidden sm:flex h-12 w-12 items-center justify-center rounded-full text-text-primary/60 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+            <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+            </svg>
+        </button>
+
+        <!-- Swipe hint (mobile only): shown briefly when a photo opens, then fades -->
+        <div x-show="images.length > 1 && showSwipeHint"
+             x-transition.opacity.duration.500ms
+             class="absolute bottom-4 inset-x-0 z-10 flex sm:hidden items-center justify-center text-text-primary/60"
+             style="display: none;">
+            <span class="rounded-full border border-text-primary/25 bg-surface-overlay backdrop-blur px-4 py-1.5 text-sm font-medium shadow-md">
+                {{ t('gallery.lightbox_swipe_hint') }}
+            </span>
+        </div>
+    </div>
+
+    <!-- Bottom bar: filename only (read-only — no selection controls). -->
+    <template x-if="currentImage">
+        <div class="shrink-0 bg-surface-overlay backdrop-blur px-4 pb-5 pt-4 sm:px-6">
+            <div class="mx-auto flex max-w-3xl items-center gap-2 text-xs text-text-primary/50">
+                <span class="font-mono" x-text="currentImage.filename"></span>
+            </div>
+        </div>
+    </template>
+</div>

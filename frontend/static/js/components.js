@@ -259,11 +259,22 @@ function galleryManagerComponent() {
         editing: false,
         galleryName: '',
         selectedImages: [],
-        previewSrc: '',
-        previewFilename: '',
+
+        // Read-only lightbox state (x4o). Mirrors the guest viewer's navigation
+        // (arrows / keyboard / swipe) but without select/favorite/comment.
+        images: [],
+        lightboxOpen: false,
+        lightboxIndex: 0,
+        showSwipeHint: false,
+        _swipeHintTimer: null,
+        _touchStartX: null,
+        _touchStartY: null,
 
         init() {
             this.galleryName = this.$root.dataset.galleryName || '';
+            // Only 'ready' images carry preview URLs; pending/failed are excluded
+            // server-side. Fresh uploads appear after a full page reload (TODO).
+            this.images = JSON.parse(this.$root.dataset.images || '[]');
         },
 
         startEditing() {
@@ -296,17 +307,103 @@ function galleryManagerComponent() {
             this.selectedImages = Array.from(checkboxes).map((el) => el.dataset.imageId);
         },
 
-        openPreview(src, filename) {
-            this.previewSrc = src;
-            this.previewFilename = filename;
-            // The modal macro no longer carries x-ref (u3s); open by id.
-            document.getElementById('previewModal').showModal();
-        },
-
         submitName() {
             this.$refs.renameForm.querySelector('[name=name]').value = this.galleryName;
             // requestSubmit() — see note in uploadZone.startUpload().
             this.$refs.renameForm.requestSubmit();
+        },
+
+        // --- Lightbox (read-only) ---
+
+        get currentImage() {
+            return this.images[this.lightboxIndex] || null;
+        },
+
+        openLightboxById(id) {
+            const idx = this.images.findIndex((i) => i.id === id);
+            if (idx >= 0) this.openLightbox(idx);
+        },
+
+        openLightbox(index) {
+            this.lightboxIndex = index;
+            this.lightboxOpen = true;
+            this._preloadAdjacent();
+            this._showSwipeHintBriefly();
+        },
+
+        closeLightbox() {
+            this.lightboxOpen = false;
+        },
+
+        nextImage() {
+            if (this.lightboxIndex < this.images.length - 1) {
+                this.lightboxIndex++;
+                this._preloadAdjacent();
+            }
+        },
+
+        prevImage() {
+            if (this.lightboxIndex > 0) {
+                this.lightboxIndex--;
+                this._preloadAdjacent();
+            }
+        },
+
+        // Preload the adjacent images so navigation feels instant.
+        _preloadAdjacent() {
+            const targets = [this.lightboxIndex + 1, this.lightboxIndex - 1];
+            targets.forEach((idx) => {
+                const img = this.images[idx];
+                if (!img) return;
+                const url = img.preview_url || img.thumb_md_url;
+                if (!url) return;
+                const preload = new Image();
+                preload.src = url;
+            });
+        },
+
+        // Swipe hint (mobile) is a one-off nudge: show on open, fade after a
+        // few seconds so it does not linger (jwc pattern).
+        _showSwipeHintBriefly() {
+            if (this._swipeHintTimer) {
+                clearTimeout(this._swipeHintTimer);
+            }
+            this.showSwipeHint = true;
+            this._swipeHintTimer = setTimeout(() => {
+                this.showSwipeHint = false;
+                this._swipeHintTimer = null;
+            }, 3500);
+        },
+
+        // Swipe gestures on mobile. Threshold = 50px horizontal; vertical
+        // movement must be smaller (otherwise it's a scroll).
+        handleTouchStart(e) {
+            if (!e.touches || e.touches.length !== 1) return;
+            this._touchStartX = e.touches[0].clientX;
+            this._touchStartY = e.touches[0].clientY;
+        },
+
+        handleTouchEnd(e) {
+            if (this._touchStartX === null) return;
+            const t = e.changedTouches && e.changedTouches[0];
+            if (!t) {
+                this._touchStartX = null;
+                return;
+            }
+            const dx = t.clientX - this._touchStartX;
+            const dy = t.clientY - this._touchStartY;
+            this._touchStartX = null;
+            this._touchStartY = null;
+            if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy)) return;
+            if (dx < 0) this.nextImage();
+            else this.prevImage();
+        },
+
+        handleKeydown(e) {
+            if (!this.lightboxOpen) return;
+            if (e.key === 'ArrowRight') this.nextImage();
+            else if (e.key === 'ArrowLeft') this.prevImage();
+            else if (e.key === 'Escape') this.closeLightbox();
         },
     };
 }
