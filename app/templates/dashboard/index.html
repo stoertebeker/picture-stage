@@ -8,40 +8,40 @@
 {% block content %}
 <div class="min-h-screen bg-surface-base">
     <header class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
-        <div class="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between gap-4">
-                <div>
-                    <div class="text-xs uppercase text-text-muted">{{ t('nav.brand') }}</div>
-                    <h1 class="font-display text-3xl leading-tight text-text-primary sm:text-4xl">{{ t('dashboard.my_galleries') }}</h1>
-                </div>
-                {% call button(variant='primary', attrs={'data-open-dialog': 'createModal'}) %}
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                    </svg>
-                    {{ t('dashboard.new_gallery') }}
-                {% endcall %}
+        <div class="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+            <div>
+                <div class="text-xs uppercase text-text-muted">{{ t('nav.brand') }}</div>
+                <h1 class="font-display text-2xl leading-tight text-text-primary sm:text-4xl">{{ t('dashboard.my_galleries') }}</h1>
             </div>
-
-            <div class="grid gap-3 sm:grid-cols-4">
-                <div class="rounded-md border border-border-subtle bg-surface-raised px-4 py-3">
-                    <div class="text-2xl font-semibold text-text-primary">{{ galleries | length }}</div>
-                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_galleries') }}</div>
-                </div>
-                <div class="rounded-md border border-status-info bg-surface-raised px-4 py-3">
-                    <div class="text-2xl font-semibold text-status-info">{{ galleries | selectattr('gallery.share_token_hash') | list | length }}</div>
-                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_shared') }}</div>
-                </div>
-                <div class="rounded-md border border-accent bg-surface-raised px-4 py-3">
-                    <div class="text-2xl font-semibold text-accent">{{ galleries | sum(attribute='selected_count') }}</div>
-                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_selected') }}</div>
-                </div>
-                <div class="rounded-md border border-favorite bg-surface-raised px-4 py-3">
-                    <div class="text-2xl font-semibold text-favorite">{{ galleries | sum(attribute='favorited_count') }}</div>
-                    <div class="text-xs text-text-muted">{{ t('dashboard.metric_favorites') }}</div>
-                </div>
-            </div>
+            {% call button(variant='primary', attrs={'data-open-dialog': 'createModal'}) %}
+                <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                </svg>
+                {{ t('dashboard.new_gallery') }}
+            {% endcall %}
         </div>
     </header>
+
+    <div class="mx-auto max-w-7xl px-4 pt-4 sm:px-6 lg:px-8">
+        <div class="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
+            <div class="rounded-md border border-border-subtle bg-surface-raised px-3 py-2 sm:px-4 sm:py-3">
+                <div class="text-xl font-semibold text-text-primary sm:text-2xl">{{ galleries | length }}</div>
+                <div class="text-xs text-text-muted">{{ t('dashboard.metric_galleries') }}</div>
+            </div>
+            <div class="rounded-md border border-status-info bg-surface-raised px-3 py-2 sm:px-4 sm:py-3">
+                <div class="text-xl font-semibold text-status-info sm:text-2xl">{{ galleries | selectattr('gallery.share_token_hash') | list | length }}</div>
+                <div class="text-xs text-text-muted">{{ t('dashboard.metric_shared') }}</div>
+            </div>
+            <div class="rounded-md border border-accent bg-surface-raised px-3 py-2 sm:px-4 sm:py-3">
+                <div class="text-xl font-semibold text-accent sm:text-2xl">{{ galleries | sum(attribute='selected_count') }}</div>
+                <div class="text-xs text-text-muted">{{ t('dashboard.metric_selected') }}</div>
+            </div>
+            <div class="rounded-md border border-favorite bg-surface-raised px-3 py-2 sm:px-4 sm:py-3">
+                <div class="text-xl font-semibold text-favorite sm:text-2xl">{{ galleries | sum(attribute='favorited_count') }}</div>
+                <div class="text-xs text-text-muted">{{ t('dashboard.metric_favorites') }}</div>
+            </div>
+        </div>
+    </div>
 
     <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <div class="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
