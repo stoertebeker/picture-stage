@@ -9,6 +9,7 @@ from app.auth.dependencies import get_current_user
 from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
 from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRequest, SignupResponse, UserResponse
 from app.auth.tokens import create_access_token, generate_verification_token
+from app.auth.utils import get_client_ip
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.notifications.service import notify_admins_signup, send_verification_email
@@ -48,6 +49,7 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
         password_hash=hash_password(body.password),
         verification_token_hash=token_hash,
         verification_token_salt=token_salt,
+        ip_address=get_client_ip(request),
     )
     db.add(pending)
     await db.commit()

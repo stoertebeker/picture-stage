@@ -45,6 +45,7 @@
     "heading": "Ausstehende Registrierungen",
     "email_col": "E-Mail",
     "registered_col": "Registriert am",
+    "ip_col": "IP-Adresse",
     "actions_col": "Aktionen",
     "approve": "Genehmigen",
     "reject": "Ablehnen",

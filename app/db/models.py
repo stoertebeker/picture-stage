@@ -273,3 +273,4 @@ class PendingSignup(Base):
     verification_token_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     verification_token_salt: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)

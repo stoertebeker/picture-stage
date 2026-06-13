@@ -45,6 +45,7 @@
     "heading": "Pending Registrations",
     "email_col": "Email",
     "registered_col": "Registered",
+    "ip_col": "IP Address",
     "actions_col": "Actions",
     "approve": "Approve",
     "reject": "Reject",

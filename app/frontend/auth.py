@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_user_from_cookie
 from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
 from app.auth.tokens import create_access_token, generate_verification_token
+from app.auth.utils import get_client_ip
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.frontend.deps import templates
@@ -146,6 +147,7 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
         password_hash=hash_password(password),
         verification_token_hash=token_hash,
         verification_token_salt=token_salt,
+        ip_address=get_client_ip(request),
     )
     db.add(pending)
     await db.commit()
