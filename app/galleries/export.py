@@ -59,8 +59,8 @@ async def _get_materialized_selections(gallery_id: uuid.UUID, db: AsyncSession) 
 @router.get("/{gallery_id}/export")
 async def export_selections(
     gallery_id: uuid.UUID,
-    format: str = Query("json", pattern="^(json|csv)$"),
-    filter: str = Query("all", pattern="^(all|selected|favorited)$"),
+    format: str = Query("json", pattern="^(json|csv|txt)$"),
+    filter: str = Query("all", pattern="^(all|selected|favorited|marked)$"),
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> StreamingResponse:
@@ -75,8 +75,22 @@ async def export_selections(
         selections = [s for s in selections if s["selected"]]
     elif filter == "favorited":
         selections = [s for s in selections if s["favorited"]]
+    elif filter == "marked":
+        # Everything the model touched: a normal selection OR a favorite (r84).
+        selections = [s for s in selections if s["selected"] or s["favorited"]]
 
     safe_name = gallery.name.replace(" ", "_").replace("/", "_")[:50]
+
+    if format == "txt":
+        # Comma-separated filenames (with extension) on a single line — the
+        # format Lightroom Classic's filename filter and Capture One's
+        # "Select by filename" expect for a paste-in selection (r84).
+        body = ", ".join(s["filename"] for s in selections)
+        return StreamingResponse(
+            iter([body]),
+            media_type="text/plain; charset=utf-8",
+            headers={"Content-Disposition": f'attachment; filename="{safe_name}_filenames.txt"'},
+        )
 
     if format == "csv":
         buf = io.StringIO()
