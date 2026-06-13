@@ -10,111 +10,100 @@
      data-gallery-name="{{ gallery.name }}">
 
     <header id="gallery-header" class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
-        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-4 flex flex-col gap-4">
-            <div class="flex items-center justify-between gap-4">
-                <a href="/dashboard" class="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary">
-                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
-                    </svg>
-                    {{ t('nav.dashboard') }}
-                </a>
-                <div class="flex items-center gap-2">
-                    <a href="/galleries/{{ gallery.id }}/audit-log"
-                       class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary"
-                       aria-label="{{ t('gallery.audit_log') }}">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 012-2z"/>
-                        </svg>
-                    </a>
-                    <div class="relative" x-data="{ exportOpen: false }">
-                        <button type="button"
-                                @click="exportOpen = !exportOpen"
-                                class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary"
-                                aria-label="{{ t('gallery.export') }}">
-                            <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l4-4m-4 4l-4-4M5 19h14"/>
-                            </svg>
-                        </button>
-                        <div x-show="exportOpen"
-                             x-transition
-                             @click.outside="exportOpen = false"
-                             class="absolute right-0 mt-2 w-32 rounded-md border border-border-subtle bg-surface-raised shadow-md z-dropdown">
-                            <a href="/galleries/{{ gallery.id }}/export?format=csv"
-                               class="block px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken hover:text-text-primary rounded-t-md">CSV</a>
-                            <a href="/galleries/{{ gallery.id }}/export?format=json"
-                               class="block px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken hover:text-text-primary rounded-b-md">JSON</a>
-                        </div>
-                    </div>
-                    <a href="#gallery-upload"
-                       class="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2 text-sm font-medium text-text-on-accent hover:bg-accent-hover">
-                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
-                        </svg>
-                        {{ t('gallery.upload_short') }}
-                    </a>
+        <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 lg:px-8">
+            <a href="/dashboard"
+               class="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-text-muted hover:bg-surface-sunken hover:text-text-primary"
+               aria-label="{{ t('nav.dashboard') }}">
+                <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                </svg>
+            </a>
+
+            <div class="flex min-w-0 flex-1 items-center gap-3">
+                <h1 class="truncate font-display text-xl leading-tight text-text-primary"
+                    x-show="!editing"
+                    @dblclick="startEditing()">
+                    {{ gallery.name }}
+                </h1>
+                <div x-show="editing" class="flex min-w-0 flex-wrap items-center gap-2">
+                    <input
+                        x-ref="nameInput"
+                        type="text"
+                        x-model="galleryName"
+                        @keydown.escape="cancelEditing()"
+                        @keydown.enter.prevent="submitName()"
+                        class="min-w-0 rounded-md border border-border-strong bg-surface-raised px-3 py-1.5 font-display text-lg text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus"
+                    >
+                    {% call button(variant='primary', size='sm', type='button', attrs={'@click': 'submitName()'}) %}{{ t('gallery.save') }}{% endcall %}
+                    {% call button(variant='ghost', size='sm', type='button', attrs={'@click': 'cancelEditing()'}) %}{{ t('gallery.cancel') }}{% endcall %}
                 </div>
+                <form x-ref="renameForm"
+                      class="hidden"
+                      method="post"
+                      action="/galleries/{{ gallery.id }}/rename"
+                      hx-post="/galleries/{{ gallery.id }}/rename"
+                      hx-target="body"
+                      hx-swap="innerHTML">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="name" value="">
+                </form>
+                <span x-show="!editing" class="hidden shrink-0 text-xs text-text-muted sm:inline">
+                    {% if image_count != 1 %}{{ t('gallery.image_count_label_plural').replace('{count}', image_count | string) }}{% else %}{{ t('gallery.image_count_label').replace('{count}', image_count | string) }}{% endif %}
+                </span>
             </div>
 
-            <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
-                <div class="min-w-0">
-                    <div class="mb-2 flex flex-wrap items-center gap-2">
-                        <span class="text-xs uppercase text-text-muted">{{ t('gallery.review_gallery') }}</span>
+            <div class="flex flex-wrap items-center justify-end gap-2">
+                {% set st = gallery.status.value %}
+                <span class="inline-flex items-center gap-1.5 rounded-full border border-status-info bg-surface-raised px-2.5 py-1 text-xs font-medium text-status-info">
+                    <span class="h-1.5 w-1.5 rounded-full bg-status-info"></span>
+                    {{ t('gallery.status_' ~ st) }}
+                </span>
+                {% for action in transitions %}
+                <form method="post"
+                      action="/galleries/{{ gallery.id }}/status"
+                      hx-post="/galleries/{{ gallery.id }}/status"
+                      hx-target="body"
+                      hx-swap="innerHTML"
+                      class="inline">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+                    <input type="hidden" name="status" value="{{ action.status }}">
+                    {% call button(variant='secondary', size='sm', type='submit') %}{{ t(action.label_key) }}{% endcall %}
+                </form>
+                {% endfor %}
+                <a href="/galleries/{{ gallery.id }}/audit-log"
+                   class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary"
+                   aria-label="{{ t('gallery.audit_log') }}">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6M7 4h10a2 2 0 012 2v14l-4-2-4 2-4-2-4 2V6a2 2 0 012-2z"/>
+                    </svg>
+                </a>
+                <div class="relative" x-data="{ exportOpen: false }">
+                    <button type="button"
+                            @click="exportOpen = !exportOpen"
+                            class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary"
+                            aria-label="{{ t('gallery.export') }}">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l4-4m-4 4l-4-4M5 19h14"/>
+                        </svg>
+                    </button>
+                    <div x-show="exportOpen"
+                         x-transition
+                         @click.outside="exportOpen = false"
+                         class="absolute right-0 mt-2 w-32 rounded-md border border-border-subtle bg-surface-raised shadow-md z-dropdown">
+                        <a href="/galleries/{{ gallery.id }}/export?format=csv"
+                           class="block px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken hover:text-text-primary rounded-t-md">CSV</a>
+                        <a href="/galleries/{{ gallery.id }}/export?format=json"
+                           class="block px-4 py-2 text-sm text-text-secondary hover:bg-surface-sunken hover:text-text-primary rounded-b-md">JSON</a>
                     </div>
-
-                    <div class="flex min-w-0 items-center gap-3">
-                        <h1 class="truncate font-display text-3xl leading-tight text-text-primary sm:text-4xl"
-                            x-show="!editing"
-                            @dblclick="startEditing()">
-                            {{ gallery.name }}
-                        </h1>
-                        <div x-show="editing" class="flex min-w-0 flex-wrap items-center gap-2">
-                            <input
-                                x-ref="nameInput"
-                                type="text"
-                                x-model="galleryName"
-                                @keydown.escape="cancelEditing()"
-                                @keydown.enter.prevent="submitName()"
-                                class="min-w-0 rounded-md border border-border-strong bg-surface-raised px-3 py-2 font-display text-2xl text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus"
-                            >
-                            {% call button(variant='primary', size='sm', type='button', attrs={'@click': 'submitName()'}) %}{{ t('gallery.save') }}{% endcall %}
-                            {% call button(variant='ghost', size='sm', type='button', attrs={'@click': 'cancelEditing()'}) %}{{ t('gallery.cancel') }}{% endcall %}
-                        </div>
-                        <form x-ref="renameForm"
-                              class="hidden"
-                              method="post"
-                              action="/galleries/{{ gallery.id }}/rename"
-                              hx-post="/galleries/{{ gallery.id }}/rename"
-                              hx-target="body"
-                              hx-swap="innerHTML">
-                            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                            <input type="hidden" name="name" value="">
-                        </form>
-                    </div>
-                    <p class="mt-2 max-w-2xl text-sm text-text-muted">
-                        {% if image_count != 1 %}{{ t('gallery.image_count_label_plural').replace('{count}', image_count | string) }}{% else %}{{ t('gallery.image_count_label').replace('{count}', image_count | string) }}{% endif %}
-                    </p>
                 </div>
-
-                <div class="flex flex-wrap items-center gap-2">
-                    {% set st = gallery.status.value %}
-                    <span class="inline-flex items-center gap-1.5 rounded-full border border-status-info bg-surface-raised px-2.5 py-1 text-xs font-medium text-status-info">
-                        <span class="h-1.5 w-1.5 rounded-full bg-status-info"></span>
-                        {{ t('gallery.status_' ~ st) }}
-                    </span>
-                    {% for action in transitions %}
-                    <form method="post"
-                          action="/galleries/{{ gallery.id }}/status"
-                          hx-post="/galleries/{{ gallery.id }}/status"
-                          hx-target="body"
-                          hx-swap="innerHTML"
-                          class="inline">
-                        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                        <input type="hidden" name="status" value="{{ action.status }}">
-                        {% call button(variant='secondary', size='sm', type='submit') %}{{ t(action.label_key) }}{% endcall %}
-                    </form>
-                    {% endfor %}
-                    {% include "galleries/_delete_modal.html" %}
-                </div>
+                <a href="#gallery-upload"
+                   class="inline-flex h-11 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-text-on-accent hover:bg-accent-hover">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                    </svg>
+                    {{ t('gallery.upload_short') }}
+                </a>
+                {% include "galleries/_delete_modal.html" %}
             </div>
         </div>
     </header>
@@ -185,7 +174,7 @@
                 </section>
             </div>
 
-            <aside class="flex flex-col gap-4 lg:sticky lg:top-32 lg:self-start">
+            <aside class="flex flex-col gap-4 lg:sticky lg:top-16 lg:max-h-[calc(100vh-5rem)] lg:self-start lg:overflow-y-auto">
                 <section id="share-section">
                     {% include "galleries/_share_modal.html" %}
                 </section>
