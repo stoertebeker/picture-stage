@@ -118,52 +118,42 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-13 (Tag-Wache)
-**Wachwechsel-Tag:** `handover-2026-06-13` (zeigt auf `9a55322`)
+**Datum:** 2026-06-13 (Abend-Wache)
+**Wachwechsel-Tag:** `handover-2026-06-13-abend` (zeigt auf `ec9324f`)
 **Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung).
 **Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`, Admin: `admin@local.test` / `testpass123`. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads uv run pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
 
-### Erledigt in dieser Wache (2026-06-13 Tag) — Guest-/UX-Findings, Infinite-Scroll, Expired-Page
-- **`aku` (P2 bug, `4c123d4`, closed):** Dashboard-Stat-Kacheln auf Mobil unbenutzbar — saßen im `sticky-top-0`-Header und stapelten 4×1, klebten dauerhaft über der Galerie-Liste. Kachel-Grid aus dem Header gelöst (scrollt mit), mobil `grid-cols-2` (2×2) + kompakteres Padding/Schrift via `sm:`. Desktop unverändert. Nur `dashboard/index.html`.
-- **`8wv` (P2 bug, `2bc1b96`, closed):** Bei abgeschlossener Galerie hieß der reaktivierende Button (`completed→shared`) generisch „Teilen" → suggerierte Link-Erstellung. Neuer i18n-Key `transition_reopen` („Erneut öffnen"/„Reopen"), im Frontend-Context für reaktivierende Übergänge gesetzt. Status-Pill aus dem Titel-Block in die Aktions-Button-Gruppe gerückt. `ALLOWED_TRANSITIONS`/Backend unverändert.
-- **`jwc` (P3 bug, `def9f5d`, closed):** Mobile-Lightbox-Swipe-Hint war dauerhaft sichtbar (nur an `images.length > 1`). Neuer Alpine-State `showSwipeHint`, in `openLightbox()` true + selbstlöschender 3,5s-Timer → fadet aus, erscheint bei jedem Öffnen neu. Mobile-only.
-- **`am9` (P2, `aae3e5b`, closed):** Guest-Grid lud alle Bilder als DOM-Items vorab → riesiges initiales HTML (~630 KB @ 122 Bildern, linear), Seite beim Laden blockiert. **Profiling zeigte: JSON.parse (0,1 ms) + Bild-Download (lazy) waren NICHT der Flaschenhals — die DOM-Menge war es.** Grid rendert jetzt 30 Items, Rest via HTMX-`revealed`-Sentinel beim Scrollen (`offset` am `gallery-images`-Endpoint). Initiales HTML ~265 KB, gemountete Item-Zahl konstant. Volle Liste bleibt in `data-images` für Lightbox/Selektion. Grid-Bindings von Array-Index auf **Bild-id** umgestellt (`id→image`-Map, O(1)) → behebt latenten Filter/Sort-Index-Bug. 5 neue Unit-Tests.
-- **`9ql` (P3, `40bb388`, closed):** Guest-Expired-Page (HTTP 410) hing im Legacy-Styling + `guest_base`. Jetzt auf `auth_base.html` (Editorial-Dark-Chrome wie Auth-Pages/`gmo`): Brand, Theme-Toggle, Legal-Footer, Token-basiert (dark+light). 410 + i18n unverändort. 2 Unit-Tests. **Lokal abgenommen: dark+light per Toggle, echter 410-Pfad.**
-- **270 Unit-Tests grün**, ruff+mypy sauber. Verifikation durchweg per direktem `browser_evaluate` gegen frisch gebauten Stack (haiku-Subagent meldete stale-Cache-Fehlalarme — s. lessons-learned).
+### Erledigt in dieser Wache (2026-06-13 Abend) — v0.6-Epic + IP-Erfassung + Galerie-Limit-Override
 
-### Erledigt in der Wache davor (2026-06-12 Nacht) — Galerie-Nachricht, Abschluss-Mail-Kette, Bugfixes
-- **`dii` (P2, `3c13bfe`, closed):** Optionale **Galerie-Nachricht an das Model**. Settings-Karte in der Galerie-Detail-Seite (`name="guest_message"`, max 1000 Zeichen) → Anzeige im Guest-Viewer über dem Grid. Migration `0005` (`galleries.guest_message`, nullable), Endpoint `POST /galleries/{id}/message`, in `GalleryCreate/Update/Response` + Duplicate. **XSS:** autoescaped + `white-space: pre-line` (kein `|safe`). 3 Unit + 3 Integration. CHANGELOG.
-- **`qkh` (P2 bug, `11e1ebc`, closed):** Test-Drift seit `gmo` behoben (3× `*_has_dark_mode` prüften obsoletes `dark:`-Utility, `skip_link`-Test prüfte Kind-Templates statt `auth_base`). **Wichtig: das rote CI gated den Image-Build — seit `gmo` (14:07) lief KEIN Build, kein `:dev`-Image seit `aqn` (13:32).** Fix entsperrte die Pipeline → alle Features wieder im Image. Nur Test-Dateien.
-- **`16l` (P2, `6255dc1`, closed):** **Mail an den Fotografen bei Galerie-Abschluss.** Template + Trigger existierten, lieferten aber nichts (config-gated auf leere `NotificationConfig`). Neue config-freie `notify_owner_gallery_completed()` (Muster `notify_admins_signup`), gated über `NOTIFY_OWNER_ON_COMPLETION` (default true) + `SMTP_HOST`, Empfänger = Owner-Adresse aus DB. 5 Unit + 2 Integration. CHANGELOG, `.env.example`, README.
-- **`4gr` (P1 bug, `3a294db`, closed):** **Abschluss-Button war stumm kaputt.** `POST /g/{token}/complete` band `session_id` als Query-Param, das JS sendet ihn im Body → 422; JS prüft Status nicht → Galerie wurde über die Web-UI nie `completed` (→ Read-only-Gate + `16l`-Mail feuerten nie). Fix: `CompleteReviewRequest`-Body-Model. Regressions-Tests pinnen den Body-Vertrag. **Voraussetzung dafür, dass `16l` überhaupt wirkt.**
-- **`0d1` (P2 bug, `9c4bcbd`, closed):** Guest-Lightbox-Toolbar überdeckte Bild + Wasserzeichen. Umbau auf Flex-Column (Bild in `flex-1`-Stage via `object-contain`/`absolute inset-0`, Toolbar im Fluss darunter). **Selbst per Screenshot abgenommen** (lokaler Stack; haiku-Subagent meldete 2× falsch). Reiner CSS-Umbau, JS unberührt. CHANGELOG.
-- **Doku-Fix (`5c3a3f2`):** Prod ist **NICHT** via Playwright testbar (Cloudflare) — Annahme im Stand korrigiert.
-- **265 Unit-Tests grün**, ruff+mypy sauber, alle CI grün inkl. `build-and-push`.
+**v0.6-Epic `3av` (alle 4 Tickets, Epic geschlossen):**
+- **`tln` (`86627f0`, closed):** Setup-Onboarding auf Editorial Dark — `setup/index.html` auf `auth_base.html` umgestellt (Muster login/signup/verify). Macros `field`/`button`/`csrf_input`/`form_error`. Test-Drift behoben (war in Standalone-Liste, jetzt auth_base-Kinder).
+- **`026` (`df20a14`, closed):** Admin Pending Signups auf Editorial Dark — `admin/pending.html` mit sticky Header, `bg-surface-base/90`-Blur, Token-Tabelle, `_signup_row.html` mit Approve/Reject via button-Macro + HTMX.
+- **`atj` (`35086f0`, closed):** Audit-Log-Viewer auf Editorial Dark — sticky Header, semantischer Breadcrumb-Nav, Token-`<select>` für Eventfilter, `_audit_log_table.html` mit `overflow-x-auto`, Event-Badge `bg-accent/10 text-accent`, Token-Pagination.
+- **`3av` (Epic):** ✅ geschlossen — alle Sub-Tickets durch (`gmo` Auth-Pages, `9ql` Expired-Page, `tln` Setup, `026` Pending Signups, `atj` Audit-Log).
 
-### ⚠️ Betrieblicher Rest — Prod-Deploy + Abnahme stehen aus (wächst!)
-Alles liegt im `:dev`-Image, ist aber **NICHT auf Prod**. Nach `docker compose pull && up -d` + CF-Purge gegenprüfen:
-- **Heute (2026-06-13):** `aku` (Dashboard-Kacheln mobil 2×2/wegscrollbar), `8wv` („Erneut öffnen"-Label + Status-Pill bei Buttons, abgeschlossene Galerie), `jwc` (Swipe-Hint blendet mobil nach ~3,5 s aus), `am9` (Guest-Grid lädt progressiv beim Scrollen — Test mit großer Galerie!), `9ql` (Expired-Page Editorial Dark, dark+light).
-- **Vom 12.:** `gmo` (Auth-Pages Editorial Dark), `dii` (Galerie-Nachricht), `0d1` (Lightbox Bild+Wasserzeichen frei).
-- **`16l`+`4gr` (Abschluss-Mail-Kette) — kritisch, SMTP nur auf Prod testbar (Mailjet aus Sandbox nicht erreichbar):** echter Galerie-Abschluss über die Guest-UI → Galerie wird `completed` → **Mail im Posteingang des Fotografen**. `NOTIFY_OWNER_ON_COMPLETION` default true.
-- Im lokalen Docker-Stack liegt eine „Test-Galerie Mobile" mit 2 Testbildern (Share-Token `_jWltCZWA3HMumNBLghBISyjbiVwaBUxakxAwF-230o`) + harmloser Pending-Signup `smoketest-gmo@example.com`. **Hinweis:** Lokales `:dev`-Image wurde zuletzt mit `ASSET_VERSION=am9test` gebaut (nur lokal; CI setzt beim echten Build den Timestamp).
+**Standalone-Tickets:**
+- **`1qa` (`c39f7ee`, closed):** IP-Adresse bei Pending Signups erfasst + angezeigt. Neuer Helper `app/auth/utils.py::get_client_ip()` — Priorität CF-Connecting-IP → X-Forwarded-For → request.client.host (Proxy-sicher). Migration `0006` (`ip_address String(45)`, nullable). Beide Signup-Pfade (API + Frontend). Admin-Tabelle: neue Spalte `hidden sm:table-cell`, `font-mono`. 6 Unit-Tests. **Prod-verifiziert: CF-Connecting-IP korrekt erfasst.**
+- **`56k` (`ec9324f`, closed):** Per-User-Galerie-Limit-Override in Admin-UI. `User.gallery_limit_override` (nullable Integer, 0=unbegrenzt, None=global-Default). Migration `0007`. `assert_within_gallery_quota()` um `limit_override`-Parameter erweitert; beide Quota-Aufrufer (API + Frontend-Dashboard) übergeben `user.gallery_limit_override`. Neuer Service `set_gallery_limit_override()` + `POST /admin/users/{id}/gallery-limit`-Endpoint. Admin-Tabelle: Limit-Spalte + Limit-Modal (leeres Feld = zurücksetzen). AuditLog-Event `user_gallery_limit_changed`. 6 Unit-Tests.
+- **286 Unit-Tests grün**, ruff+mypy sauber, alle Tickets gepusht und prod-deployed.
 
-### Offene Tickets (6) — Stand Tag-Wache 2026-06-13
-| Ticket | Prio | Befund |
-|--------|------|--------|
-| `picture-stage-3av` | P2 | v0.6 UX-Redesign Photographer-Pages — aktiver Epic (Auth-Pages ✅ `gmo`, Guest-Expired ✅ `9ql`) |
-| `picture-stage-tln` | P3 | [Impl] Setup-Onboarding ← 3av (Sticky-Footer-Layout schon vorbereitet) — kleinster sinnvoller Happen im Epic |
-| `picture-stage-026` | P3 | [Impl] Admin Pending Signups ← 3av |
-| `picture-stage-atj` | P3 | [Impl] Audit-Log Viewer ← 3av |
-| `picture-stage-1qa` | P3 | IP-Adresse bei Pending Signups erfassen + anzeigen (DSGVO + Proxy-IP beachten) |
-| `picture-stage-56k` | P3 | Per-User-Galerie-Limit-Override in Admin-UI (Schritt 2 von `5gi`) |
+### Erledigt in der Wache davor (2026-06-13 Tag) — Guest-/UX-Findings, Infinite-Scroll, Expired-Page
+- **`aku` (P2 bug, `4c123d4`, closed):** Dashboard-Stat-Kacheln auf Mobil unbenutzbar → `grid-cols-2` (2×2), scrollt mit, Desktop unverändert.
+- **`8wv` (P2 bug, `2bc1b96`, closed):** Reaktivierender Button `completed→shared` → i18n-Key `transition_reopen` („Erneut öffnen"). Status-Pill in Aktions-Button-Gruppe.
+- **`jwc` (P3 bug, `def9f5d`, closed):** Mobile-Lightbox-Swipe-Hint: Alpine-State `showSwipeHint`, selbstlöschender 3,5s-Timer.
+- **`am9` (P2, `aae3e5b`, closed):** Guest-Grid Infinite-Scroll — 30 initiale Items, HTMX-`revealed`-Sentinel, Grid-Bindings auf Bild-id (O(1)-Map). Initiales HTML ~265 KB statt ~630 KB.
+- **`9ql` (P3, `40bb388`, closed):** Guest-Expired-Page auf `auth_base.html` (Editorial Dark, dark+light).
+
+### ✅ Betrieblicher Rest — alle Tickets prod-deployed und abgenommen
+Kapitän hat nach Abend-Wache-Deploy bestätigt: alles live, IP-Erfassung funktioniert (CF-Connecting-IP), Abschluss-Mail-Kette (`16l`+`4gr`) prod-verifiziert.
+
+### Offene Tickets — Stand Abend-Wache 2026-06-13
+**Keine offenen Tickets.** `bd ready` meldet „No open issues".
 
 ### Offene Punkte für die nächste Wache
-1. **Erst Prod-Deploy + Abnahme** (s. Betrieblicher Rest — der Stapel ist groß geworden) — v.a. die Abschluss-Mail-Kette `16l`+`4gr` ist nur live verifizierbar, und `am9` (Infinite-Scroll) sollte mit einer **echten großen Galerie** auf Prod gegengeprüft werden.
-2. **Dann v0.6-Epic `3av`:** `tln` (Setup-Onboarding) profitiert vom Sticky-Footer-Layout; danach `026`/`atj`. Muster: `auth_base.html` + Editorial-Dark-Tokens, **kein Mockup-Spike** — direkt am Template (s. Frontend-Workflow).
-3. **Oder Restposten:** `1qa` (IP bei Pending Signups, DSGVO-Sorgfalt) / `56k` (Galerie-Limit-Override).
-4. **Frontend-Workflow (verschärft, 2026-06-13):** Für eine zuverlässige lokale Abnahme **Stack mit frischer `ASSET_VERSION` neu bauen** (`docker compose build --build-arg ASSET_VERSION=<neu> app && up -d`) statt nur `docker cp` — sonst liefern Browser-HTTP-Cache (statisches `?v=dev`) UND App-Jinja-Template-Cache alte Stände. Dann **Frontend-State selbst per `browser_evaluate` prüfen** (haiku-Subagent meldete stale-Cache mehrfach als Code-Bug — s. lessons-learned). Prod-Abnahme durch den Kapitän (Cloudflare blockt Headless).
-5. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
-6. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen.
+1. **Betrieblich:** `cxs` (Share-Sessions gesperrter User invalidieren/prüfen, P3) — einziger bekannter Follow-up aus dem Admin-Epic.
+2. **Frontend-Workflow (verschärft, 2026-06-13):** Für eine zuverlässige lokale Abnahme **Stack mit frischer `ASSET_VERSION` neu bauen** (`docker compose build --build-arg ASSET_VERSION=<neu> app && up -d`). Frontend-State selbst per `browser_evaluate` prüfen (haiku-Subagent meldete stale-Cache mehrfach als Code-Bug — s. lessons-learned). Prod-Abnahme durch den Kapitän (Cloudflare blockt Headless).
+3. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
+4. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
