@@ -59,6 +59,7 @@ def _render_viewer(images: list[dict[str, object]], gallery_message: str | None 
         gallery_message=gallery_message,
         token="tok123",
         session_id="sess123",
+        all_images=images,
         images=images,
         total_images=len(images),
         selected_count=0,
@@ -68,6 +69,8 @@ def _render_viewer(images: list[dict[str, object]], gallery_message: str | None 
         sort_by="sort_order",
         sort_dir="asc",
         filter="all",
+        next_offset=len(images),
+        has_more=False,
     )
 
 
@@ -366,19 +369,70 @@ def test_guest_image_grid_exists():
 def test_guest_image_grid_avoids_optional_chaining():
     """Grid Alpine expressions must not use optional chaining (picture-stage-2gb).
 
-    The @alpinejs/csp build cannot parse `images[N]?.selected`; such expressions
-    throw at runtime and silently kill grid reactivity (selection ring, check
-    badge, hover toggles, favorite heart). The grid must call the null-safe
-    isSelected()/isFavorited() helpers on guestViewer instead.
+    The @alpinejs/csp build cannot parse `imageById[id]?.selected`; such
+    expressions throw at runtime and silently kill grid reactivity (selection
+    ring, check badge, hover toggles, favorite heart). The grid must call the
+    null-safe id-based helpers on guestViewer instead. The grid is keyed by image
+    id (not array index) because it is loaded progressively (picture-stage-am9).
     """
     grid_html = (PROJECT_ROOT / "app" / "templates" / "guest" / "_image_grid.html").read_text()
     components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
 
     assert "?." not in grid_html, "optional chaining is not CSP-compatible"
-    assert "isSelected(" in grid_html
-    assert "isFavorited(" in grid_html
-    assert "isSelected(idx)" in components_js
-    assert "isFavorited(idx)" in components_js
+    assert "isSelectedById(" in grid_html
+    assert "isFavoritedById(" in grid_html
+    assert "isSelectedById(id)" in components_js
+    assert "isFavoritedById(id)" in components_js
+
+
+def _render_image_grid(
+    images: list[dict[str, object]],
+    *,
+    has_more: bool = False,
+    next_offset: int = 30,
+    sort_by: str = "sort_order",
+    sort_dir: str = "asc",
+    filter: str = "all",
+    token: str = "tok123",  # noqa: S107 — share token, not a password
+    session_id: str = "sess123",
+) -> str:
+    return templates.env.get_template("guest/_image_grid.html").render(
+        t=_t,
+        locale="de",
+        images=images,
+        token=token,
+        session_id=session_id,
+        has_more=has_more,
+        next_offset=next_offset,
+        sort_by=sort_by,
+        sort_dir=sort_dir,
+        filter=filter,
+        session_completed=False,
+    )
+
+
+def test_guest_grid_sentinel_present_when_more_pages():
+    """am9: with more pages, the grid ends in an infinite-scroll sentinel that
+    loads the next offset and carries the active sort/filter."""
+    html = _render_image_grid([_make_image("a.jpg", 0)], has_more=True, next_offset=30, filter="favorited")
+    assert 'hx-trigger="revealed"' in html
+    assert "offset=30" in html
+    assert "filter=favorited" in html
+
+
+def test_guest_grid_no_sentinel_on_last_page():
+    """am9: the last page has no sentinel, so progressive loading stops."""
+    html = _render_image_grid([_make_image("a.jpg", 0)], has_more=False)
+    assert 'hx-trigger="revealed"' not in html
+
+
+def test_guest_grid_items_keyed_by_id():
+    """am9: grid items reference their image by id (stable across pages), not by
+    array index."""
+    img = _make_image("a.jpg", 5)
+    html = _render_image_grid([img], has_more=False)
+    assert f"openLightboxById('{img['id']}')" in html
+    assert f"isSelectedById('{img['id']}')" in html
 
 
 def test_guest_router_registered():

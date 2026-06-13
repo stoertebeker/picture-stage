@@ -2,22 +2,23 @@
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
     {% for img in images %}
     <div class="group relative aspect-[4/5] overflow-hidden rounded-md"
-         :class="isSelected({{ loop.index0 }}) ? 'ring-2 ring-inset ring-accent' : ''">
+         :class="isSelectedById('{{ img.id }}') ? 'ring-2 ring-inset ring-accent' : ''">
         <button type="button"
-                @click="openLightbox({{ loop.index0 }})"
+                @click="openLightboxById('{{ img.id }}')"
                 aria-label="{{ t('guest.open_image') }}: {{ img.filename }}"
                 class="absolute inset-0 focus:outline-none focus-visible:ring focus-visible:ring-focus">
             <img src="{{ img.thumb_md_url or img.thumb_sm_url }}"
                  alt="{{ img.filename }}"
                  loading="lazy"
+                 decoding="async"
                  class="w-full h-full object-cover">
 
             <!-- Hover ring (when not selected) -->
             <span class="absolute inset-0 ring-1 ring-inset ring-transparent group-hover:ring-text-primary/30 transition-all"
-                  x-show="!isSelected({{ loop.index0 }})"></span>
+                  x-show="!isSelectedById('{{ img.id }}')"></span>
 
             <!-- Selected check badge (top-left, persistent) -->
-            <template x-if="isSelected({{ loop.index0 }})">
+            <template x-if="isSelectedById('{{ img.id }}')">
                 <span class="absolute top-2 left-2">
                     <span class="flex h-6 w-6 items-center justify-center rounded-full bg-accent text-text-on-accent shadow">
                         <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" aria-hidden="true">
@@ -31,7 +32,7 @@
         <!-- Selection toggle (bottom-left, only on hover when unselected) -->
         <button type="button"
                 @click.stop="toggleSelect('{{ img.id }}')"
-                x-show="!isSelected({{ loop.index0 }}) && !completed"
+                x-show="!isSelectedById('{{ img.id }}') && !completed"
                 class="absolute bottom-2 left-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity h-7 w-7 rounded-full bg-black/50 hover:bg-accent text-white flex items-center justify-center"
                 aria-label="{{ t('guest.lightbox_select') }}">
             <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3" aria-hidden="true">
@@ -42,7 +43,7 @@
         <!-- Deselect toggle (bottom-left, when selected) -->
         <button type="button"
                 @click.stop="toggleSelect('{{ img.id }}')"
-                x-show="isSelected({{ loop.index0 }}) && !completed"
+                x-show="isSelectedById('{{ img.id }}') && !completed"
                 class="absolute bottom-2 left-2 z-10 h-7 w-7 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center"
                 aria-label="{{ t('guest.lightbox_selected') }}"
                 style="display: none;">
@@ -52,7 +53,7 @@
         </button>
 
         <!-- Favorite heart filled when set -->
-        <template x-if="isFavorited({{ loop.index0 }})">
+        <template x-if="isFavoritedById('{{ img.id }}')">
             <button type="button"
                     @click.stop="toggleFavorite('{{ img.id }}')"
                     :disabled="completed"
@@ -67,7 +68,7 @@
         <!-- Favorite outline only on hover (when not favourited) -->
         <button type="button"
                 @click.stop="toggleFavorite('{{ img.id }}')"
-                x-show="!isFavorited({{ loop.index0 }}) && !completed"
+                x-show="!isFavoritedById('{{ img.id }}') && !completed"
                 class="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity text-white drop-shadow-md hover:text-favorite"
                 aria-label="{{ t('guest.lightbox_favorite') }}">
             <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -76,6 +77,18 @@
         </button>
     </div>
     {% endfor %}
+
+    {# Infinite-scroll sentinel (am9): when revealed, loads the next page and
+       replaces itself with those items + a fresh sentinel. Carries the current
+       sort/filter so progressive loading respects the active view. #}
+    {% if has_more %}
+    <div class="col-span-full flex justify-center py-6"
+         hx-get="/g/{{ token }}/gallery-images?offset={{ next_offset }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&filter={{ filter }}{% if session_id %}&session_id={{ session_id }}{% endif %}"
+         hx-trigger="revealed"
+         hx-swap="outerHTML">
+        <span class="text-xs text-text-muted">{{ t('guest.loading_more') }}</span>
+    </div>
+    {% endif %}
 </div>
 {% else %}
 {% from "_macros/empty.html" import empty_state, icon_image %}

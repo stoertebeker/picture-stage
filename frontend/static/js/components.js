@@ -64,6 +64,7 @@ function guestViewerComponent() {
         token: '',
         sessionId: '',
         images: [],
+        imageById: {},
         totalImages: 0,
         selectedCount: 0,
         favoritedCount: 0,
@@ -79,6 +80,12 @@ function guestViewerComponent() {
             this.token = root.dataset.token || '';
             this.sessionId = root.dataset.sessionId || '';
             this.images = JSON.parse(root.dataset.images || '[]');
+            // id -> image map for O(1) lookups from the (progressively loaded,
+            // id-keyed) grid items (am9). The grid no longer uses array indices.
+            this.imageById = {};
+            this.images.forEach((img) => {
+                this.imageById[img.id] = img;
+            });
             this.totalImages = parseInt(root.dataset.totalImages || '0', 10);
             this.selectedCount = parseInt(root.dataset.selectedCount || '0', 10);
             this.favoritedCount = parseInt(root.dataset.favoritedCount || '0', 10);
@@ -90,18 +97,23 @@ function guestViewerComponent() {
             return this.images[this.lightboxIndex] || null;
         },
 
-        // Null-safe grid lookups by index. The @alpinejs/csp build rejects
-        // optional chaining (images[N]?.selected), so the grid template calls
-        // these instead. Reading this.images[idx].selected keeps Alpine's
-        // reactivity intact.
-        isSelected(idx) {
-            const img = this.images[idx];
+        // Null-safe grid lookups by image id. The grid is loaded progressively
+        // (am9), so array indices are not stable across pages — items reference
+        // their image by id. Reading the mapped object's .selected keeps Alpine's
+        // reactivity intact (same object instance as in this.images).
+        isSelectedById(id) {
+            const img = this.imageById[id];
             return !!(img && img.selected);
         },
 
-        isFavorited(idx) {
-            const img = this.images[idx];
+        isFavoritedById(id) {
+            const img = this.imageById[id];
             return !!(img && img.favorited);
+        },
+
+        openLightboxById(id) {
+            const idx = this.images.findIndex((i) => i.id === id);
+            if (idx >= 0) this.openLightbox(idx);
         },
 
         openLightbox(index) {

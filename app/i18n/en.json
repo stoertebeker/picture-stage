@@ -243,6 +243,7 @@
     "lightbox_prev": "Previous image",
     "lightbox_next": "Next image",
     "lightbox_swipe_hint": "← swipe →",
+    "loading_more": "Loading more images …",
     "no_images": "No images in this gallery.",
     "password_text": "This gallery is password-protected. You received the password from your photographer.",
     "password_placeholder": "Password",

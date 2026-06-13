@@ -100,6 +100,12 @@ def _parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:
         return None
 
 
+# Number of grid items rendered per page. The full image list is still sent to
+# the client (data-images) for the lightbox/selection state, but the heavy grid
+# DOM is loaded progressively to keep the initial HTML small (picture-stage-am9).
+GALLERY_PAGE_SIZE = 30
+
+
 async def _load_images(
     gallery: Gallery,
     db: AsyncSession,
@@ -229,6 +235,7 @@ def _render_password_gate(
             "token": token,
             "requires_password": True,
             "error_key": error_key,
+            "all_images": [],
             "images": [],
             "session_id": None,
             "total_images": 0,
@@ -267,7 +274,12 @@ async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str,
             "gallery_message": gallery.guest_message,
             "token": token,
             "requires_password": False,
-            "images": images,
+            # Full list for the Alpine state (data-images): lightbox + selection
+            # need every image. The grid renders only the first page (am9).
+            "all_images": images,
+            "images": images[:GALLERY_PAGE_SIZE],
+            "next_offset": GALLERY_PAGE_SIZE,
+            "has_more": total > GALLERY_PAGE_SIZE,
             "session_id": str(session.id),
             "total_images": total,
             "selected_count": selected_count,
@@ -287,10 +299,16 @@ async def guest_gallery_images(
     sort_by: ImageSortBy = Query(ImageSortBy.sort_order),
     sort_dir: SortDirection = Query(SortDirection.asc),
     filter: ImageFilter = Query(ImageFilter.all),
+    offset: int = Query(0, ge=0),
     session_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    """HTMX partial: return the image grid for sort/filter refresh."""
+    """HTMX partial: image grid page.
+
+    Serves two cases with the same fragment (grid items + optional infinite-scroll
+    sentinel): a sort/filter refresh (offset=0, swaps #image-grid) and progressive
+    loading (offset>0, the sentinel replaces itself with the next page) — am9.
+    """
     gallery = await _resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -301,13 +319,14 @@ async def guest_gallery_images(
     total = len(images)
     selected_count = sum(1 for img in images if img["selected"])
     favorited_count = sum(1 for img in images if img["favorited"])
+    page = images[offset : offset + GALLERY_PAGE_SIZE]
 
     return templates.TemplateResponse(
         request,
         "guest/_image_grid.html",
         {
             "request": request,
-            "images": images,
+            "images": page,
             "token": token,
             "session_id": str(session_id) if session_id else None,
             "total_images": total,
@@ -317,6 +336,8 @@ async def guest_gallery_images(
             "sort_by": sort_by.value,
             "sort_dir": sort_dir.value,
             "filter": filter.value,
+            "next_offset": offset + GALLERY_PAGE_SIZE,
+            "has_more": total > offset + GALLERY_PAGE_SIZE,
         },
     )
 
