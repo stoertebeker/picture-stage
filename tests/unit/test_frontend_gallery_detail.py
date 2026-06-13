@@ -209,3 +209,59 @@ def test_share_modal_password_i18n_keys_exist() -> None:
     ):
         assert key in de, f"DE missing gallery.{key}"
         assert key in en, f"EN missing gallery.{key}"
+
+
+def test_selection_page_offers_lightroom_copy_and_downloads() -> None:
+    """The selection result page (r84) exposes a copy-for-Lightroom button plus
+    txt/csv downloads, all scoped to the 'marked' filter (selected OR favorite)."""
+    selection = _template("selection.html")
+
+    # Copy-for-Lightroom button: payload via data-* (autoescaped), copied via x-text/x-show.
+    assert 'x-data="copyButton"' in selection
+    assert 'data-copy-text="{{ filename_list }}"' in selection
+    assert '@click="copy()"' in selection
+    assert 'x-show="copied"' in selection
+    assert "gallery.selection_copy_lightroom" in selection
+    assert "gallery.selection_copied" in selection
+
+    # Downloads use the marked filter so untouched images are excluded.
+    assert "/export?format=txt&filter=marked" in selection
+    assert "/export?format=csv&filter=marked" in selection
+
+    # Both badges (selected + favorite) and the filename are present.
+    assert "gallery.selection_selected" in selection
+    assert "gallery.selection_favorited" in selection
+    assert "{{ item.filename }}" in selection
+
+
+def test_detail_links_to_selection_when_shared_or_completed() -> None:
+    """The 'view selection' link appears only for shared/completed galleries."""
+    detail = _template("detail.html")
+
+    assert "st in ['shared', 'completed']" in detail
+    assert 'href="/galleries/{{ gallery.id }}/selection"' in detail
+    assert "gallery.selection_view" in detail
+
+
+def test_selection_page_i18n_keys_exist() -> None:
+    """All i18n keys referenced by the selection page exist in DE and EN."""
+    import json
+
+    de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())["gallery"]
+    en = json.loads((PROJECT_ROOT / "app" / "i18n" / "en.json").read_text())["gallery"]
+    for key in (
+        "selection_title",
+        "selection_view",
+        "back_to_gallery",
+        "selection_marked",
+        "selection_selected",
+        "selection_favorited",
+        "selection_copy_lightroom",
+        "selection_copied",
+        "selection_download_txt",
+        "selection_lightroom_hint",
+        "selection_empty_title",
+        "selection_empty_text",
+    ):
+        assert key in de, f"DE missing gallery.{key}"
+        assert key in en, f"EN missing gallery.{key}"

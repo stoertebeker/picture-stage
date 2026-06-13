@@ -70,6 +70,16 @@
                     {% call button(variant='secondary', size='sm', type='submit') %}{{ t(action.label_key) }}{% endcall %}
                 </form>
                 {% endfor %}
+                {% if st in ['shared', 'completed'] %}
+                <a href="/galleries/{{ gallery.id }}/selection"
+                   class="inline-flex h-11 items-center gap-2 rounded-md border border-border-subtle px-4 text-sm text-text-secondary hover:border-border-strong hover:text-text-primary"
+                   aria-label="{{ t('gallery.selection_view') }}">
+                    <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"/>
+                    </svg>
+                    <span class="hidden sm:inline">{{ t('gallery.selection_view') }}</span>
+                </a>
+                {% endif %}
                 <a href="/galleries/{{ gallery.id }}/audit-log"
                    class="inline-flex h-11 w-11 items-center justify-center rounded-md border border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary"
                    aria-label="{{ t('gallery.audit_log') }}">

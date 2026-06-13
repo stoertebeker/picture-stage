@@ -1,5 +1,6 @@
 """Integration tests for the selection export endpoint (r84: txt + marked)."""
 
+from app.auth.tokens import create_access_token
 from app.db.models import (
     Gallery,
     GalleryStatus,
@@ -91,3 +92,28 @@ async def test_export_rejects_unknown_format(client, db, owner, auth_headers):
     )
 
     assert resp.status_code == 422
+
+
+async def test_selection_page_shows_only_marked_images(client, db, owner):
+    """The selection result page lists only selected-OR-favorited images and
+    builds a comma-separated copy payload matching the txt export (r84)."""
+    gallery = await _gallery_with_marks(db, owner)
+    client.cookies.set("session", create_access_token(str(owner.id)))
+
+    resp = await client.get(f"/galleries/{gallery.id}/selection")
+
+    assert resp.status_code == 200
+    assert "img1.jpg" in resp.text
+    assert "img2.jpg" in resp.text
+    assert "img3.jpg" not in resp.text
+    assert 'data-copy-text="img1.jpg, img2.jpg"' in resp.text
+
+
+async def test_selection_page_is_owner_only(client, db, owner, other_user):
+    """A non-owner cannot see another photographer's selection (tenant isolation)."""
+    gallery = await _gallery_with_marks(db, owner)
+    client.cookies.set("session", create_access_token(str(other_user.id)))
+
+    resp = await client.get(f"/galleries/{gallery.id}/selection")
+
+    assert resp.status_code == 404

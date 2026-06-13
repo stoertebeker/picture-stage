@@ -225,7 +225,19 @@
     "lightbox_prev": "Previous image",
     "lightbox_next": "Next image",
     "lightbox_swipe_hint": "← swipe →",
-    "delete_name_mismatch": "The name entered does not match the gallery name."
+    "delete_name_mismatch": "The name entered does not match the gallery name.",
+    "selection_title": "Model's selection",
+    "selection_view": "View selection",
+    "back_to_gallery": "Back to gallery",
+    "selection_marked": "marked",
+    "selection_selected": "Selected",
+    "selection_favorited": "Favorite",
+    "selection_copy_lightroom": "Copy for Lightroom",
+    "selection_copied": "Copied!",
+    "selection_download_txt": "List (.txt)",
+    "selection_lightroom_hint": "Comma-separated filenames — paste straight into Lightroom Classic's filename filter or Capture One's \"Select by filename\".",
+    "selection_empty_title": "No selection yet",
+    "selection_empty_text": "The model has not selected or favorited any images yet. Once a selection is made it will appear here."
   },
   "guest": {
     "selected_of_total": "{selected} / {total} selected, {favorited} favorites",

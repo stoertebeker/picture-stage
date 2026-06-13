@@ -454,6 +454,30 @@ function shareUrlComponent() {
     };
 }
 
+// Generic copy-to-clipboard button (r84: copy the marked filenames for
+// Lightroom). Reads the payload from data-copy-text and shows a brief "copied"
+// state. navigator.* / setTimeout live here in JS, not in inline expressions
+// (the @alpinejs/csp build forbids them in templates).
+function copyButtonComponent() {
+    return {
+        copied: false,
+        text: '',
+
+        init() {
+            this.text = this.$root.dataset.copyText || '';
+        },
+
+        copy() {
+            navigator.clipboard.writeText(this.text).then(() => {
+                this.copied = true;
+                setTimeout(() => {
+                    this.copied = false;
+                }, 2000);
+            });
+        },
+    };
+}
+
 // "Einstellungen" dropdown in the top nav (theme toggle + language switcher).
 // Logic lives in methods/getters because the @alpinejs/csp build forbids
 // inline expressions. `expanded` returns a string so :aria-expanded renders
@@ -486,5 +510,6 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('langSwitcher', langSwitcherComponent);
     Alpine.data('auditFilter', auditFilterComponent);
     Alpine.data('shareUrl', shareUrlComponent);
+    Alpine.data('copyButton', copyButtonComponent);
     Alpine.data('settingsMenu', settingsMenuComponent);
 });

@@ -32,6 +32,7 @@ from app.frontend.deps import templates
 from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.security.signing import sign_url
+from app.selections.service import get_current_selections
 from app.storage.base import StorageBackend
 from app.storage.dependencies import get_storage
 
@@ -160,6 +161,55 @@ async def gallery_detail(
     images = await _load_images_with_signed_urls(gallery_id, db)
     ctx = _build_context(request, gallery, images, user)
     return templates.TemplateResponse(request, "galleries/detail.html", ctx)
+
+
+@router.get("/galleries/{gallery_id}/selection", response_class=HTMLResponse)
+async def gallery_selection(
+    gallery_id: uuid.UUID,
+    request: Request,
+    user: User = Depends(require_authenticated_page),
+    db: AsyncSession = Depends(get_db),
+) -> HTMLResponse:
+    """Read-only result view of the model's picks — every image the model
+    selected OR favorited, with a Lightroom-ready filename list to copy or
+    download (r84). Owner-only via the gallery ownership check."""
+    gallery = await _get_owned_gallery(gallery_id, user, db)
+    images = await _load_images_with_signed_urls(gallery_id, db)
+    selections = await get_current_selections(gallery_id, db)
+    state = {str(s.image_id): s for s in selections}
+
+    items: list[dict[str, Any]] = []
+    for img in images:
+        s = state.get(img["id"])
+        if s is None or not (s.selected or s.favorited):
+            continue
+        previews = img["previews"]
+        items.append(
+            {
+                "filename": img["filename"],
+                "thumb_url": previews.get("thumb_sm") or previews.get("thumb_md") or "",
+                "selected": s.selected,
+                "favorited": s.favorited,
+                "comment": s.comment,
+            }
+        )
+
+    # Comma-separated filename list for the "copy for Lightroom" button — built
+    # server-side so the clipboard payload matches the txt download exactly.
+    filename_list = ", ".join(item["filename"] for item in items)
+
+    ctx = {
+        "request": request,
+        "user": user,
+        "gallery": gallery,
+        "items": items,
+        "marked_count": len(items),
+        "selected_count": sum(1 for i in items if i["selected"]),
+        "favorited_count": sum(1 for i in items if i["favorited"]),
+        "filename_list": filename_list,
+        "csrf_token": request.cookies.get("csrf_token", ""),
+    }
+    return templates.TemplateResponse(request, "galleries/selection.html", ctx)
 
 
 @router.post("/galleries/{gallery_id}/rename", response_class=HTMLResponse)
