@@ -53,9 +53,11 @@
             </svg>
         </button>
 
-        <!-- Swipe hint (mobile only) -->
-        <div x-show="images.length > 1"
-             class="absolute bottom-4 inset-x-0 z-10 flex sm:hidden items-center justify-center text-text-primary/60">
+        <!-- Swipe hint (mobile only): shown briefly when a photo opens, then fades out (jwc) -->
+        <div x-show="images.length > 1 && showSwipeHint"
+             x-transition.opacity.duration.500ms
+             class="absolute bottom-4 inset-x-0 z-10 flex sm:hidden items-center justify-center text-text-primary/60"
+             style="display: none;">
             <span class="rounded-full border border-text-primary/25 bg-surface-overlay backdrop-blur px-4 py-1.5 text-sm font-medium shadow-md">
                 {{ t('guest.lightbox_swipe_hint') }}
             </span>

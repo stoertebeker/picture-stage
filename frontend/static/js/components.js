@@ -71,6 +71,8 @@ function guestViewerComponent() {
         lightboxIndex: 0,
         showCompleteModal: false,
         completed: false,
+        showSwipeHint: false,
+        _swipeHintTimer: null,
 
         init() {
             const root = this.$root;
@@ -106,6 +108,20 @@ function guestViewerComponent() {
             this.lightboxIndex = index;
             this.lightboxOpen = true;
             this._preloadAdjacent();
+            this._showSwipeHintBriefly();
+        },
+
+        // Swipe hint (mobile) is a one-off nudge: show it when a photo opens,
+        // then fade it out after a few seconds so it does not linger (jwc).
+        _showSwipeHintBriefly() {
+            if (this._swipeHintTimer) {
+                clearTimeout(this._swipeHintTimer);
+            }
+            this.showSwipeHint = true;
+            this._swipeHintTimer = setTimeout(() => {
+                this.showSwipeHint = false;
+                this._swipeHintTimer = null;
+            }, 3500);
         },
 
         closeLightbox() {
