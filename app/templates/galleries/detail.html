@@ -58,11 +58,6 @@
             <div class="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
                 <div class="min-w-0">
                     <div class="mb-2 flex flex-wrap items-center gap-2">
-                        {% set st = gallery.status.value %}
-                        <span class="inline-flex items-center gap-1.5 rounded-full border border-status-info bg-surface-raised px-2.5 py-1 text-xs font-medium text-status-info">
-                            <span class="h-1.5 w-1.5 rounded-full bg-status-info"></span>
-                            {{ t('gallery.status_' ~ st) }}
-                        </span>
                         <span class="text-xs uppercase text-text-muted">{{ t('gallery.review_gallery') }}</span>
                     </div>
 
@@ -101,6 +96,11 @@
                 </div>
 
                 <div class="flex flex-wrap items-center gap-2">
+                    {% set st = gallery.status.value %}
+                    <span class="inline-flex items-center gap-1.5 rounded-full border border-status-info bg-surface-raised px-2.5 py-1 text-xs font-medium text-status-info">
+                        <span class="h-1.5 w-1.5 rounded-full bg-status-info"></span>
+                        {{ t('gallery.status_' ~ st) }}
+                    </span>
                     {% for action in transitions %}
                     <form method="post"
                           action="/galleries/{{ gallery.id }}/status"
@@ -110,7 +110,7 @@
                           class="inline">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <input type="hidden" name="status" value="{{ action.status }}">
-                        {% call button(variant='secondary', size='sm', type='submit') %}{{ t('gallery.transition_' ~ action.status) }}{% endcall %}
+                        {% call button(variant='secondary', size='sm', type='submit') %}{{ t(action.label_key) }}{% endcall %}
                     </form>
                     {% endfor %}
                     {% include "galleries/_delete_modal.html" %}

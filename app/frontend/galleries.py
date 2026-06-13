@@ -102,9 +102,19 @@ def _build_context(
         # Cannot transition to shared without share token
         if target_status == GalleryStatus.shared and gallery.share_token_hash is None:
             continue
+        # Re-sharing a finished or archived gallery re-opens it for the model;
+        # label it "reopen" instead of the misleading generic "share".
+        if target_status == GalleryStatus.shared and gallery.status in (
+            GalleryStatus.completed,
+            GalleryStatus.archived,
+        ):
+            label_key = "gallery.transition_reopen"
+        else:
+            label_key = f"gallery.transition_{target_status.value}"
         transitions.append(
             {
                 "status": target_status.value,
+                "label_key": label_key,
             }
         )
 

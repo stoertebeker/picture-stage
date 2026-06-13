@@ -139,6 +139,7 @@
     "cancel": "Abbrechen",
     "audit_log": "Audit-Log",
     "transition_shared": "Teilen",
+    "transition_reopen": "Erneut öffnen",
     "transition_completed": "Abschließen",
     "transition_archived": "Archivieren",
     "no_images_title": "Noch keine Bilder",
