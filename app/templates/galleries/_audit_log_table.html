@@ -1,29 +1,29 @@
 <!-- HTMX partial: audit log table with pagination -->
 <div id="audit-log-table">
     {% if entries %}
-    <div class="overflow-x-auto">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead class="bg-gray-50 dark:bg-gray-800">
+    <div class="overflow-x-auto rounded-lg border border-border-subtle">
+        <table class="min-w-full divide-y divide-border-subtle">
+            <thead class="bg-surface-raised">
                 <tr>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_timestamp') }}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_event') }}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_actor') }}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_ip') }}</th>
-                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('audit.col_details') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('audit.col_timestamp') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('audit.col_event') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('audit.col_actor') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('audit.col_ip') }}</th>
+                    <th class="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('audit.col_details') }}</th>
                 </tr>
             </thead>
-            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody class="divide-y divide-border-subtle bg-surface-base">
                 {% for entry in entries %}
-                <tr class="hover:bg-gray-50 dark:hover:bg-gray-800">
-                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                <tr class="hover:bg-surface-raised">
+                    <td class="px-4 py-3 text-sm text-text-secondary whitespace-nowrap">
                         {{ entry.created_at.strftime('%d.%m.%Y %H:%M:%S') }}
                     </td>
                     <td class="px-4 py-3 text-sm">
-                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">
+                        <span class="inline-flex items-center rounded px-2 py-0.5 text-xs font-medium bg-accent/10 text-accent">
                             {{ entry.event_type }}
                         </span>
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                    <td class="px-4 py-3 text-sm text-text-secondary whitespace-nowrap">
                         {% if entry.actor_user_id %}
                             {{ t('audit.actor_user').replace('{id}', entry.actor_user_id | string | truncate(8, True, '')) }}
                         {% elif entry.actor_session_id %}
@@ -32,10 +32,10 @@
                             {{ t('audit.actor_system') }}
                         {% endif %}
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 font-mono whitespace-nowrap">
+                    <td class="px-4 py-3 text-sm text-text-muted font-mono whitespace-nowrap">
                         {{ entry.ip_address or '-' }}
                     </td>
-                    <td class="px-4 py-3 text-sm text-gray-500 dark:text-gray-400 max-w-xs truncate">
+                    <td class="px-4 py-3 text-sm text-text-muted max-w-xs truncate">
                         {% if entry.details %}
                             {{ entry.details | tojson | truncate(80) }}
                         {% else %}
@@ -48,10 +48,9 @@
         </table>
     </div>
 
-    <!-- Pagination -->
     {% if total_pages > 1 %}
-    <nav class="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 px-4 py-3 mt-4">
-        <div class="text-sm text-gray-500 dark:text-gray-400">
+    <nav class="flex items-center justify-between border-t border-border-subtle px-4 py-3 mt-4" aria-label="{{ t('audit.heading') }} pagination">
+        <div class="text-sm text-text-muted">
             {{ t('audit.pagination_total').replace('{total}', total | string).replace('{page}', page | string).replace('{total_pages}', total_pages | string) }}
         </div>
         <div class="flex gap-2">
@@ -60,7 +59,7 @@
                hx-get="/galleries/{{ gallery.id }}/audit-log?page={{ page - 1 }}{% if event_type %}&event_type={{ event_type }}{% endif %}"
                hx-target="#audit-log-table"
                hx-swap="outerHTML"
-               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+               class="inline-flex items-center rounded-md border border-border-subtle px-3 py-1.5 text-sm text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors">
                 {{ t('audit.pagination_prev') }}
             </a>
             {% endif %}
@@ -69,7 +68,7 @@
                hx-get="/galleries/{{ gallery.id }}/audit-log?page={{ page + 1 }}{% if event_type %}&event_type={{ event_type }}{% endif %}"
                hx-target="#audit-log-table"
                hx-swap="outerHTML"
-               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+               class="inline-flex items-center rounded-md border border-border-subtle px-3 py-1.5 text-sm text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors">
                 {{ t('audit.pagination_next') }}
             </a>
             {% endif %}

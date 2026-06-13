@@ -3,49 +3,50 @@
 {% block title %}{{ t('audit.title').replace('{name}', gallery.name) }}{% endblock %}
 
 {% block content %}
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="min-h-screen bg-surface-base">
+    <header class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
+        <div class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+            <nav class="mb-1 flex items-center gap-1 text-xs text-text-muted" aria-label="Breadcrumb">
+                <a href="/dashboard" class="hover:text-text-primary transition-colors">{{ t('nav.dashboard') }}</a>
+                <span aria-hidden="true">/</span>
+                <a href="/galleries/{{ gallery.id }}" class="hover:text-text-primary transition-colors">{{ gallery.name }}</a>
+                <span aria-hidden="true">/</span>
+                <span class="text-text-secondary">{{ t('audit.heading') }}</span>
+            </nav>
 
-    <!-- Breadcrumb -->
-    <nav class="mb-6 text-sm text-gray-500 dark:text-gray-400">
-        <a href="/dashboard" class="hover:text-blue-600 dark:hover:text-blue-400">{{ t('nav.dashboard') }}</a>
-        <span class="mx-2">/</span>
-        <a href="/galleries/{{ gallery.id }}" class="hover:text-blue-600 dark:hover:text-blue-400">{{ gallery.name }}</a>
-        <span class="mx-2">/</span>
-        <span class="text-gray-900 dark:text-white">{{ t('audit.heading') }}</span>
-    </nav>
+            <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h1 class="font-display text-2xl text-text-primary">{{ t('audit.heading') }}</h1>
 
-    <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-        <h1 class="text-2xl font-bold text-gray-900 dark:text-white">{{ t('audit.heading') }}</h1>
+                <div class="flex flex-wrap items-center gap-2">
+                    <div x-data="auditFilter" data-audit-url="/galleries/{{ gallery.id }}/audit-log">
+                        <select @change="navigate($el.value)"
+                                class="rounded-md border border-border-subtle bg-surface-raised px-3 py-1.5 text-sm text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus">
+                            <option value="">{{ t('audit.filter_all') }}</option>
+                            {% for et in event_types %}
+                            <option value="{{ et }}" {% if event_type == et %}selected{% endif %}>{{ et }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
 
-        <div class="flex items-center gap-3">
-            <!-- Event Type Filter -->
-            <div class="relative" x-data="auditFilter" data-audit-url="/galleries/{{ gallery.id }}/audit-log">
-                <select @change="navigate($el.value)"
-                        class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300">
-                    <option value="">{{ t('audit.filter_all') }}</option>
-                    {% for et in event_types %}
-                    <option value="{{ et }}" {% if event_type == et %}selected{% endif %}>{{ et }}</option>
-                    {% endfor %}
-                </select>
+                    <a href="/api/v1/galleries/{{ gallery.id }}/audit-log/export"
+                       class="inline-flex items-center rounded-md border border-border-subtle px-3 py-1.5 text-sm text-text-secondary hover:border-border-strong hover:text-text-primary transition-colors">
+                        {{ t('audit.csv_export') }}
+                    </a>
+
+                    <a href="/galleries/{{ gallery.id }}"
+                       class="inline-flex items-center gap-2 text-sm text-text-muted hover:text-text-primary transition-colors">
+                        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7"/>
+                        </svg>
+                        {{ t('audit.back_to_gallery') }}
+                    </a>
+                </div>
             </div>
-
-            <!-- CSV Export -->
-            <a href="/api/v1/galleries/{{ gallery.id }}/audit-log/export"
-               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                {{ t('audit.csv_export') }}
-            </a>
-
-            <!-- Back to Gallery -->
-            <a href="/galleries/{{ gallery.id }}"
-               class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-                {{ t('audit.back_to_gallery') }}
-            </a>
         </div>
-    </div>
+    </header>
 
-    <!-- Audit Log Table -->
-    {% include "galleries/_audit_log_table.html" %}
-
+    <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {% include "galleries/_audit_log_table.html" %}
+    </main>
 </div>
 {% endblock %}
