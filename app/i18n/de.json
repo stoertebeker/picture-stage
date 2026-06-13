@@ -36,9 +36,9 @@
     "invalid_verify_token": "Ungültiger oder abgelaufener Bestätigungslink."
   },
   "setup": {
-    "title": "Setup - Picture-Stage",
-    "subtitle": "Create the first admin account to get started.",
-    "create_admin": "Create Admin Account"
+    "title": "Einrichtung – Picture-Stage",
+    "subtitle": "Erstelle das erste Admin-Konto, um loszulegen.",
+    "create_admin": "Admin-Konto erstellen"
   },
   "admin": {
     "title": "Ausstehende Registrierungen – Picture-Stage",

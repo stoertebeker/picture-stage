@@ -72,15 +72,13 @@ def test_tailwind_config_exists():
 def test_skip_link_on_all_standalone_pages():
     """WCAG 2.4.1 (p07.8): every template with its own <body> ships a skip
     link to #main as first focusable element, and a matching id="main"
-    landmark. Covers base/guest_base (inherited by all pages) plus the
-    standalone setup head and the shared auth_base layout. Since gmo the auth
-    pages (login/signup/verify) no longer carry their own <head>; they extend
-    auth_base, which owns the skip link — verified separately below."""
+    landmark. Covers base/guest_base (inherited by all pages) and the shared
+    auth_base layout. Auth + setup pages extend auth_base and inherit the skip
+    link — verified separately below."""
     pages = [
         ("base.html",),
         ("guest_base.html",),
         ("auth_base.html",),
-        ("setup", "index.html"),
     ]
     for parts in pages:
         html = (PROJECT_ROOT / "app" / "templates").joinpath(*parts).read_text()
@@ -90,10 +88,15 @@ def test_skip_link_on_all_standalone_pages():
         # Skip link must come before the target so it is the first tab stop.
         assert html.index('href="#main"') < html.index('id="main"'), parts
 
-    # The auth pages inherit the skip link by extending auth_base (gmo).
-    for child in ("login.html", "signup.html", "verify.html"):
-        html = (PROJECT_ROOT / "app" / "templates" / "auth" / child).read_text()
-        assert 'extends "auth_base.html"' in html, f"{child} must extend auth_base for the skip link"
+    # Auth + setup pages inherit the skip link by extending auth_base.
+    for child_parts in [
+        ("auth", "login.html"),
+        ("auth", "signup.html"),
+        ("auth", "verify.html"),
+        ("setup", "index.html"),
+    ]:
+        html = (PROJECT_ROOT / "app" / "templates").joinpath(*child_parts).read_text()
+        assert 'extends "auth_base.html"' in html, f"{child_parts} must extend auth_base for the skip link"
 
 
 def test_skip_to_content_i18n_key_exists():
