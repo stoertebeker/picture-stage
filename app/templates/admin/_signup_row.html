@@ -1,22 +1,25 @@
+{% from "_macros/buttons.html" import button %}
 <tr>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{{ signup.email }}</td>
-    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">{{ signup.requested_at.strftime('%d.%m.%Y %H:%M') }}</td>
-    <td class="px-6 py-4 whitespace-nowrap text-right text-sm space-x-2">
-        <button
-            hx-post="/admin/approve/{{ signup.id }}"
-            hx-target="closest tr"
-            hx-swap="outerHTML"
-            hx-confirm="{{ t('admin.approve_confirm').replace('{email}', signup.email) }}"
-            class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 transition-colors">
-            {{ t('admin.approve') }}
-        </button>
-        <button
-            hx-post="/admin/reject/{{ signup.id }}"
-            hx-target="closest tr"
-            hx-swap="outerHTML"
-            hx-confirm="{{ t('admin.reject_confirm').replace('{email}', signup.email) }}"
-            class="inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 transition-colors">
-            {{ t('admin.reject') }}
-        </button>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-text-primary">{{ signup.email }}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">{{ signup.requested_at.strftime('%d.%m.%Y %H:%M') }}</td>
+    <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
+        <div class="flex justify-end gap-2">
+            {% call button(variant='success', size='sm', attrs={
+                'hx-post': '/admin/approve/' ~ signup.id,
+                'hx-target': 'closest tr',
+                'hx-swap': 'outerHTML',
+                'hx-confirm': t('admin.approve_confirm').replace('{email}', signup.email)
+            }) %}
+                {{ t('admin.approve') }}
+            {% endcall %}
+            {% call button(variant='danger', size='sm', attrs={
+                'hx-post': '/admin/reject/' ~ signup.id,
+                'hx-target': 'closest tr',
+                'hx-swap': 'outerHTML',
+                'hx-confirm': t('admin.reject_confirm').replace('{email}', signup.email)
+            }) %}
+                {{ t('admin.reject') }}
+            {% endcall %}
+        </div>
     </td>
 </tr>

@@ -3,29 +3,39 @@
 {% block title %}{{ t('admin.title') }}{% endblock %}
 
 {% block content %}
-<div class="max-w-4xl mx-auto px-4 py-8">
-    <h1 class="text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">{{ t('admin.heading') }}</h1>
+<div class="min-h-screen bg-surface-base">
+    <header class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
+        <div class="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
+            <h1 class="font-display text-2xl text-text-primary">{{ t('admin.heading') }}</h1>
+            <a href="/admin/users"
+               class="text-sm text-accent hover:text-accent-hover hover:underline focus:outline-none focus-visible:ring focus-visible:ring-focus rounded">
+                {{ t('admin.nav_users') }} &rarr;
+            </a>
+        </div>
+    </header>
 
-    {% if signups %}
-    <div class="overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-700">
-        <table class="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead class="bg-gray-100 dark:bg-gray-800">
-                <tr>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.email_col') }}</th>
-                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.registered_col') }}</th>
-                    <th class="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">{{ t('admin.actions_col') }}</th>
-                </tr>
-            </thead>
-            <tbody class="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                {% for signup in signups %}
-                {% include "admin/_signup_row.html" %}
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    {% else %}
-    {% from "_macros/empty.html" import empty_state, icon_inbox %}
-    {{ empty_state(icon=icon_inbox(), title=t('admin.no_pending')) }}
-    {% endif %}
+    <main class="mx-auto max-w-5xl px-4 py-6 sm:px-6">
+        {% if signups %}
+        <div class="overflow-x-auto rounded-lg border border-border-subtle">
+            <table class="min-w-full divide-y divide-border-subtle">
+                <thead class="bg-surface-raised">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('admin.email_col') }}</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('admin.registered_col') }}</th>
+                        <th class="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-text-muted">{{ t('admin.actions_col') }}</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-border-subtle bg-surface-base">
+                    {% for signup in signups %}
+                    {% include "admin/_signup_row.html" %}
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        {% from "_macros/empty.html" import empty_state, icon_inbox %}
+        {{ empty_state(icon=icon_inbox(), title=t('admin.no_pending')) }}
+        {% endif %}
+    </main>
 </div>
 {% endblock %}
