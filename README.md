@@ -11,7 +11,7 @@ Picture-Stage lets photographers share image galleries with models for review. M
 - **Share galleries via magic link** — no model login required, optional password protection
 - **Select, favorite, and comment** on individual images
 - **Auto-save** — selections persist immediately (event-sourced)
-- **Export selections** as CSV/JSON for Lightroom/Capture One
+- **Export selections** as CSV/JSON, or a comma-separated filename list (TXT) ready to paste into Lightroom Classic / Capture One
 - **Server-side watermarking** — originals are never exposed to models
 - **Pluggable storage** — local Docker volume or S3-compatible (MinIO, AWS, Hetzner, R2, B2)
 - **Multi-tenant** — multiple photographers with admin approval registration
@@ -104,7 +104,7 @@ curl -s https://DEINE-DOMAIN/login | grep -o "/static/css/styles.css?v=[^\"]*"
 | DELETE | `/api/v1/galleries/{id}` | Delete gallery + images |
 | POST | `/api/v1/galleries/{id}/share` | Generate share link |
 | DELETE | `/api/v1/galleries/{id}/share` | Revoke share link |
-| GET | `/api/v1/galleries/{id}/export` | Export selections (CSV/JSON) |
+| GET | `/api/v1/galleries/{id}/export` | Export selections (CSV/JSON/TXT, `filter=all\|selected\|favorited\|marked`) |
 
 ### Images (`/api/v1/galleries/{id}/images/`)
 

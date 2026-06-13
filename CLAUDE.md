@@ -118,12 +118,18 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-13 (Abend-Wache)
-**Wachwechsel-Tag:** `handover-2026-06-13-abend` (zeigt auf `ec9324f`)
+**Datum:** 2026-06-13 (Spät-Wache)
+**Wachwechsel-Tag:** `handover-2026-06-13-spaet` (zeigt auf `d81a82a`)
 **Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung).
-**Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`, Admin: `admin@local.test` / `testpass123`. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads uv run pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
+**Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`. **Lokaler Admin: `testadmin@example.com` / `testpass123`** (NICHT `admin@local.test` — s. Memory `local-dev-admin-login`). **Frontend-Änderungen lokal abnehmen:** Stack mit frischer `ASSET_VERSION` neu bauen (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`), sonst stale Cache. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads .venv/bin/pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
 
-### Erledigt in dieser Wache (2026-06-13 Abend) — v0.6-Epic + IP-Erfassung + Galerie-Limit-Override
+### Erledigt in dieser Wache (2026-06-13 Spät) — Fotograf-Galerie: Lightbox + Auswahl-Export (User-Findings)
+- **`x4o` (bug P2, `d295d28`, closed):** Read-only Bild-Lightbox in der Fotografen-Galerie. Ersetzt das alte Einzelbild-`previewModal` durch eine vollwertige Lightbox (Pfeile, Tastatur ←/→/ESC, Mobile-Swipe, Nachbar-Preload) — **ohne** Auswahl-Controls (Fotograf betrachtet nur). `galleryManager` (components.js) um Lightbox-State erweitert; `data-images`-JSON (nur `ready`-Bilder) am Root; neues Partial `_owner_lightbox.html`; Grid öffnet per UUID (`openLightboxById`). Dateiname XSS-sicher via `x-text`.
+- **`r84` (feature P2, `a7a64da` Backend + `68c998b` Frontend, closed):** Auswahl-Ergebnis-Seite + Lightroom-Export. Neue owner-only Seite `/galleries/{id}/selection` listet alle markierten Bilder (selected ODER favorited) mit Vorschau/Symbol/Dateiname; verlinkt von der Detailseite bei `shared`/`completed`. **„Für Lightroom kopieren"** (Clipboard, komma-separiert) via neuer Alpine-Komponente `copyButton` + Downloads `.txt`/CSV mit `filter=marked`. Backend: Export um `format=txt` (komma-separierte Dateinamen mit Endung, einzeilig — Recherche: Lightroom Classic/Capture One brauchen genau das, NICHT eine pro Zeile) + `filter=marked` erweitert. CHANGELOG (`d81a82a`) + README aktualisiert.
+- **286 Unit + 5 Integration-Tests grün**, ruff+mypy sauber. Alles gepusht (`main` = `origin/main`). **Noch NICHT prod-deployed** (Kapitän deployt + nimmt ab).
+- **Dev-DB-Hinweis:** Die lokale „QA-Galerie" (`766dc953-…`) wurde für die r84-Abnahme auf `status=shared` gesetzt + 4 Test-Markierungen (3 select, 2 favorite) angelegt. Bei Bedarf zurücksetzen (`status=draft`, `selection_events` löschen).
+
+### Erledigt in der Wache davor (2026-06-13 Abend) — v0.6-Epic + IP-Erfassung + Galerie-Limit-Override
 
 **v0.6-Epic `3av` (alle 4 Tickets, Epic geschlossen):**
 - **`tln` (`86627f0`, closed):** Setup-Onboarding auf Editorial Dark — `setup/index.html` auf `auth_base.html` umgestellt (Muster login/signup/verify). Macros `field`/`button`/`csrf_input`/`form_error`. Test-Drift behoben (war in Standalone-Liste, jetzt auth_base-Kinder).
@@ -146,8 +152,10 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ### ✅ Betrieblicher Rest — alle Tickets prod-deployed und abgenommen
 Kapitän hat nach Abend-Wache-Deploy bestätigt: alles live, IP-Erfassung funktioniert (CF-Connecting-IP), Abschluss-Mail-Kette (`16l`+`4gr`) prod-verifiziert.
 
-### Offene Tickets — Stand Abend-Wache 2026-06-13
-**Keine offenen Tickets.** `bd ready` meldet „No open issues".
+### Offene Tickets — Stand Spät-Wache 2026-06-13
+**Ready-Queue (2):**
+- **`3rl` (bug P2):** Filter-Chips „Alle"/„Ausgewählt"/„Favoriten" in der Fotografen-Galerie sind reine `<span>`-Deko ohne `@click`/Filter-Logik (`detail.html` ~Z. 142–145, Copy aus dem Gast-Viewer). Soll: Owner-Grid nach Auswahl-Status filtern (analog Gast). **Nächster logischer Happen** — die r84-Auswahl-Daten (`get_current_selections`) sind jetzt schon im View verfügbar.
+- **`ggx` (bug P3):** `Alpine Expression Error: Undefined variable: limitValue` auf `/admin/users` (Limit-Modal, Ticket `56k`). **Vorbehalt:** beim Test gegen einen alten Build (`?v=56k-test`) beobachtet → ZUERST gegen frischen Build verifizieren, ob real oder stale.
 
 ### Offene Punkte für die nächste Wache
 1. **Betrieblich:** `cxs` (Share-Sessions gesperrter User invalidieren/prüfen, P3) — einziger bekannter Follow-up aus dem Admin-Epic.
