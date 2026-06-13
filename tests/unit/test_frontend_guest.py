@@ -464,3 +464,26 @@ def test_guest_viewer_escapes_gallery_message_xss():
     # The raw tag must not survive; the escaped form must be present instead.
     assert "<script>alert('xss')</script>" not in html
     assert "&lt;script&gt;" in html
+
+
+def test_guest_expired_page_uses_editorial_dark():
+    """9ql: the expired page (HTTP 410 dead-end) uses the auth_base Editorial-Dark
+    chrome and semantic tokens, not the legacy gray palette / dark: utilities."""
+    html = (PROJECT_ROOT / "app" / "templates" / "guest" / "expired.html").read_text()
+    assert 'extends "auth_base.html"' in html
+    assert "text-text-primary" in html
+    assert "text-text-secondary" in html
+    assert "dark:" not in html, "legacy dark: utilities must be gone"
+    assert "text-gray-" not in html, "legacy gray palette must be gone"
+    # i18n keys preserved
+    assert "guest.expired_title" in html
+    assert "guest.expired_text" in html
+    assert "guest.expired_contact" in html
+
+
+def test_guest_expired_renders_with_minimal_context():
+    """The 410 handler passes only gallery_name; the template must render without
+    a csrf_token or image list (regression guard for the auth_base switch, 9ql)."""
+    html = templates.env.get_template("guest/expired.html").render(t=_t, locale="de", gallery_name="Sommer-Shooting")
+    assert _t("guest.expired_title") in html
+    assert "Sommer-Shooting" in html
