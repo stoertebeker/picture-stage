@@ -140,28 +140,29 @@
         {% endif %}
         </div>
     </td>
+    {# --- Gallery-limit modal (inside tr for Alpine scope) --- #}
+    <div class="contents">
+        <dialog id="limitModal-{{ user.id }}" data-backdrop-close
+            class="rounded-lg p-0 backdrop:bg-black/50 w-full max-w-md bg-white dark:bg-gray-800">
+            <form class="p-6 text-left"
+                hx-post="/admin/users/{{ user.id }}/gallery-limit"
+                hx-target="#user-row-{{ user.id }}"
+                hx-swap="outerHTML"
+                data-close-dialog-on-success>
+                <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{{ t('admin.gallery_limit_title') }}</h3>
+                <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ t('admin.gallery_limit_info') }}</p>
+                <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ t('admin.gallery_limit_label') }}</label>
+                <input type="number" name="limit" x-model="limitValue" min="0" placeholder="{{ t('admin.gallery_limit_default') }}"
+                    class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-4">
+                <div class="flex justify-end gap-2">
+                    <button type="button" data-close-dialog
+                        class="px-3 py-1.5 text-sm rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{{ t('admin.cancel') }}</button>
+                    <button type="submit"
+                        class="px-3 py-1.5 text-sm rounded-md font-medium bg-blue-600 hover:bg-blue-700 text-white">
+                        {{ t('admin.gallery_limit_button') }}
+                    </button>
+                </div>
+            </form>
+        </dialog>
+    </div>
 </tr>
-
-{# --- Gallery-limit modal (outside the actions cell so it renders regardless of user.id == current_user.id) --- #}
-<dialog id="limitModal-{{ user.id }}" data-backdrop-close
-    class="rounded-lg p-0 backdrop:bg-black/50 w-full max-w-md bg-white dark:bg-gray-800">
-    <form class="p-6 text-left"
-        hx-post="/admin/users/{{ user.id }}/gallery-limit"
-        hx-target="#user-row-{{ user.id }}"
-        hx-swap="outerHTML"
-        data-close-dialog-on-success>
-        <h3 class="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">{{ t('admin.gallery_limit_title') }}</h3>
-        <p class="text-sm text-gray-600 dark:text-gray-300 mb-4">{{ t('admin.gallery_limit_info') }}</p>
-        <label class="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-1">{{ t('admin.gallery_limit_label') }}</label>
-        <input type="number" name="limit" x-model="limitValue" min="0" placeholder="{{ t('admin.gallery_limit_default') }}"
-            class="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm mb-4">
-        <div class="flex justify-end gap-2">
-            <button type="button" data-close-dialog
-                class="px-3 py-1.5 text-sm rounded-md bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200">{{ t('admin.cancel') }}</button>
-            <button type="submit"
-                class="px-3 py-1.5 text-sm rounded-md font-medium bg-blue-600 hover:bg-blue-700 text-white">
-                {{ t('admin.gallery_limit_button') }}
-            </button>
-        </div>
-    </form>
-</dialog>
