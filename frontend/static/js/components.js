@@ -260,6 +260,13 @@ function galleryManagerComponent() {
         galleryName: '',
         selectedImages: [],
 
+        // Owner-grid filter (3rl). Client-side: the grid loads all images at
+        // once (no pagination), so filtering by the model's marks is instant
+        // with no server round-trip. `selections` is a {id: {selected,
+        // favorited}} map of marked images only (unmarked images are absent).
+        activeFilter: 'all',
+        selections: {},
+
         // Read-only lightbox state (x4o). Mirrors the guest viewer's navigation
         // (arrows / keyboard / swipe) but without select/favorite/comment.
         images: [],
@@ -275,6 +282,32 @@ function galleryManagerComponent() {
             // Only 'ready' images carry preview URLs; pending/failed are excluded
             // server-side. Fresh uploads appear after a full page reload (TODO).
             this.images = JSON.parse(this.$root.dataset.images || '[]');
+            this.selections = JSON.parse(this.$root.dataset.selections || '{}');
+        },
+
+        // --- Owner-grid filter (3rl) ---
+
+        setFilter(filter) {
+            this.activeFilter = filter;
+        },
+
+        // Active/inactive chip styling. Computed in JS to keep the inline
+        // expression a CSP-safe method call (no comparison operators in
+        // templates under @alpinejs/csp).
+        chipClass(filter) {
+            const base = 'rounded-full border px-3 py-1 text-xs font-medium transition-colors';
+            if (this.activeFilter === filter) {
+                return base + ' border-accent bg-surface-raised text-accent';
+            }
+            return base + ' border-border-subtle text-text-secondary hover:border-border-strong hover:text-text-primary';
+        },
+
+        isVisible(imageId) {
+            if (this.activeFilter === 'all') return true;
+            const state = this.selections[imageId];
+            if (!state) return false;
+            if (this.activeFilter === 'favorited') return state.favorited;
+            return state.selected;
         },
 
         startEditing() {

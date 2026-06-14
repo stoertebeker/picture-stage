@@ -11,6 +11,7 @@
 <div class="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-5">
     {% for img in images %}
     <article class="group relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-colors hover:border-border-strong"
+             x-show="isVisible('{{ img.id }}')"
              data-image-id="{{ img.id }}">
         {% if img.processing_status == 'ready' %}
         <button type="button"

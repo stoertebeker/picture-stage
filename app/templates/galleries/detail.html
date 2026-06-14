@@ -7,7 +7,8 @@
 <div class="min-h-screen"
      x-data="galleryManager"
      data-gallery-name="{{ gallery.name }}"
-     data-images='{{ lightbox_images | tojson }}'>
+     data-images='{{ lightbox_images | tojson }}'
+     data-selections='{{ selection_map | tojson }}'>
 
     <header id="gallery-header" class="sticky top-0 z-sticky border-b border-border-subtle bg-surface-base/90 backdrop-blur-md">
         <div class="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 sm:px-6 lg:px-8">
@@ -139,9 +140,9 @@
                             <p class="text-sm text-text-muted">{{ t('gallery.image_grid_hint') }}</p>
                         </div>
                         <div class="flex flex-wrap items-center gap-2">
-                            <span class="rounded-full border border-accent bg-surface-raised px-3 py-1 text-xs font-medium text-accent">{{ t('guest.filter_all') }}</span>
-                            <span class="rounded-full border border-border-subtle px-3 py-1 text-xs font-medium text-text-secondary">{{ t('guest.filter_selected') }}</span>
-                            <span class="rounded-full border border-border-subtle px-3 py-1 text-xs font-medium text-text-secondary">{{ t('guest.filter_favorited') }}</span>
+                            <button type="button" @click="setFilter('all')" :class="chipClass('all')">{{ t('guest.filter_all') }}</button>
+                            <button type="button" @click="setFilter('selected')" :class="chipClass('selected')">{{ t('guest.filter_selected') }}</button>
+                            <button type="button" @click="setFilter('favorited')" :class="chipClass('favorited')">{{ t('guest.filter_favorited') }}</button>
                             {% if images %}
                             <button type="button"
                                     @click="selectAll()"

@@ -265,3 +265,49 @@ def test_selection_page_i18n_keys_exist() -> None:
     ):
         assert key in de, f"DE missing gallery.{key}"
         assert key in en, f"EN missing gallery.{key}"
+
+
+def test_owner_grid_filter_chips_are_wired() -> None:
+    """3rl: the owner filter chips (Alle/Ausgewählt/Favoriten) are functional —
+    client-side Alpine, not decorative <span>s. Each chip sets the active filter
+    and reflects it via chipClass(); the root carries the selection map and each
+    tile is gated by isVisible()."""
+    detail = _template("detail.html")
+    image_grid = _template("_image_grid.html")
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+
+    # Chips are buttons with click + reactive class, reusing the guest i18n keys.
+    assert "@click=\"setFilter('all')\"" in detail
+    assert "@click=\"setFilter('selected')\"" in detail
+    assert "@click=\"setFilter('favorited')\"" in detail
+    assert "chipClass('all')" in detail
+    assert "chipClass('selected')" in detail
+    assert "chipClass('favorited')" in detail
+    assert "guest.filter_all" in detail
+    assert "guest.filter_selected" in detail
+    assert "guest.filter_favorited" in detail
+
+    # Selection data rides a data-* attribute as JSON (autoescaped, never code).
+    assert "data-selections='{{ selection_map | tojson }}'" in detail
+
+    # Each tile is gated by the client filter.
+    assert "x-show=\"isVisible('{{ img.id }}')\"" in image_grid
+
+    # The component implements the filter API used by the templates.
+    assert "activeFilter" in components_js
+    assert "setFilter(" in components_js
+    assert "isVisible(" in components_js
+    assert "chipClass(" in components_js
+    assert "dataset.selections" in components_js
+
+
+def test_owner_grid_filter_backend_provides_selection_map() -> None:
+    """3rl: the owner detail/grid routes must thread a selection_map into the
+    context so the client filter has data; the helper is owner-scoped via the
+    already owner-checked gallery."""
+    galleries_py = (PROJECT_ROOT / "app" / "frontend" / "galleries.py").read_text()
+
+    assert "async def _load_selection_map(" in galleries_py
+    assert "selection_map" in galleries_py
+    # All three routes that render the grid/detail pass the map.
+    assert galleries_py.count("_load_selection_map(gallery_id, db)") >= 3

@@ -89,11 +89,27 @@ async def _load_images_with_signed_urls(gallery_id: uuid.UUID, db: AsyncSession)
     return image_list
 
 
+async def _load_selection_map(gallery_id: uuid.UUID, db: AsyncSession) -> dict[str, dict[str, bool]]:
+    """Build a compact {image_id: {selected, favorited}} map for the owner grid
+    filter. Only images the model actually marked appear — unmarked images are
+    absent and treated as neither selected nor favorited by the client filter.
+
+    Gallery-wide (magic-link = one model), mirroring the guest viewer's sel_map.
+    """
+    selections = await get_current_selections(gallery_id, db)
+    return {
+        str(s.image_id): {"selected": s.selected, "favorited": s.favorited}
+        for s in selections
+        if s.selected or s.favorited
+    }
+
+
 def _build_context(
     request: Request,
     gallery: Gallery,
     images: list[dict[str, Any]],
     user: User,
+    selection_map: dict[str, dict[str, bool]] | None = None,
     **extra: object,
 ) -> dict[str, Any]:
     """Build common template context for gallery pages."""
@@ -142,6 +158,7 @@ def _build_context(
         "transitions": transitions,
         "has_share_token": gallery.share_token_hash is not None,
         "csrf_token": request.cookies.get("csrf_token", ""),
+        "selection_map": selection_map or {},
     }
     if gallery.share_token:
         ctx["share_url"] = build_share_url(request, gallery.share_token)
@@ -159,7 +176,8 @@ async def gallery_detail(
     """Gallery detail page with image grid, upload, share, and status controls."""
     gallery = await _get_owned_gallery(gallery_id, user, db)
     images = await _load_images_with_signed_urls(gallery_id, db)
-    ctx = _build_context(request, gallery, images, user)
+    selection_map = await _load_selection_map(gallery_id, db)
+    ctx = _build_context(request, gallery, images, user, selection_map=selection_map)
     return templates.TemplateResponse(request, "galleries/detail.html", ctx)
 
 
@@ -229,7 +247,8 @@ async def rename_gallery(
     await db.commit()
     await db.refresh(gallery)
     images = await _load_images_with_signed_urls(gallery_id, db)
-    ctx = _build_context(request, gallery, images, user)
+    selection_map = await _load_selection_map(gallery_id, db)
+    ctx = _build_context(request, gallery, images, user, selection_map=selection_map)
     return templates.TemplateResponse(request, "galleries/detail.html", ctx)
 
 
@@ -243,7 +262,8 @@ async def gallery_images_grid(
     """HTMX partial: refreshed image grid."""
     gallery = await _get_owned_gallery(gallery_id, user, db)
     images = await _load_images_with_signed_urls(gallery_id, db)
-    ctx = _build_context(request, gallery, images, user)
+    selection_map = await _load_selection_map(gallery_id, db)
+    ctx = _build_context(request, gallery, images, user, selection_map=selection_map)
     return templates.TemplateResponse(request, "galleries/_image_grid.html", ctx)
 
 
