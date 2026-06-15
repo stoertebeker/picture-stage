@@ -37,8 +37,12 @@ bd close <id>         # Complete work
    git push
    git status  # MUST show "up to date with origin"
    ```
-   Note: there is NO external Dolt remote. Beads issues + memories sync solely
-   via `.beads/issues.jsonl`, which ships with the git push. Do NOT run
+   Note: there is NO external Dolt remote. Beads **issues** sync via
+   `.beads/issues.jsonl` (run `bd export > .beads/issues.jsonl`, which ships
+   with the git push). **Memories** (`bd remember`) deliberately live ONLY in
+   the local Dolt DB on this machine and are NOT synced to git (captain's
+   decision 2026-06-15) — `bd export` excludes them by default anyway, and
+   `bd prime` loads them into every session regardless. Do NOT run
    `bd dolt push`.
 5. **Clean up** - Clear stashes, prune remote branches
 6. **Verify** - All changes committed AND pushed
@@ -166,7 +170,7 @@ Kapitän hat nach Abend-Wache-Deploy bestätigt: alles live, IP-Erfassung funkti
 2. **`cxs` ist erledigt** (Stand der Vor-Wachen war veraltet): Share-Links eines gesperrten Users resolven nicht mehr — Owner-Status-Check sitzt im zentralen Guest-Resolver. Code-verifiziert, kein offener Punkt mehr.
 3. **Frontend-Workflow:** Für zuverlässige lokale Abnahme **Stack mit frischer `ASSET_VERSION` neu bauen** (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`). **Achtung haiku-Subagenten:** ordnen Browser-Konsolen-Fehler aus stale Tab-/Cache-Context der falschen Seite zu (im ml0-Lauf wurde `limitValue` von `/admin/users` auf der Galerie-Seite gemeldet, wo die Variable gar nicht existiert) — gemeldete Fehler immer gegen den tatsächlich ausgelieferten Code gegenprüfen (`curl … | grep`).
 4. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
-5. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen (Beads syncen nur via git, kein Dolt-Remote).
+5. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen (nur **Issues** syncen via git, kein Dolt-Remote; **Memories** bleiben bewusst lokal — s. „Session Completion").
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
