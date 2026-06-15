@@ -118,12 +118,18 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-13 (Spät-Wache)
-**Wachwechsel-Tag:** `handover-2026-06-13-spaet` (zeigt auf `d81a82a`)
+**Datum:** 2026-06-15
+**Wachwechsel-Tag:** `handover-2026-06-15` (zeigt auf `35eb690`)
 **Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` / `1234qwER!!` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung).
 **Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`. **Lokaler Admin: `testadmin@example.com` / `testpass123`** (NICHT `admin@local.test` — s. Memory `local-dev-admin-login`). **Frontend-Änderungen lokal abnehmen:** Stack mit frischer `ASSET_VERSION` neu bauen (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`), sonst stale Cache. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads .venv/bin/pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
 
-### Erledigt in dieser Wache (2026-06-13 Spät) — Fotograf-Galerie: Lightbox + Auswahl-Export (User-Findings)
+### Erledigt in dieser Wache (2026-06-15) — Fotograf-Galerie: Filter-Chips + Lightbox-Filter, Admin-Limit-Modal
+- **`3rl` (bug P2, `9921ed6` + `2d7e650` Doku, closed):** Owner-Grid Filter-Chips „Alle/Ausgewählt/Favoriten" funktionsfähig. Waren reine `<span>`-Deko → client-seitiger Filter im `galleryManager` (`activeFilter`, `setFilter`, `isVisible`, `chipClass`); Auswahldaten via `data-selections`-JSON am Root (`get_current_selections` jetzt auch im Detail-Context). Tiles per `x-show="isVisible(id)"`.
+- **`ggx` (bug P3, `b04bb21` → `6b20e29` korrigiert + `d449e23` Doku, closed):** `Undefined variable: limitValue` auf `/admin/users`. Ursache: Limit-Modal-`<dialog>` lag direkt im `<tbody>` (invalides HTML → Parser foster-parented es aus der `<tr>`, Alpine-Scope weg). Fix: Modal in die „Limit"-`<td>` verschoben (gültig, bleibt im Row-Scope).
+- **`ml0` (bug P3, `794a2db` + `35eb690` Doku, closed):** Owner-Lightbox (`x4o`) navigierte über ALLE Bilder trotz aktivem Grid-Filter. Neuer `visibleImages`-Getter (`images` gefiltert via `isVisible`); `next/prev/open/preload/currentImage` + Counter/Next-Pfeil/Swipe-Hint (`_owner_lightbox.html`) nutzen die gefilterte Sicht. `lightboxIndex` = Index in `visibleImages`.
+- **Verifikation:** 62 Frontend-Unit-Tests grün; ml0 Playwright-abgenommen am lokalen Stack (Filter Ausgewählt 1/3..3/3, Favoriten 1/2..2/2, Alle 1/24; keine JS-/CSP-Fehler). `cxs` (Share-Sessions gesperrter User) als bereits-umgesetzt **code-verifiziert** (Owner-Status-Check im Guest-Resolver `app/guest/router.py:_resolve_gallery_by_token`). **Alles gepusht (`main` = `origin/main`); 3rl/ggx/ml0 lokal abgenommen, noch NICHT prod-deployed.**
+
+### Erledigt in der Wache davor (2026-06-13 Spät) — Fotograf-Galerie: Lightbox + Auswahl-Export (User-Findings)
 - **`x4o` (bug P2, `d295d28`, closed):** Read-only Bild-Lightbox in der Fotografen-Galerie. Ersetzt das alte Einzelbild-`previewModal` durch eine vollwertige Lightbox (Pfeile, Tastatur ←/→/ESC, Mobile-Swipe, Nachbar-Preload) — **ohne** Auswahl-Controls (Fotograf betrachtet nur). `galleryManager` (components.js) um Lightbox-State erweitert; `data-images`-JSON (nur `ready`-Bilder) am Root; neues Partial `_owner_lightbox.html`; Grid öffnet per UUID (`openLightboxById`). Dateiname XSS-sicher via `x-text`.
 - **`r84` (feature P2, `a7a64da` Backend + `68c998b` Frontend, closed):** Auswahl-Ergebnis-Seite + Lightroom-Export. Neue owner-only Seite `/galleries/{id}/selection` listet alle markierten Bilder (selected ODER favorited) mit Vorschau/Symbol/Dateiname; verlinkt von der Detailseite bei `shared`/`completed`. **„Für Lightroom kopieren"** (Clipboard, komma-separiert) via neuer Alpine-Komponente `copyButton` + Downloads `.txt`/CSV mit `filter=marked`. Backend: Export um `format=txt` (komma-separierte Dateinamen mit Endung, einzeilig — Recherche: Lightroom Classic/Capture One brauchen genau das, NICHT eine pro Zeile) + `filter=marked` erweitert. CHANGELOG (`d81a82a`) + README aktualisiert.
 - **286 Unit + 5 Integration-Tests grün**, ruff+mypy sauber. Alles gepusht (`main` = `origin/main`). **Noch NICHT prod-deployed** (Kapitän deployt + nimmt ab).
@@ -152,16 +158,15 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ### ✅ Betrieblicher Rest — alle Tickets prod-deployed und abgenommen
 Kapitän hat nach Abend-Wache-Deploy bestätigt: alles live, IP-Erfassung funktioniert (CF-Connecting-IP), Abschluss-Mail-Kette (`16l`+`4gr`) prod-verifiziert.
 
-### Offene Tickets — Stand Spät-Wache 2026-06-13
-**Ready-Queue (2):**
-- **`3rl` (bug P2):** Filter-Chips „Alle"/„Ausgewählt"/„Favoriten" in der Fotografen-Galerie sind reine `<span>`-Deko ohne `@click`/Filter-Logik (`detail.html` ~Z. 142–145, Copy aus dem Gast-Viewer). Soll: Owner-Grid nach Auswahl-Status filtern (analog Gast). **Nächster logischer Happen** — die r84-Auswahl-Daten (`get_current_selections`) sind jetzt schon im View verfügbar.
-- **`ggx` (bug P3):** `Alpine Expression Error: Undefined variable: limitValue` auf `/admin/users` (Limit-Modal, Ticket `56k`). **Vorbehalt:** beim Test gegen einen alten Build (`?v=56k-test`) beobachtet → ZUERST gegen frischen Build verifizieren, ob real oder stale.
+### Offene Tickets — Stand 2026-06-15
+**Ready-Queue: LEER.** Alle 218 Beads-Issues geschlossen (`bd stats`: 0 open / 0 ready). Kein aktiver Epic, kein offener Plan. Nächste Arbeit kommt aus neuen User-Findings oder einem neuen Epic.
 
 ### Offene Punkte für die nächste Wache
-1. **Betrieblich:** `cxs` (Share-Sessions gesperrter User invalidieren/prüfen, P3) — einziger bekannter Follow-up aus dem Admin-Epic.
-2. **Frontend-Workflow (verschärft, 2026-06-13):** Für eine zuverlässige lokale Abnahme **Stack mit frischer `ASSET_VERSION` neu bauen** (`docker compose build --build-arg ASSET_VERSION=<neu> app && up -d`). Frontend-State selbst per `browser_evaluate` prüfen (haiku-Subagent meldete stale-Cache mehrfach als Code-Bug — s. lessons-learned). Prod-Abnahme durch den Kapitän (Cloudflare blockt Headless).
-3. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
-4. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen.
+1. **Deploy ausstehend:** `3rl` (Filter-Chips), `ggx` (Limit-Modal), `ml0` (Lightbox-Filter) sind lokal abgenommen, aber **noch nicht prod-deployed**. Kapitän deployt + nimmt gegen Prod ab.
+2. **`cxs` ist erledigt** (Stand der Vor-Wachen war veraltet): Share-Links eines gesperrten Users resolven nicht mehr — Owner-Status-Check sitzt im zentralen Guest-Resolver. Code-verifiziert, kein offener Punkt mehr.
+3. **Frontend-Workflow:** Für zuverlässige lokale Abnahme **Stack mit frischer `ASSET_VERSION` neu bauen** (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`). **Achtung haiku-Subagenten:** ordnen Browser-Konsolen-Fehler aus stale Tab-/Cache-Context der falschen Seite zu (im ml0-Lauf wurde `limitValue` von `/admin/users` auf der Galerie-Seite gemeldet, wo die Variable gar nicht existiert) — gemeldete Fehler immer gegen den tatsächlich ausgelieferten Code gegenprüfen (`curl … | grep`).
+4. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
+5. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen (Beads syncen nur via git, kein Dolt-Remote).
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
