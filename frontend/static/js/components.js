@@ -348,12 +348,22 @@ function galleryManagerComponent() {
 
         // --- Lightbox (read-only) ---
 
+        // The lightbox navigates the *visible* subset, not all images: with a
+        // filter active (selected/favorited), next/prev must skip hidden tiles
+        // (ml0). lightboxIndex is therefore an index into visibleImages, kept
+        // consistent across open/next/prev/preload. Recomputed on access; the
+        // filter chips sit behind the overlay, so the subset is stable while
+        // the lightbox is open.
+        get visibleImages() {
+            return this.images.filter((img) => this.isVisible(img.id));
+        },
+
         get currentImage() {
-            return this.images[this.lightboxIndex] || null;
+            return this.visibleImages[this.lightboxIndex] || null;
         },
 
         openLightboxById(id) {
-            const idx = this.images.findIndex((i) => i.id === id);
+            const idx = this.visibleImages.findIndex((i) => i.id === id);
             if (idx >= 0) this.openLightbox(idx);
         },
 
@@ -369,7 +379,7 @@ function galleryManagerComponent() {
         },
 
         nextImage() {
-            if (this.lightboxIndex < this.images.length - 1) {
+            if (this.lightboxIndex < this.visibleImages.length - 1) {
                 this.lightboxIndex++;
                 this._preloadAdjacent();
             }
@@ -384,9 +394,10 @@ function galleryManagerComponent() {
 
         // Preload the adjacent images so navigation feels instant.
         _preloadAdjacent() {
+            const visible = this.visibleImages;
             const targets = [this.lightboxIndex + 1, this.lightboxIndex - 1];
             targets.forEach((idx) => {
-                const img = this.images[idx];
+                const img = visible[idx];
                 if (!img) return;
                 const url = img.preview_url || img.thumb_md_url;
                 if (!url) return;
