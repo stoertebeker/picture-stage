@@ -137,7 +137,7 @@ class TestShareLinkAutoTransition:
         with open("app/i18n/en.json") as f:
             en = json.load(f)
 
-        assert "aeltere Links" in de["gallery"]["share_active_text"]
+        assert "ältere Links" in de["gallery"]["share_active_text"]
         assert "Older links" in en["gallery"]["share_active_text"]
 
 
