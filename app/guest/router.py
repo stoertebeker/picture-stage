@@ -9,11 +9,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth.passwords import verify_password, verify_token
+from app.auth.passwords import verify_password
 from app.config import settings
 from app.db.models import (
-    LOGIN_ALLOWED_STATUSES,
-    Gallery,
     GalleryStatus,
     Image,
     PreviewVariant,
@@ -24,6 +22,11 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
+from app.guest.service import (
+    check_gallery_accessible,
+    parse_exif_date,
+    resolve_gallery_by_token,
+)
 from app.notifications.service import notify_owner_gallery_completed, send_notification
 from app.security.rate_limit import limiter
 from app.security.signing import sign_url
@@ -66,34 +69,6 @@ class CompleteReviewResponse(BaseModel):
     session_completed: bool
 
 
-async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
-    # Join the owner and require a login-allowed status: a disabled/pending
-    # photographer's share links must stop resolving (cxs). The check lives in
-    # the query so every guest endpoint inherits it via this single resolver,
-    # and an unlock restores access without touching share sessions.
-    result = await db.execute(
-        select(Gallery)
-        .join(User, User.id == Gallery.owner_id)
-        .where(
-            Gallery.share_token_hash.isnot(None),
-            Gallery.status.in_([GalleryStatus.shared, GalleryStatus.completed]),
-            User.status.in_(LOGIN_ALLOWED_STATUSES),
-        )
-    )
-    galleries = result.scalars().all()
-
-    for gallery in galleries:
-        if gallery.share_token_hash and gallery.share_token_salt:
-            if verify_token(token, gallery.share_token_hash, gallery.share_token_salt):
-                return gallery
-    return None
-
-
-def _check_gallery_accessible(gallery: Gallery) -> None:
-    if gallery.expires_at and gallery.expires_at < datetime.now(UTC):
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gallery link has expired")
-
-
 @router.get("/{token}", response_model=GuestGalleryResponse)
 @limiter.limit("20/10minutes")
 async def get_shared_gallery(
@@ -101,11 +76,11 @@ async def get_shared_gallery(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> GuestGalleryResponse:
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     image_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery.id))
     image_count = len(image_count_result.scalars().all())
@@ -141,11 +116,11 @@ async def verify_gallery_password(
     request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> GuestGalleryResponse:
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     if not gallery.password_hash or not verify_password(body.password, gallery.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
@@ -171,18 +146,6 @@ async def verify_gallery_password(
     )
 
 
-def _parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:
-    if not exif:
-        return None
-    raw = exif.get("DateTimeOriginal") or exif.get("DateTime")
-    if not raw or not isinstance(raw, str):
-        return None
-    try:
-        return datetime.strptime(raw, "%Y:%m:%d %H:%M:%S")
-    except ValueError:
-        return None
-
-
 @router.get("/{token}/images", response_model=list[GuestImageResponse])
 async def list_shared_images(
     token: str,
@@ -192,11 +155,11 @@ async def list_shared_images(
     session_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> list[GuestImageResponse]:
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     order_col: Any = Image.sort_order
     if sort_by == ImageSortBy.filename:
@@ -211,7 +174,7 @@ async def list_shared_images(
     if sort_by == ImageSortBy.exif_date:
         far_future = datetime(9999, 1, 1)
         images.sort(
-            key=lambda img: _parse_exif_date(img.exif) or far_future,
+            key=lambda img: parse_exif_date(img.exif) or far_future,
             reverse=(sort_dir == SortDirection.desc),
         )
 
@@ -261,10 +224,10 @@ async def create_selection_event(
     body: SelectionEventCreate,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     image_result = await db.execute(select(Image).where(Image.id == body.image_id, Image.gallery_id == gallery.id))
     if image_result.scalar_one_or_none() is None:
@@ -303,10 +266,10 @@ async def get_selections(
     session_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> SelectionSummary:
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     selections = await get_current_selections(gallery.id, db)
 
@@ -329,10 +292,10 @@ async def complete_review(
     db: AsyncSession = Depends(get_db),
 ) -> CompleteReviewResponse:
     session_id = body.session_id
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     result = await db.execute(
         select(ShareSession).where(ShareSession.id == session_id, ShareSession.gallery_id == gallery.id)

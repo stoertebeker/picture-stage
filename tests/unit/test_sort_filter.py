@@ -76,39 +76,39 @@ class TestImageFilterEnum:
 
 
 class TestExifDateParsing:
-    """Verify _parse_exif_date handles edge cases."""
+    """Verify parse_exif_date handles edge cases."""
 
     def test_valid_exif_date(self) -> None:
-        from app.guest.router import _parse_exif_date
+        from app.guest.service import parse_exif_date
 
-        result = _parse_exif_date({"DateTimeOriginal": "2024:06:15 14:30:00"})
+        result = parse_exif_date({"DateTimeOriginal": "2024:06:15 14:30:00"})
         assert result == datetime(2024, 6, 15, 14, 30, 0)
 
     def test_datetime_fallback(self) -> None:
-        from app.guest.router import _parse_exif_date
+        from app.guest.service import parse_exif_date
 
-        result = _parse_exif_date({"DateTime": "2024:06:15 14:30:00"})
+        result = parse_exif_date({"DateTime": "2024:06:15 14:30:00"})
         assert result == datetime(2024, 6, 15, 14, 30, 0)
 
     def test_none_exif(self) -> None:
-        from app.guest.router import _parse_exif_date
+        from app.guest.service import parse_exif_date
 
-        assert _parse_exif_date(None) is None
+        assert parse_exif_date(None) is None
 
     def test_empty_exif(self) -> None:
-        from app.guest.router import _parse_exif_date
+        from app.guest.service import parse_exif_date
 
-        assert _parse_exif_date({}) is None
+        assert parse_exif_date({}) is None
 
     def test_invalid_format(self) -> None:
-        from app.guest.router import _parse_exif_date
+        from app.guest.service import parse_exif_date
 
-        assert _parse_exif_date({"DateTimeOriginal": "not-a-date"}) is None
+        assert parse_exif_date({"DateTimeOriginal": "not-a-date"}) is None
 
     def test_non_string_value(self) -> None:
-        from app.guest.router import _parse_exif_date
+        from app.guest.service import parse_exif_date
 
-        assert _parse_exif_date({"DateTimeOriginal": 12345}) is None
+        assert parse_exif_date({"DateTimeOriginal": 12345}) is None
 
 
 class TestEndpointStructure:
@@ -151,7 +151,7 @@ class TestEndpointStructure:
     def test_exif_sort_uses_python_sort(self) -> None:
         with open("app/guest/router.py") as f:
             source = f.read()
-        assert "_parse_exif_date" in source
+        assert "parse_exif_date" in source
         assert "images.sort" in source
 
     def test_defaults_are_sort_order_asc_all(self) -> None:

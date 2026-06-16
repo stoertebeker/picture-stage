@@ -2,7 +2,7 @@
 
 import logging
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
@@ -11,19 +11,23 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth.passwords import verify_password, verify_token
+from app.auth.passwords import verify_password
 from app.db.models import (
-    LOGIN_ALLOWED_STATUSES,
     Gallery,
     GalleryStatus,
     Image,
     PreviewVariant,
     ShareSession,
-    User,
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
+from app.guest.service import (
+    check_gallery_accessible,
+    is_gallery_expired,
+    parse_exif_date,
+    resolve_gallery_by_token,
+)
 from app.security.rate_limit import limiter
 from app.security.signing import sign_url
 from app.selections.service import get_current_selections
@@ -31,55 +35,6 @@ from app.selections.service import get_current_selections
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/g", tags=["frontend-guest"])
-
-
-async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
-    """Resolve a share token to a Gallery, checking hash against all shared galleries.
-
-    Joins the owner and requires a login-allowed status so a disabled/pending
-    photographer's share links stop resolving (cxs) — mirrors the API resolver
-    in app/guest/router.py.
-    """
-    result = await db.execute(
-        select(Gallery)
-        .join(User, User.id == Gallery.owner_id)
-        .where(
-            Gallery.share_token_hash.isnot(None),
-            Gallery.status.in_([GalleryStatus.shared, GalleryStatus.completed]),
-            User.status.in_(LOGIN_ALLOWED_STATUSES),
-        )
-    )
-    galleries = result.scalars().all()
-
-    for gallery in galleries:
-        if gallery.share_token_hash and gallery.share_token_salt:
-            if verify_token(token, gallery.share_token_hash, gallery.share_token_salt):
-                return gallery
-    return None
-
-
-def _is_gallery_expired(gallery: Gallery) -> bool:
-    """Check if gallery link has expired."""
-    return bool(gallery.expires_at and gallery.expires_at < datetime.now(UTC))
-
-
-def _check_gallery_accessible(gallery: Gallery) -> None:
-    """Raise 410 if gallery link has expired (used by non-HTML endpoints)."""
-    if _is_gallery_expired(gallery):
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gallery link has expired")
-
-
-def _parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:
-    """Parse EXIF date from image metadata."""
-    if not exif:
-        return None
-    raw = exif.get("DateTimeOriginal") or exif.get("DateTime")
-    if not raw or not isinstance(raw, str):
-        return None
-    try:
-        return datetime.strptime(raw, "%Y:%m:%d %H:%M:%S")
-    except ValueError:
-        return None
 
 
 # Number of grid items rendered per page. The full image list is still sent to
@@ -109,7 +64,7 @@ async def _load_images(
     if sort_by == ImageSortBy.exif_date:
         far_future = datetime(9999, 1, 1)
         images.sort(
-            key=lambda img: _parse_exif_date(img.exif) or far_future,
+            key=lambda img: parse_exif_date(img.exif) or far_future,
             reverse=(sort_dir == SortDirection.desc),
         )
 
@@ -185,11 +140,11 @@ async def guest_viewer(
     if not _wants_html(request):
         raise HTTPException(status_code=status.HTTP_406_NOT_ACCEPTABLE, detail="Use JSON API")
 
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    if _is_gallery_expired(gallery):
+    if is_gallery_expired(gallery):
         return templates.TemplateResponse(
             request,
             "guest/expired.html",
@@ -291,11 +246,11 @@ async def guest_gallery_images(
     sentinel): a sort/filter refresh (offset=0, swaps #image-grid) and progressive
     loading (offset>0, the sentinel replaces itself with the next page) — am9.
     """
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     images = await _load_images(gallery, db, sort_by, sort_dir, filter)
     total = len(images)
@@ -339,11 +294,11 @@ async def guest_verify_password(
     the page without them). Failure re-renders the gate with an error alert,
     mirroring the login form pattern (full page, 401).
     """
-    gallery = await _resolve_gallery_by_token(token, db)
+    gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-    _check_gallery_accessible(gallery)
+    check_gallery_accessible(gallery)
 
     if not gallery.password_hash or not verify_password(password, gallery.password_hash):
         return _render_password_gate(
