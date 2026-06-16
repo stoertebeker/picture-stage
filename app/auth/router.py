@@ -19,6 +19,13 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
+# Pre-computed bcrypt hash (rounds=12, same cost as a real password). Used to
+# equalize login timing when the email doesn't exist: both handlers always run
+# exactly one bcrypt verify, so an attacker can't distinguish a missing account
+# from a wrong password by response time (account-enumeration guard, mirrors the
+# signup path / picture-stage-42q).
+_DUMMY_PASSWORD_HASH = hash_password("timing-equalization-decoy")
+
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
@@ -95,7 +102,11 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     result = await db.execute(select(User).where(User.email == body.email))
     user = result.scalar_one_or_none()
 
-    if user is None or not verify_password(body.password, user.password_hash):
+    # Always run one bcrypt verify (against a dummy hash when the user is missing)
+    # so login timing doesn't reveal whether the account exists.
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_valid = verify_password(body.password, password_hash)
+    if user is None or not password_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     if user.status not in LOGIN_ALLOWED_STATUSES:
@@ -119,7 +130,11 @@ async def login_form(request: Request, db: AsyncSession = Depends(get_db)) -> Re
     result = await db.execute(select(User).where(User.email == str(email)))
     user = result.scalar_one_or_none()
 
-    if user is None or not verify_password(str(password), user.password_hash):
+    # Always run one bcrypt verify (against a dummy hash when the user is missing)
+    # so login timing doesn't reveal whether the account exists.
+    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
+    password_valid = verify_password(str(password), password_hash)
+    if user is None or not password_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
     if user.status not in LOGIN_ALLOWED_STATUSES:
