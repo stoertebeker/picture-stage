@@ -8,20 +8,28 @@ owner-status (cxs) and expiry security checks in exactly one place, so a future
 fix can no longer miss a copy.
 """
 
+import uuid
 from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth.passwords import verify_token
 from app.db.models import (
     LOGIN_ALLOWED_STATUSES,
     Gallery,
     GalleryStatus,
+    Image,
+    PreviewVariant,
     User,
 )
+from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
+from app.security.signing import sign_url
+from app.selections.schemas import SelectionState
+from app.selections.service import get_current_selections
 
 
 async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
@@ -72,3 +80,65 @@ def parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:
         return datetime.strptime(raw, "%Y:%m:%d %H:%M:%S")
     except ValueError:
         return None
+
+
+async def load_sorted_filtered_images(
+    gallery: Gallery,
+    db: AsyncSession,
+    sort_by: ImageSortBy = ImageSortBy.sort_order,
+    sort_dir: SortDirection = SortDirection.asc,
+    filter_mode: ImageFilter = ImageFilter.all,
+) -> tuple[list[Image], dict[uuid.UUID, SelectionState]]:
+    """Load a gallery's images, sorted and filtered, plus the selection map.
+
+    Returns the (sorted, filtered) Image rows and a gallery-wide selection map
+    (image_id -> SelectionState) so each caller can serialise to its own shape
+    (the JSON API drops the selection fields; the HTML viewer keeps them). The
+    selections are always loaded — even for filter=all — so the map is available
+    to both callers from a single query.
+    """
+    order_col: Any = Image.sort_order
+    if sort_by == ImageSortBy.filename:
+        order_col = Image.filename
+    order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
+
+    result = await db.execute(
+        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)).order_by(order_clause)
+    )
+    images = list(result.scalars().all())
+
+    if sort_by == ImageSortBy.exif_date:
+        far_future = datetime(9999, 1, 1)
+        images.sort(
+            key=lambda img: parse_exif_date(img.exif) or far_future,
+            reverse=(sort_dir == SortDirection.desc),
+        )
+
+    selections = await get_current_selections(gallery.id, db)
+    sel_map: dict[uuid.UUID, SelectionState] = {s.image_id: s for s in selections}
+
+    if filter_mode == ImageFilter.selected:
+        images = [img for img in images if (s := sel_map.get(img.id)) and s.selected]
+    elif filter_mode == ImageFilter.favorited:
+        images = [img for img in images if (s := sel_map.get(img.id)) and s.favorited]
+    elif filter_mode == ImageFilter.unrated:
+        images = [img for img in images if not (s := sel_map.get(img.id)) or (not s.selected and not s.favorited)]
+
+    return images, sel_map
+
+
+def sign_preview_urls(img: Image) -> dict[str, str]:
+    """Build signed thumbnail/preview URLs for an image's preview variants.
+
+    Thumbnails get a 1h TTL, the larger preview a 15min TTL (matching the
+    project's signed-URL policy). Missing variants are simply absent from the map.
+    """
+    preview_urls: dict[str, str] = {}
+    for preview in img.previews:
+        if preview.variant == PreviewVariant.thumb_sm:
+            preview_urls["thumb_sm"] = sign_url(f"/media/{preview.storage_key}", expires_in=3600)
+        elif preview.variant == PreviewVariant.thumb_md:
+            preview_urls["thumb_md"] = sign_url(f"/media/{preview.storage_key}", expires_in=3600)
+        elif preview.variant == PreviewVariant.preview:
+            preview_urls["preview"] = sign_url(f"/media/{preview.storage_key}", expires_in=900)
+    return preview_urls

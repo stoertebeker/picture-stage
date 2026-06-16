@@ -2,21 +2,16 @@
 
 import logging
 import uuid
-from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.auth.passwords import verify_password
 from app.db.models import (
     Gallery,
     GalleryStatus,
-    Image,
-    PreviewVariant,
     ShareSession,
 )
 from app.db.session import get_db
@@ -25,12 +20,11 @@ from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
     is_gallery_expired,
-    parse_exif_date,
+    load_sorted_filtered_images,
     resolve_gallery_by_token,
+    sign_preview_urls,
 )
 from app.security.rate_limit import limiter
-from app.security.signing import sign_url
-from app.selections.service import get_current_selections
 
 logger = logging.getLogger(__name__)
 
@@ -50,54 +44,17 @@ async def _load_images(
     sort_dir: SortDirection = SortDirection.asc,
     filter_mode: ImageFilter = ImageFilter.all,
 ) -> list[dict[str, Any]]:
-    """Load images for a gallery with sorting, filtering, and signed URLs."""
-    order_col: Any = Image.sort_order
-    if sort_by == ImageSortBy.filename:
-        order_col = Image.filename
-    order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
+    """Load images for a gallery with sorting, filtering, and signed URLs.
 
-    result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)).order_by(order_clause)
-    )
-    images = list(result.scalars().all())
-
-    if sort_by == ImageSortBy.exif_date:
-        far_future = datetime(9999, 1, 1)
-        images.sort(
-            key=lambda img: parse_exif_date(img.exif) or far_future,
-            reverse=(sort_dir == SortDirection.desc),
-        )
-
-    # Build selection map for filtering — gallery-wide (magic-link = one model)
-    selections = await get_current_selections(gallery.id, db)
-    sel_map: dict[uuid.UUID, dict[str, Any]] = {
-        s.image_id: {"selected": s.selected, "favorited": s.favorited, "comment": s.comment} for s in selections
-    }
-
-    if filter_mode != ImageFilter.all:
-        if filter_mode == ImageFilter.selected:
-            images = [img for img in images if sel_map.get(img.id, {}).get("selected")]
-        elif filter_mode == ImageFilter.favorited:
-            images = [img for img in images if sel_map.get(img.id, {}).get("favorited")]
-        elif filter_mode == ImageFilter.unrated:
-            images = [
-                img
-                for img in images
-                if not sel_map.get(img.id, {}).get("selected") and not sel_map.get(img.id, {}).get("favorited")
-            ]
+    Thin adapter over the shared loader (d7z): keeps the dict shape the templates
+    expect (incl. per-image selection state for the lightbox/grid).
+    """
+    images, sel_map = await load_sorted_filtered_images(gallery, db, sort_by, sort_dir, filter_mode)
 
     image_list = []
     for img in images:
-        preview_urls: dict[str, str] = {}
-        for preview in img.previews:
-            if preview.variant == PreviewVariant.thumb_sm:
-                preview_urls["thumb_sm"] = sign_url(f"/media/{preview.storage_key}", expires_in=3600)
-            elif preview.variant == PreviewVariant.thumb_md:
-                preview_urls["thumb_md"] = sign_url(f"/media/{preview.storage_key}", expires_in=3600)
-            elif preview.variant == PreviewVariant.preview:
-                preview_urls["preview"] = sign_url(f"/media/{preview.storage_key}", expires_in=900)
-
-        sel = sel_map.get(img.id, {"selected": False, "favorited": False, "comment": None})
+        preview_urls = sign_preview_urls(img)
+        sel = sel_map.get(img.id)
         image_list.append(
             {
                 "id": str(img.id),
@@ -106,9 +63,9 @@ async def _load_images(
                 "thumb_sm_url": preview_urls.get("thumb_sm", ""),
                 "thumb_md_url": preview_urls.get("thumb_md", ""),
                 "preview_url": preview_urls.get("preview", ""),
-                "selected": sel.get("selected", False),
-                "favorited": sel.get("favorited", False),
-                "comment": sel.get("comment"),
+                "selected": sel.selected if sel else False,
+                "favorited": sel.favorited if sel else False,
+                "comment": sel.comment if sel else None,
             }
         )
 

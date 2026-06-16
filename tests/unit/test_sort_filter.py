@@ -149,7 +149,8 @@ class TestEndpointStructure:
         assert "get_current_selections" in source
 
     def test_exif_sort_uses_python_sort(self) -> None:
-        with open("app/guest/router.py") as f:
+        # Sorting/filtering now lives in the shared loader (d7z).
+        with open("app/guest/service.py") as f:
             source = f.read()
         assert "parse_exif_date" in source
         assert "images.sort" in source

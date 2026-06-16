@@ -1,20 +1,17 @@
 import logging
 import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
 from app.auth.passwords import verify_password
 from app.config import settings
 from app.db.models import (
     GalleryStatus,
     Image,
-    PreviewVariant,
     SelectionAction,
     SelectionEvent,
     ShareSession,
@@ -24,12 +21,12 @@ from app.db.session import get_db
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
-    parse_exif_date,
+    load_sorted_filtered_images,
     resolve_gallery_by_token,
+    sign_preview_urls,
 )
 from app.notifications.service import notify_owner_gallery_completed, send_notification
 from app.security.rate_limit import limiter
-from app.security.signing import sign_url
 from app.selections.schemas import SelectionEventCreate, SelectionSummary
 from app.selections.service import get_current_selections
 
@@ -161,49 +158,13 @@ async def list_shared_images(
 
     check_gallery_accessible(gallery)
 
-    order_col: Any = Image.sort_order
-    if sort_by == ImageSortBy.filename:
-        order_col = Image.filename
-    order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
-
-    result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)).order_by(order_clause)
-    )
-    images = list(result.scalars().all())
-
-    if sort_by == ImageSortBy.exif_date:
-        far_future = datetime(9999, 1, 1)
-        images.sort(
-            key=lambda img: parse_exif_date(img.exif) or far_future,
-            reverse=(sort_dir == SortDirection.desc),
-        )
-
-    if filter != ImageFilter.all:
-        selections = await get_current_selections(gallery.id, db)
-        sel_map = {s.image_id: s for s in selections}
-
-        if filter == ImageFilter.selected:
-            images = [img for img in images if sel_map.get(img.id) and sel_map[img.id].selected]
-        elif filter == ImageFilter.favorited:
-            images = [img for img in images if sel_map.get(img.id) and sel_map[img.id].favorited]
-        elif filter == ImageFilter.unrated:
-            images = [
-                img
-                for img in images
-                if not sel_map.get(img.id) or (not sel_map[img.id].selected and not sel_map[img.id].favorited)
-            ]
+    # Selection map is unused here (the JSON API omits selection fields), but the
+    # shared loader always materialises it from a single query (d7z).
+    images, _sel_map = await load_sorted_filtered_images(gallery, db, sort_by, sort_dir, filter)
 
     guest_images = []
     for img in images:
-        preview_urls: dict[str, str] = {}
-        for preview in img.previews:
-            if preview.variant == PreviewVariant.thumb_sm:
-                preview_urls["thumb_sm"] = sign_url(f"/media/{preview.storage_key}", expires_in=3600)
-            elif preview.variant == PreviewVariant.thumb_md:
-                preview_urls["thumb_md"] = sign_url(f"/media/{preview.storage_key}", expires_in=3600)
-            elif preview.variant == PreviewVariant.preview:
-                preview_urls["preview"] = sign_url(f"/media/{preview.storage_key}", expires_in=900)
-
+        preview_urls = sign_preview_urls(img)
         guest_images.append(
             GuestImageResponse(
                 id=img.id,
