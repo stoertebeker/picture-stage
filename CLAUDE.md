@@ -122,12 +122,29 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-15
-**Wachwechsel-Tag:** `handover-2026-06-15` (zeigt auf `35eb690`)
+**Datum:** 2026-06-16
+**Wachwechsel-Tag:** `handover-2026-06-16` (neuester Wachwechsel dieser Wache)
 **Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung). Passwort NICHT im Repo — lokal in bd-Memory bzw. Passwort-Manager.
 **Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`. **Lokaler Admin: `testadmin@example.com` / `testpass123`** (NICHT `admin@local.test` — s. Memory `local-dev-admin-login`). **Frontend-Änderungen lokal abnehmen:** Stack mit frischer `ASSET_VERSION` neu bauen (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`), sonst stale Cache. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads .venv/bin/pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
 
-### Erledigt in dieser Wache (2026-06-15) — Fotograf-Galerie: Filter-Chips + Lightbox-Filter, Admin-Limit-Modal
+### Erledigt in dieser Wache (2026-06-16) — Cleanup + 2 User-Findings + 2 externe Security-Reviews + 3 P2-Härtungen
+
+**Cleanup & User-Findings:**
+- **Cleanup-Audit:** loses Treibgut entsorgt (18 Root-Screenshots, 93 Playwright-MCP-Artefakte, `/tmp`-Reste) + **1 Sicherheitsfund** (JWT-Cookie-Jars in `/tmp`). 2 User-Findings aus `user-findings.txt` vor dem Löschen in Tickets überführt.
+- **`vre` (bug P2, `fe74e38`, closed):** `de.json` orthografisch korrigiert (ASCII-Ersatz `ae/oe/ue` → echte Umlaute, 14 Werte) + komplett englisch gebliebenen `auth.*`-Block übersetzt + `nav.logout`→„Abmelden". Etablierte Begriffe (Dashboard/Dark/Light/Picture-Stage) bewusst belassen.
+- **`pc6` (bug P2, `1f35793`, closed):** Galerie-Abschluss-Mail verlinkte auf den API-Endpunkt (`/api/v1/galleries/dashboard`, JWT-Bearer nötig → „Not authenticated" im Browser). Jetzt Frontend-Galerie `{app_url}/galleries/{id}`; Payload-Key `dashboard_url`→`gallery_url`, Wording „Zur Galerie".
+
+**2 externe LLM-Security-Reports geprüft (Finding-für-Finding gegen echten Code) → 10 Tickets:**
+- **miniax-report:** kein echtes „Kritisch"; K3.3 (Worker existiert) + H2-Beispiel widerlegt. → `0y7` (Login-Timing), `fbq` (Upload-Limits), `6bs` (Login-CSRF), `ccx` (Image-Bomb).
+- **qwen-report:** 1 widerlegt (1.2 Admin-PW-Längencheck existiert in API+Web), 3 Dubletten. → `8ox` (Cookie-Security 1.5+1.1), `d7z` (Guest-Entdopplung 2.1), `bkw` (DRY 2.2+3.2), `e5n` (func.count 2.3), `ath` (Expiry 3.3), `1gd` (Betrieb 4.4+4.5). Beide Report-Dateien nach Auswertung gelöscht.
+
+**3 P2-Security-Härtungen umgesetzt:**
+- **`0y7` (`60ed6b1`, closed):** Login-Timing-Angleichung gegen Account-Enumeration — immer ein bcrypt-Verify (Dummy-Hash bei fehlendem User), konsistent zu Signup-Schutz (`42q`).
+- **`6bs` (`a0cedd8`, closed):** Toten CSRF-exempten `POST /api/v1/auth/login-form` entfernt (Login-CSRF-Lücke + Duplikat von `login_submit`). Timing-Angleichung in `verify_password_or_dummy` (`app/auth/passwords.py`) zentralisiert → beide verbliebenen Login-Pfade (JSON-API `login` + UI `login_submit`); schloss eine in `0y7` übersehene Lücke in `login_submit`.
+- **`fbq` (`d655a2f`, closed):** Upload-Größen-/Anzahl-Limit für beide Upload-Pfade. Guard `app/images/upload_limits.py` (`MAX_UPLOAD_FILE_MB`=50, `MAX_FILES_PER_UPLOAD`=500, `0`=off; pro Request aus settings → `.env`+Neustart gilt für ALLE Uploads inkl. bestehender Galerien). Follow-up `m4ct` (ASGI-Body-Limit).
+- **Verifikation:** 300 Unit-Tests grün, ruff+mypy sauber, CHANGELOG (Security) + `.env.example` aktuell. Alles gepusht (`main` = `origin/main`). Backend-Härtungen — Kapitän deployt/nimmt ab.
+
+### Erledigt in der Wache davor (2026-06-15) — Fotograf-Galerie: Filter-Chips + Lightbox-Filter, Admin-Limit-Modal
 - **`3rl` (bug P2, `9921ed6` + `2d7e650` Doku, closed):** Owner-Grid Filter-Chips „Alle/Ausgewählt/Favoriten" funktionsfähig. Waren reine `<span>`-Deko → client-seitiger Filter im `galleryManager` (`activeFilter`, `setFilter`, `isVisible`, `chipClass`); Auswahldaten via `data-selections`-JSON am Root (`get_current_selections` jetzt auch im Detail-Context). Tiles per `x-show="isVisible(id)"`.
 - **`ggx` (bug P3, `b04bb21` → `6b20e29` korrigiert + `d449e23` Doku, closed):** `Undefined variable: limitValue` auf `/admin/users`. Ursache: Limit-Modal-`<dialog>` lag direkt im `<tbody>` (invalides HTML → Parser foster-parented es aus der `<tr>`, Alpine-Scope weg). Fix: Modal in die „Limit"-`<td>` verschoben (gültig, bleibt im Row-Scope).
 - **`ml0` (bug P3, `794a2db` + `35eb690` Doku, closed):** Owner-Lightbox (`x4o`) navigierte über ALLE Bilder trotz aktivem Grid-Filter. Neuer `visibleImages`-Getter (`images` gefiltert via `isVisible`); `next/prev/open/preload/currentImage` + Counter/Next-Pfeil/Swipe-Hint (`_owner_lightbox.html`) nutzen die gefilterte Sicht. `lightboxIndex` = Index in `visibleImages`.
@@ -162,13 +179,16 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 ### ✅ Betrieblicher Rest — alle Tickets prod-deployed und abgenommen
 Kapitän hat nach Abend-Wache-Deploy bestätigt: alles live, IP-Erfassung funktioniert (CF-Connecting-IP), Abschluss-Mail-Kette (`16l`+`4gr`) prod-verifiziert.
 
-### Offene Tickets — Stand 2026-06-15
-**Ready-Queue: LEER.** Alle 218 Beads-Issues geschlossen (`bd stats`: 0 open / 0 ready). Kein aktiver Epic, kein offener Plan. Nächste Arbeit kommt aus neuen User-Findings oder einem neuen Epic.
+### Offene Tickets — Stand 2026-06-16
+**Ready-Queue: 8 offen** (alle aus den 2 externen Security-Reviews + 1 Follow-up; **kein aktiver Epic/Plan**). `bd ready`:
+- **P2:** `d7z` (Guest-Logik entdoppeln — größter Brocken/Refactoring, Security-Wartbarkeit) · `8ox` (Cookie-Security: Secure-Flag/HSTS hinter Proxy + Logout-Löschung — **braucht Kapitän-Klärung**, s. Offene Punkte #1)
+- **P3:** `m4ct` (ASGI-Body-Limit, Follow-up zu `fbq`) · `1gd` (Betrieb: Migration-Race + `selection_events`-Wachstum) · `ath` (Expiry-Vergangenheits-Check) · `e5n` (`func.count()` statt `len(all())`, 5 Stellen) · `bkw` (DRY: `purge_gallery` + `ALLOWED_TRANSITIONS`) · `ccx` (Image-Bomb `MAX_IMAGE_PIXELS`)
+- Plus `9q3.6` deferred (Tastatur-Shortcuts).
 
 ### Offene Punkte für die nächste Wache
-1. **Deploy ausstehend:** `3rl` (Filter-Chips), `ggx` (Limit-Modal), `ml0` (Lightbox-Filter) sind lokal abgenommen, aber **noch nicht prod-deployed**. Kapitän deployt + nimmt gegen Prod ab.
-2. **`cxs` ist erledigt** (Stand der Vor-Wachen war veraltet): Share-Links eines gesperrten Users resolven nicht mehr — Owner-Status-Check sitzt im zentralen Guest-Resolver. Code-verifiziert, kein offener Punkt mehr.
-3. **Frontend-Workflow:** Für zuverlässige lokale Abnahme **Stack mit frischer `ASSET_VERSION` neu bauen** (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`). **Achtung haiku-Subagenten:** ordnen Browser-Konsolen-Fehler aus stale Tab-/Cache-Context der falschen Seite zu (im ml0-Lauf wurde `limitValue` von `/admin/users` auf der Galerie-Seite gemeldet, wo die Variable gar nicht existiert) — gemeldete Fehler immer gegen den tatsächlich ausgelieferten Code gegenprüfen (`curl … | grep`).
+1. **`8ox` braucht Kapitän-Input vor Umsetzung:** Läuft Prod definitiv hinter Cloudflare/Caddy, und ist der App-Container **ausschließlich** über den Proxy erreichbar? Davon hängt ab, ob `trusted_hosts=["*"]` (bzw. uvicorn `--forwarded-allow-ips`) vertretbar ist. Beleg, dass der Container HTTP sieht: der `0hp`/`build_share_url`-Workaround existiert genau deswegen — derselbe Effekt lässt aktuell auch `secure`-Cookie-Flag + HSTS-Header in Prod ausfallen.
+2. **Deploy-Stand:** Die 5 Fixes dieser Wache (`vre`/`pc6`/`0y7`/`6bs`/`fbq`) + die 3 aus 2026-06-15 (`3rl`/`ggx`/`ml0`) sind gepusht, aber Kapitän deployt + nimmt gegen Prod ab. `0y7`/`6bs`/`fbq` sind Backend-Härtungen (kein visueller Test nötig); `vre`/`pc6` betreffen Texte/Mail.
+3. **Externe Security-Reports immer gegen echten Code prüfen** (s. neue Lesson in `docs/lessons-learned.md`) — beide Reports überschätzten Schweregrade und analysierten teils veraltete/falsche Pfade.
 4. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
 5. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen (nur **Issues** syncen via git, kein Dolt-Remote; **Memories** bleiben bewusst lokal — s. „Session Completion").
 
