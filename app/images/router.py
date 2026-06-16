@@ -19,6 +19,7 @@ from app.images.processing import (
     get_image_dimensions,
 )
 from app.images.schemas import BulkDeleteRequest, BulkDeleteResponse, ImageResponse, ImageUploadResponse
+from app.images.upload_limits import enforce_file_count, read_within_limit
 from app.security.signing import verify_signed_url
 from app.storage.base import StorageBackend, storage_key
 from app.storage.dependencies import get_storage
@@ -63,6 +64,8 @@ async def upload_images(
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
+    enforce_file_count(len(files))
+
     existing_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id))
     sort_offset = len(existing_count_result.scalars().all())
 
@@ -78,7 +81,7 @@ async def upload_images(
                 detail=f"Unsupported file type: {file.content_type}",
             )
 
-        file_data = await file.read()
+        file_data = await read_within_limit(file)
         file_buf = io.BytesIO(file_data)
 
         sha256 = compute_sha256(file_buf)

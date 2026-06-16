@@ -64,6 +64,14 @@ class Settings(BaseSettings):
     # simply cannot create more until they drop below it. 0 = unlimited.
     max_galleries_per_user: int = 5
 
+    # Upload input limits (picture-stage-fbq). Both are read per request from
+    # settings, so changing them in .env and restarting the container applies to
+    # ALL uploads — including existing galleries — because the limit is enforced
+    # at upload time, not stored per gallery. Per-file size is the primary guard
+    # against OOM; the file-count cap bounds a single multipart request. 0 = off.
+    max_upload_file_mb: int = 50
+    max_files_per_upload: int = 500
+
     ratelimit_enabled: bool = True
 
     captcha_enabled: bool = True

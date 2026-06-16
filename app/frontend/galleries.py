@@ -292,6 +292,7 @@ async def upload_images(
         extract_exif,
         get_image_dimensions,
     )
+    from app.images.upload_limits import enforce_file_count, read_within_limit
     from app.storage.base import storage_key
 
     gallery = await _get_owned_gallery(gallery_id, user, db)
@@ -309,6 +310,8 @@ async def upload_images(
     if not files:
         logger.warning("Upload to gallery %s: no usable files in form", gallery_id)
         raise HTTPException(status_code=422, detail="No files provided")
+
+    enforce_file_count(len(files))
 
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
 
@@ -330,7 +333,7 @@ async def upload_images(
                 detail=f"Unsupported file type: {file.content_type}",
             )
 
-        file_data = await file.read()
+        file_data = await read_within_limit(file)
         file_buf = io.BytesIO(file_data)
 
         sha256 = compute_sha256(file_buf)
