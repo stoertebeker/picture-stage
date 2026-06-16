@@ -176,6 +176,7 @@
     "expiry_remove": "Ablaufdatum entfernen",
     "expiry_current": "Aktuell: {date} Uhr",
     "expiry_none": "Kein Ablaufdatum gesetzt – die Galerie ist unbegrenzt zugänglich.",
+    "expiry_must_be_future": "Das Ablaufdatum muss in der Zukunft liegen.",
     "watermark_heading": "Wasserzeichen",
     "watermark_hint": "Freitext-Wasserzeichen für Vorschauen, pro Galerie einstellbar.",
     "watermark_text_label": "Wasserzeichen-Text",

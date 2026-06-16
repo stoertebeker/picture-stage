@@ -176,6 +176,7 @@
     "expiry_remove": "Remove expiry date",
     "expiry_current": "Current: {date}",
     "expiry_none": "No expiry date set — the gallery is accessible indefinitely.",
+    "expiry_must_be_future": "The expiry date must be in the future.",
     "watermark_heading": "Watermark",
     "watermark_hint": "Free-text preview watermark, configurable per gallery.",
     "watermark_text_label": "Watermark text",

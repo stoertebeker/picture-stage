@@ -1,9 +1,10 @@
 """Frontend gallery management: detail, upload, share, status transitions, expiry."""
 
+import json
 import logging
 import secrets
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
@@ -31,6 +32,7 @@ from app.db.session import get_db
 from app.frontend.deps import templates
 from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
+from app.i18n import t
 from app.security.signing import sign_url
 from app.selections.service import get_current_selections
 from app.storage.base import StorageBackend
@@ -47,6 +49,27 @@ ALLOWED_TRANSITIONS: dict[GalleryStatus, set[GalleryStatus]] = {
     GalleryStatus.completed: {GalleryStatus.archived, GalleryStatus.shared},
     GalleryStatus.archived: {GalleryStatus.shared},
 }
+
+
+class _ExpiryInPastError(Exception):
+    """Raised when a gallery expiry date is set to a past or current instant."""
+
+
+def _validate_future_expiry(raw: str) -> datetime:
+    """Parse an ISO expiry timestamp and reject non-future values.
+
+    The HTML ``datetime-local`` input yields a naive ISO string; we treat a
+    naive value as UTC (matching how it is persisted into the ``timezone=True``
+    column) so the comparison against ``now`` never mixes aware and naive
+    datetimes. Raises ``ValueError`` on malformed input and ``_ExpiryInPastError``
+    when the instant is not strictly in the future.
+    """
+    parsed = datetime.fromisoformat(raw)
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=UTC)
+    if parsed <= datetime.now(UTC):
+        raise _ExpiryInPastError
+    return parsed
 
 
 async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
@@ -487,9 +510,18 @@ async def set_gallery_expiry(
         expires_at_raw = str(form.get("expires_at", "")).strip()
         if expires_at_raw:
             try:
-                gallery.expires_at = datetime.fromisoformat(expires_at_raw)
+                gallery.expires_at = _validate_future_expiry(expires_at_raw)
             except ValueError as err:
-                raise HTTPException(status_code=422, detail="Ungueltiges Datumsformat") from err
+                raise HTTPException(status_code=422, detail="Ungültiges Datumsformat") from err
+            except _ExpiryInPastError:
+                # Reject silently-self-killing dates with an error toast and no
+                # swap (an HTTPException would not surface — htmx ignores 4xx).
+                locale = getattr(request.state, "locale", "de")
+                resp = HTMLResponse("")
+                message = t("gallery.expiry_must_be_future", locale)
+                resp.headers["HX-Trigger"] = json.dumps({"showToast": {"kind": "error", "message": message}})
+                resp.headers["HX-Reswap"] = "none"
+                return resp
         # If empty string and no clear flag, do nothing (just re-render)
 
     await db.commit()
