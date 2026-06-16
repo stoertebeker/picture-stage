@@ -10,6 +10,7 @@ from app.auth.passwords import hash_password, hash_token, verify_password_or_dum
 from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRequest, SignupResponse, UserResponse
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.auth.utils import get_client_ip
+from app.config import settings
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.notifications.service import notify_admins_signup, send_verification_email
@@ -112,7 +113,9 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 @router.post("/logout")
 async def logout() -> Response:
     response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie(key="session", path="/")
+    # Match the set_cookie attributes so the deletion is honoured across browsers
+    # (picture-stage-8ox); a mismatched Secure/SameSite can leave the cookie alive.
+    response.delete_cookie(key="session", path="/", secure=settings.cookie_secure, samesite="lax", httponly=True)
     return response
 
 

@@ -11,6 +11,7 @@ from app.auth.dependencies import get_user_from_cookie
 from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy, verify_token
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.auth.utils import get_client_ip
+from app.config import settings
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.frontend.deps import templates
@@ -91,7 +92,7 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
         key="session",
         value=access_token,
         httponly=True,
-        secure=request.url.scheme == "https",
+        secure=settings.cookie_secure,
         samesite="lax",
         max_age=86400,
         path="/",
@@ -172,7 +173,9 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
 @router.post("/logout")
 async def logout_page(request: Request) -> RedirectResponse:
     response = RedirectResponse(url="/login", status_code=303)
-    response.delete_cookie(key="session", path="/")
+    # Match the set_cookie attributes so the deletion is honoured across browsers
+    # (picture-stage-8ox); a mismatched Secure/SameSite can leave the cookie alive.
+    response.delete_cookie(key="session", path="/", secure=settings.cookie_secure, samesite="lax", httponly=True)
     return response
 
 

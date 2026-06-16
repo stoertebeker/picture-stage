@@ -6,6 +6,8 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
+from app.config import settings
+
 
 class CSRFMiddleware(BaseHTTPMiddleware):
     """Double-submit cookie CSRF protection.
@@ -32,7 +34,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     key="csrf_token",
                     value=csrf_token,
                     httponly=False,
-                    secure=request.url.scheme == "https",
+                    secure=settings.cookie_secure,
                     samesite="lax",
                     path="/",
                 )
@@ -84,7 +86,9 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         ]
         response.headers["Content-Security-Policy"] = "; ".join(csp_directives)
 
-        if request.url.scheme == "https":
+        # Tie HSTS to the configured public scheme, not the (proxy-stripped or
+        # spoofable) request scheme — see settings.cookie_secure (picture-stage-8ox).
+        if settings.cookie_secure:
             response.headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload"
 
         return response

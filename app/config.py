@@ -95,6 +95,22 @@ class Settings(BaseSettings):
     # The static default still varies per release for local/dev builds.
     asset_version: str = "0.1.0"
 
+    @property
+    def cookie_secure(self) -> bool:
+        """Whether to set the Secure flag on cookies and emit the HSTS header.
+
+        Derived from the operator-configured public ``APP_URL`` rather than the
+        request scheme (picture-stage-8ox): behind a TLS-terminating proxy the
+        container only sees plain HTTP, and the port may be reachable directly,
+        so trusting ``X-Forwarded-Proto`` would be spoofable and proxy-specific.
+        ``APP_URL`` is the existing source of truth for the public scheme (see
+        ``build_share_url`` / picture-stage-0hp), and any HTTPS deployment must
+        set it to https anyway (else share tokens leak), so the Secure flag
+        tracks it automatically. A local http:// deployment yields False, so the
+        plain-HTTP dev stack keeps working.
+        """
+        return self.app_url.lower().startswith("https://")
+
     @model_validator(mode="after")
     def _reject_default_secrets_in_production(self) -> "Settings":
         """Fail fast if crypto secrets are left at their insecure default in production.

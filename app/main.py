@@ -110,7 +110,7 @@ async def set_language(locale: str, request: Request) -> Response:
         value=locale,
         max_age=365 * 24 * 3600,  # 1 year
         httponly=False,  # needs to be readable by JS for language switcher state
-        secure=request.url.scheme == "https",
+        secure=settings.cookie_secure,
         samesite="lax",
         path="/",
     )
