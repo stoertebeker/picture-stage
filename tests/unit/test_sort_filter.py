@@ -16,22 +16,22 @@ class TestSortByEnum:
     """Verify ImageSortBy enum values."""
 
     def test_has_sort_order(self) -> None:
-        from app.guest.router import ImageSortBy
+        from app.guest.schemas import ImageSortBy
 
         assert ImageSortBy.sort_order.value == "sort_order"
 
     def test_has_filename(self) -> None:
-        from app.guest.router import ImageSortBy
+        from app.guest.schemas import ImageSortBy
 
         assert ImageSortBy.filename.value == "filename"
 
     def test_has_exif_date(self) -> None:
-        from app.guest.router import ImageSortBy
+        from app.guest.schemas import ImageSortBy
 
         assert ImageSortBy.exif_date.value == "exif_date"
 
     def test_is_string_enum(self) -> None:
-        from app.guest.router import ImageSortBy
+        from app.guest.schemas import ImageSortBy
 
         assert issubclass(ImageSortBy, str)
         assert issubclass(ImageSortBy, enum.Enum)
@@ -41,12 +41,12 @@ class TestSortDirectionEnum:
     """Verify SortDirection enum values."""
 
     def test_has_asc(self) -> None:
-        from app.guest.router import SortDirection
+        from app.guest.schemas import SortDirection
 
         assert SortDirection.asc.value == "asc"
 
     def test_has_desc(self) -> None:
-        from app.guest.router import SortDirection
+        from app.guest.schemas import SortDirection
 
         assert SortDirection.desc.value == "desc"
 
@@ -55,22 +55,22 @@ class TestImageFilterEnum:
     """Verify ImageFilter enum values."""
 
     def test_has_all(self) -> None:
-        from app.guest.router import ImageFilter
+        from app.guest.schemas import ImageFilter
 
         assert ImageFilter.all.value == "all"
 
     def test_has_selected(self) -> None:
-        from app.guest.router import ImageFilter
+        from app.guest.schemas import ImageFilter
 
         assert ImageFilter.selected.value == "selected"
 
     def test_has_favorited(self) -> None:
-        from app.guest.router import ImageFilter
+        from app.guest.schemas import ImageFilter
 
         assert ImageFilter.favorited.value == "favorited"
 
     def test_has_unrated(self) -> None:
-        from app.guest.router import ImageFilter
+        from app.guest.schemas import ImageFilter
 
         assert ImageFilter.unrated.value == "unrated"
 

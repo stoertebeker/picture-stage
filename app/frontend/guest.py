@@ -1,6 +1,5 @@
 """Frontend guest router - serves HTML gallery viewer for share-link visitors."""
 
-import enum
 import logging
 import uuid
 from datetime import UTC, datetime
@@ -24,6 +23,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.security.rate_limit import limiter
 from app.security.signing import sign_url
 from app.selections.service import get_current_selections
@@ -31,24 +31,6 @@ from app.selections.service import get_current_selections
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/g", tags=["frontend-guest"])
-
-
-class ImageSortBy(enum.StrEnum):
-    sort_order = "sort_order"
-    filename = "filename"
-    exif_date = "exif_date"
-
-
-class SortDirection(enum.StrEnum):
-    asc = "asc"
-    desc = "desc"
-
-
-class ImageFilter(enum.StrEnum):
-    all = "all"
-    selected = "selected"
-    favorited = "favorited"
-    unrated = "unrated"
 
 
 async def _resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
