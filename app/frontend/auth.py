@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_user_from_cookie
-from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
+from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy, verify_token
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.auth.utils import get_client_ip
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
@@ -61,7 +61,10 @@ async def login_submit(request: Request, db: AsyncSession = Depends(get_db)) -> 
     result = await db.execute(select(User).where(User.email == email))
     user = result.scalar_one_or_none()
 
-    if user is None or not verify_password(password, user.password_hash):
+    # Always run one bcrypt verify (against a dummy hash when the user is missing)
+    # so login timing doesn't reveal whether the account exists (0y7).
+    password_valid = verify_password_or_dummy(password, user.password_hash if user is not None else None)
+    if user is None or not password_valid:
         return templates.TemplateResponse(
             request,
             "auth/login.html",

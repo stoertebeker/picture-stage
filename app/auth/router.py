@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
-from app.auth.passwords import hash_password, hash_token, verify_password, verify_token
+from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy, verify_token
 from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRequest, SignupResponse, UserResponse
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.auth.utils import get_client_ip
@@ -18,13 +18,6 @@ from app.security.rate_limit import limiter
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
-
-# Pre-computed bcrypt hash (rounds=12, same cost as a real password). Used to
-# equalize login timing when the email doesn't exist: both handlers always run
-# exactly one bcrypt verify, so an attacker can't distinguish a missing account
-# from a wrong password by response time (account-enumeration guard, mirrors the
-# signup path / picture-stage-42q).
-_DUMMY_PASSWORD_HASH = hash_password("timing-equalization-decoy")
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
@@ -103,9 +96,8 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     user = result.scalar_one_or_none()
 
     # Always run one bcrypt verify (against a dummy hash when the user is missing)
-    # so login timing doesn't reveal whether the account exists.
-    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
-    password_valid = verify_password(body.password, password_hash)
+    # so login timing doesn't reveal whether the account exists (0y7).
+    password_valid = verify_password_or_dummy(body.password, user.password_hash if user is not None else None)
     if user is None or not password_valid:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
 
@@ -115,44 +107,6 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
 
     access_token = create_access_token(str(user.id))
     return LoginResponse(access_token=access_token)
-
-
-@router.post("/login-form")
-@limiter.limit("10/minute")
-async def login_form(request: Request, db: AsyncSession = Depends(get_db)) -> Response:
-    form = await request.form()
-    email = form.get("email")
-    password = form.get("password")
-
-    if not email or not password:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Email and password required")
-
-    result = await db.execute(select(User).where(User.email == str(email)))
-    user = result.scalar_one_or_none()
-
-    # Always run one bcrypt verify (against a dummy hash when the user is missing)
-    # so login timing doesn't reveal whether the account exists.
-    password_hash = user.password_hash if user is not None else _DUMMY_PASSWORD_HASH
-    password_valid = verify_password(str(password), password_hash)
-    if user is None or not password_valid:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
-
-    if user.status not in LOGIN_ALLOWED_STATUSES:
-        detail = "Account is disabled" if user.status == UserStatus.disabled else "Account not yet approved by admin"
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
-
-    access_token = create_access_token(str(user.id))
-    response = RedirectResponse(url="/dashboard", status_code=303)
-    response.set_cookie(
-        key="session",
-        value=access_token,
-        httponly=True,
-        secure=request.url.scheme == "https",
-        samesite="lax",
-        max_age=86400,
-        path="/",
-    )
-    return response
 
 
 @router.post("/logout")
