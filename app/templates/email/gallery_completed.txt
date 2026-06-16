@@ -7,7 +7,7 @@ Die Bewertung für die Galerie "{{ gallery_name }}" wurde abgeschlossen.
   Ausgewählt:    {{ selected_count }}
   Favorisiert:   {{ favorited_count }}
 
-Dashboard: {{ dashboard_url }}
+Galerie ansehen: {{ gallery_url }}
 
 --
 Picture-Stage — Self-hosted Photo Proofing

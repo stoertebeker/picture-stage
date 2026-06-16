@@ -396,7 +396,7 @@ async def complete_review(
             "total_images": total_images,
             "selected_count": row[0],
             "favorited_count": row[1],
-            "dashboard_url": f"{settings.app_url}/api/v1/galleries/dashboard",
+            "gallery_url": f"{settings.app_url}/galleries/{gallery.id}",
         }
 
         # Config-gated path (webhooks / future NotificationConfig UI).

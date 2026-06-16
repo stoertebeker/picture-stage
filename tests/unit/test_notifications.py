@@ -390,7 +390,7 @@ class TestNotifyOwnerGalleryCompleted:
             "total_images": 12,
             "selected_count": 5,
             "favorited_count": 2,
-            "dashboard_url": "https://example.com/api/v1/galleries/dashboard",
+            "gallery_url": "https://example.com/galleries/00000000-0000-0000-0000-000000000000",
         }
 
     @pytest.mark.asyncio
