@@ -72,6 +72,14 @@ class Settings(BaseSettings):
     max_upload_file_mb: int = 50
     max_files_per_upload: int = 500
 
+    # Decompression-bomb guard (picture-stage-ccx). Caps the decoded pixel count
+    # Pillow will process before raising DecompressionBombError instead of
+    # allocating hundreds of MB of RAM. Applied module-wide in
+    # app/images/processing.py, so it covers every decode path. The default
+    # (100 MP) sits far above real photos (~10-50 MP) yet well below the RAM a
+    # crafted image could otherwise demand. 0 = no cap (Pillow default ~178 MP).
+    max_image_pixels: int = 100_000_000
+
     ratelimit_enabled: bool = True
 
     captcha_enabled: bool = True

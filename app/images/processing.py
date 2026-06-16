@@ -1,11 +1,21 @@
 import hashlib
 import io
+import warnings
 from typing import Any, BinaryIO
 
 from PIL import Image, ImageDraw, ImageFont
 from PIL.ImageFont import FreeTypeFont
 
 from app.config import settings
+
+# Decompression-bomb guard (picture-stage-ccx). Cap the decoded pixel count
+# module-wide so every Image.open()/convert()/resize() path is covered. Pillow
+# only *warns* at MAX_IMAGE_PIXELS and raises DecompressionBombError at twice
+# that value, so we additionally promote the warning to an error to make the cap
+# deterministic at exactly the configured pixel count.
+Image.MAX_IMAGE_PIXELS = settings.max_image_pixels or None
+if settings.max_image_pixels:
+    warnings.simplefilter("error", Image.DecompressionBombWarning)
 
 PREVIEW_SIZES = {
     "thumb_sm": 320,
