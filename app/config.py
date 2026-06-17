@@ -103,6 +103,12 @@ class Settings(BaseSettings):
     image_processing_timeout_seconds: int = 60
     image_processing_workers: int = 2
 
+    # Root/app log level (picture-stage-vblf). Without a central logging config the
+    # app loggers fall back to Python's lastResort handler (WARNING threshold), so
+    # INFO diagnostics from the background workers etc. are invisible in the
+    # container log. configure_logging() (app/logging_config.py) wires this up.
+    log_level: str = "INFO"
+
     ratelimit_enabled: bool = True
 
     captcha_enabled: bool = True

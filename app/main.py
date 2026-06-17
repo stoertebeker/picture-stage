@@ -25,9 +25,14 @@ from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
 from app.i18n import detect_locale
 from app.images.router import router as images_router
+from app.logging_config import configure_logging
 from app.notifications.router import router as notifications_router
 from app.security.middleware import CSRFMiddleware, RequestBodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.security.rate_limit import limiter
+
+# Configure logging before the app starts so app-level INFO logs are visible
+# in the container log, not swallowed by the lastResort handler (picture-stage-vblf).
+configure_logging()
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +49,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     from app.images.process_pool import shutdown_pool
 
     await run_migrations()
+    # Alembic loads alembic.ini's [loggers] via fileConfig (disable_existing_loggers
+    # defaults to True), which overrides our config during migration — re-apply it
+    # so the app's log format wins at runtime (picture-stage-vblf).
+    configure_logging()
 
     try:
         yield

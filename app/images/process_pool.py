@@ -23,6 +23,7 @@ from collections.abc import Callable
 from pebble import ProcessPool
 
 from app.config import settings
+from app.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,13 @@ def get_pool() -> ProcessPool:
     global _pool
     if _pool is None:
         workers = max(1, settings.image_processing_workers)
-        _pool = ProcessPool(max_workers=workers, context=mp.get_context("spawn"))
+        # spawned workers don't inherit the parent's logging config — re-apply it
+        # per worker so any worker-side logs use the same format (picture-stage-vblf).
+        _pool = ProcessPool(
+            max_workers=workers,
+            context=mp.get_context("spawn"),
+            initializer=configure_logging,
+        )
         logger.info("Preview ProcessPool started (spawn, %d workers)", workers)
     return _pool
 
