@@ -92,6 +92,17 @@ class Settings(BaseSettings):
     # crafted image could otherwise demand. 0 = no cap (Pillow default ~178 MP).
     max_image_pixels: int = 100_000_000
 
+    # Preview-worker process isolation (picture-stage-q9td). Pillow processing
+    # runs in a pebble ProcessPool so a per-file timeout can hard-kill a hung
+    # worker process (a plain asyncio.wait_for around to_thread cannot — the
+    # thread keeps running). The pixel cap (max_image_pixels) prevents OOM; this
+    # bounds wall-clock time for a degenerate-but-under-cap image. Workers run
+    # inside the app process, so with multiple uvicorn workers the total child
+    # count is (uvicorn workers x image_processing_workers) — keep it small.
+    # timeout 0 = no timeout; workers must be >= 1.
+    image_processing_timeout_seconds: int = 60
+    image_processing_workers: int = 2
+
     ratelimit_enabled: bool = True
 
     captcha_enabled: bool = True

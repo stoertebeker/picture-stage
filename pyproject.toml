@@ -27,6 +27,7 @@ dependencies = [
     "jinja2>=3.1",
     "aiofiles>=24.1",
     "httpx>=0.28",
+    "pebble>=5.2",
 ]
 
 [project.optional-dependencies]
@@ -84,6 +85,14 @@ warn_unused_configs = true
 [[tool.mypy.overrides]]
 module = ["aioboto3"]
 ignore_missing_imports = true
+
+# pebble ships partial, imprecise type hints (e.g. ProcessPool.schedule timeout
+# typed as float, args as list); skip following them so the imported symbols are
+# treated as untyped rather than failing strict checks (picture-stage-q9td).
+[[tool.mypy.overrides]]
+module = ["pebble"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

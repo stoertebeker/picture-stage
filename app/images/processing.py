@@ -192,6 +192,38 @@ def generate_preview_with_watermark(
     return buf, composited.width, composited.height
 
 
+def render_thumbnail_bytes(image_bytes: bytes, max_width: int) -> tuple[bytes, int, int]:
+    """Process-pool entry point for a thumbnail variant (picture-stage-q9td).
+
+    A thin, picklable wrapper around ``generate_thumbnail``: it takes/returns
+    ``bytes`` (``io.BytesIO`` does not pickle cleanly across the process
+    boundary) so the work can run in a pebble worker with a hard timeout.
+    """
+    buf, width, height = generate_thumbnail(io.BytesIO(image_bytes), max_width)
+    return buf.getvalue(), width, height
+
+
+def render_preview_bytes(
+    image_bytes: bytes,
+    max_width: int,
+    watermark_config: dict[str, Any] | None,
+    gallery_id: str | None,
+) -> tuple[bytes, int, int]:
+    """Process-pool entry point for the watermarked preview (picture-stage-q9td).
+
+    Thin, picklable wrapper around ``generate_preview_with_watermark`` (bytes in,
+    bytes out) so it can run in a pebble worker with a hard timeout.
+    """
+    buf, width, height = generate_preview_with_watermark(
+        io.BytesIO(image_bytes),
+        max_width,
+        "",
+        watermark_config=watermark_config,
+        gallery_id=gallery_id,
+    )
+    return buf.getvalue(), width, height
+
+
 def extract_exif(image_data: BinaryIO) -> dict[str, str]:
     try:
         img = Image.open(image_data)

@@ -41,10 +41,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     from app.db import models as _models  # noqa: F401
     from app.db.migrations import run_migrations
+    from app.images.process_pool import shutdown_pool
 
     await run_migrations()
 
-    yield
+    try:
+        yield
+    finally:
+        # Tear down the preview ProcessPool so no worker processes are orphaned.
+        shutdown_pool()
 
 
 app = FastAPI(

@@ -3,12 +3,12 @@
 Preview generation (Pillow resize + watermark + WebP encode) is CPU-bound and
 blocking. Running it inline in the upload request froze the UI and blocked the
 whole event loop. This worker is dispatched via FastAPI BackgroundTasks: it opens
-its own DB session, reads the stored original, generates all variants in a thread
-(asyncio.to_thread keeps the event loop free), and flips
+its own DB session, reads the stored original, generates all variants in a
+process pool with a hard per-file timeout (``run_in_pool``, picture-stage-q9td;
+keeps the event loop free and can kill a hung variant), and flips
 ``images.processing_status`` to ``ready`` (or ``failed`` on error).
 """
 
-import asyncio
 import io
 import logging
 import uuid
@@ -18,10 +18,11 @@ from sqlalchemy import select
 
 from app.db.base import async_session
 from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
+from app.images.process_pool import run_in_pool
 from app.images.processing import (
     PREVIEW_SIZES,
-    generate_preview_with_watermark,
-    generate_thumbnail,
+    render_preview_bytes,
+    render_thumbnail_bytes,
 )
 from app.storage.base import storage_key
 from app.storage.dependencies import get_storage
@@ -87,21 +88,21 @@ async def process_image_previews(
             original_bytes = await _read_original(image.storage_key)
 
             for variant_name, max_width in PREVIEW_SIZES.items():
-                src = io.BytesIO(original_bytes)
+                # Run the CPU-bound Pillow work in the process pool so a hung
+                # variant can be hard-killed by the per-file timeout (q9td).
                 if variant_name == "preview":
-                    preview_buf, pw, ph = await asyncio.to_thread(
-                        generate_preview_with_watermark,
-                        src,
+                    preview_bytes, pw, ph = await run_in_pool(
+                        render_preview_bytes,
+                        original_bytes,
                         max_width,
-                        "",
-                        watermark_config=watermark_config,
-                        gallery_id=str(gallery_id),
+                        watermark_config,
+                        str(gallery_id),
                     )
                 else:
-                    preview_buf, pw, ph = await asyncio.to_thread(generate_thumbnail, src, max_width)
+                    preview_bytes, pw, ph = await run_in_pool(render_thumbnail_bytes, original_bytes, max_width)
 
                 preview_key = storage_key(str(gallery_id), "previews", f"{image_id}_{variant_name}.webp")
-                await storage.upload(preview_key, preview_buf, "image/webp")
+                await storage.upload(preview_key, io.BytesIO(preview_bytes), "image/webp")
 
                 db.add(
                     ImagePreview(
@@ -110,7 +111,7 @@ async def process_image_previews(
                         storage_key=preview_key,
                         width=pw,
                         height=ph,
-                        file_size=preview_buf.getbuffer().nbytes,
+                        file_size=len(preview_bytes),
                     )
                 )
 
