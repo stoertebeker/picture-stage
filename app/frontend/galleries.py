@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import delete as sa_delete
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -339,8 +339,10 @@ async def upload_images(
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
 
     # Get current image count for sort_order offset
-    existing_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id))
-    sort_offset = len(existing_result.scalars().all())
+    existing_result = await db.execute(
+        select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
+    )
+    sort_offset = existing_result.scalar() or 0
 
     # Snapshot the gallery's watermark config now; the worker resolves text /
     # opacity / position / enabled from it (empty -> global default).

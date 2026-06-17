@@ -3,7 +3,7 @@ import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -66,8 +66,10 @@ async def upload_images(
 
     enforce_file_count(len(files))
 
-    existing_count_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id))
-    sort_offset = len(existing_count_result.scalars().all())
+    existing_count_result = await db.execute(
+        select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
+    )
+    sort_offset = existing_count_result.scalar() or 0
 
     uploaded_images: list[ImageResponse] = []
     # Resolve text / opacity / position / enabled from the gallery's own config
