@@ -48,6 +48,17 @@ class GalleryStatus(enum.StrEnum):
     archived = "archived"
 
 
+# Allowed gallery status transitions (state machine). Single source of truth for
+# both the JSON API (app/galleries/router.py) and the HTMX frontend
+# (app/frontend/galleries.py) — see picture-stage-bkw.
+ALLOWED_TRANSITIONS: dict[GalleryStatus, set[GalleryStatus]] = {
+    GalleryStatus.draft: {GalleryStatus.shared},
+    GalleryStatus.shared: {GalleryStatus.completed},
+    GalleryStatus.completed: {GalleryStatus.archived, GalleryStatus.shared},
+    GalleryStatus.archived: {GalleryStatus.shared},
+}
+
+
 class PreviewVariant(enum.StrEnum):
     thumb_sm = "thumb_sm"
     thumb_md = "thumb_md"

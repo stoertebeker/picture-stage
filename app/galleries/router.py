@@ -15,6 +15,7 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import require_active_user
 from app.db.models import (
+    ALLOWED_TRANSITIONS,
     AuditLog,
     Gallery,
     GalleryStatus,
@@ -262,14 +263,6 @@ async def delete_gallery(
 
     await purge_gallery(gallery, db, storage)
     await db.commit()
-
-
-ALLOWED_TRANSITIONS: dict[GalleryStatus, set[GalleryStatus]] = {
-    GalleryStatus.draft: {GalleryStatus.shared},
-    GalleryStatus.shared: {GalleryStatus.completed},
-    GalleryStatus.completed: {GalleryStatus.archived, GalleryStatus.shared},
-    GalleryStatus.archived: {GalleryStatus.shared},
-}
 
 
 @router.patch("/{gallery_id}/status", response_model=GalleryResponse)

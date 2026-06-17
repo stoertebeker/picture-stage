@@ -18,6 +18,7 @@ from sqlalchemy.orm import selectinload
 from app.auth.dependencies import require_authenticated_page
 from app.auth.passwords import hash_password, hash_token
 from app.db.models import (
+    ALLOWED_TRANSITIONS,
     AuditLog,
     Gallery,
     GalleryStatus,
@@ -41,14 +42,6 @@ from app.storage.dependencies import get_storage
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["frontend-galleries"])
-
-# Allowed status transitions (mirrors app/galleries/router.py)
-ALLOWED_TRANSITIONS: dict[GalleryStatus, set[GalleryStatus]] = {
-    GalleryStatus.draft: {GalleryStatus.shared},
-    GalleryStatus.shared: {GalleryStatus.completed},
-    GalleryStatus.completed: {GalleryStatus.archived, GalleryStatus.shared},
-    GalleryStatus.archived: {GalleryStatus.shared},
-}
 
 
 class _ExpiryInPastError(Exception):
