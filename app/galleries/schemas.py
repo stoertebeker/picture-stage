@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -18,6 +18,25 @@ def _normalise_guest_message(v: Any) -> str | None:
         return None
     text = str(v).strip()
     return text or None
+
+
+def _reject_past_expiry(v: datetime | None) -> datetime | None:
+    """Reject a non-future expiry timestamp; mirror of the frontend ``ath`` fix.
+
+    A naive value is treated as UTC (matching how it is persisted into the
+    ``timezone=True`` column) so the comparison against ``now`` never mixes
+    aware and naive datetimes. ``None`` (no expiry) is allowed. Raises
+    ``ValueError`` when the instant is not strictly in the future, which Pydantic
+    surfaces as a 422.
+    """
+    if v is None:
+        return None
+    if v.tzinfo is None:
+        v = v.replace(tzinfo=UTC)
+    if v <= datetime.now(UTC):
+        msg = "expires_at must be in the future"
+        raise ValueError(msg)
+    return v
 
 
 class WatermarkConfig(BaseModel):
@@ -57,6 +76,7 @@ class GalleryCreate(BaseModel):
     expires_at: datetime | None = None
 
     _normalise_guest_message = field_validator("guest_message", mode="before")(_normalise_guest_message)
+    _reject_past_expiry = field_validator("expires_at")(_reject_past_expiry)
 
     @field_validator("watermark_config", mode="before")
     @classmethod
@@ -79,6 +99,7 @@ class GalleryUpdate(BaseModel):
     expires_at: datetime | None = None
 
     _normalise_guest_message = field_validator("guest_message", mode="before")(_normalise_guest_message)
+    _reject_past_expiry = field_validator("expires_at")(_reject_past_expiry)
 
     @field_validator("watermark_config", mode="before")
     @classmethod
