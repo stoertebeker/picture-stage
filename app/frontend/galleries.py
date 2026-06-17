@@ -9,9 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
 from fastapi.responses import HTMLResponse, RedirectResponse
-from sqlalchemy import delete as sa_delete
 from sqlalchemy import func, select
-from sqlalchemy import update as sa_update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -23,14 +21,12 @@ from app.db.models import (
     Gallery,
     GalleryStatus,
     Image,
-    ImagePreview,
     ImageProcessingStatus,
-    SelectionEvent,
-    ShareSession,
     User,
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.galleries.deletion import purge_gallery
 from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.i18n import t
@@ -719,44 +715,9 @@ async def delete_gallery(
     db.add(audit_entry)
     await db.flush()
 
-    # 2. Delete image files from storage (best-effort)
-    result = await db.execute(select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)))
-    images_to_delete = result.scalars().all()
-    for image in images_to_delete:
-        try:
-            await storage.delete(image.storage_key)
-        except Exception:
-            logger.warning("Failed to delete storage file %s during gallery deletion", image.storage_key)
-        for preview in image.previews:
-            try:
-                await storage.delete(preview.storage_key)
-            except Exception:
-                logger.warning("Failed to delete preview file %s during gallery deletion", preview.storage_key)
-
-    # 3. Delete DB records in dependency order
-    # Delete image_previews
-    await db.execute(
-        sa_delete(ImagePreview).where(ImagePreview.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id)))
-    )
-    # Delete selection_events
-    await db.execute(
-        sa_delete(SelectionEvent).where(
-            SelectionEvent.image_id.in_(select(Image.id).where(Image.gallery_id == gallery.id))
-        )
-    )
-    # Delete share_sessions
-    await db.execute(sa_delete(ShareSession).where(ShareSession.gallery_id == gallery.id))
-    # Anonymize audit_log entries
-    await db.execute(
-        sa_update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(ip_address=None, user_agent=None)
-    )
-    # Detach audit_log from gallery
-    await db.execute(sa_update(AuditLog).where(AuditLog.gallery_id == gallery.id).values(gallery_id=None))
-    # Delete images
-    await db.execute(sa_delete(Image).where(Image.gallery_id == gallery.id))
-    # Delete gallery
-    await db.execute(sa_delete(Gallery).where(Gallery.id == gallery.id))
-
+    # 2. Purge storage files + dependent DB rows via the shared helper (bkw 2.2),
+    # the same path the JSON API uses — avoids divergent, orphan-prone duplicates.
+    await purge_gallery(gallery, db, storage)
     await db.commit()
 
     return RedirectResponse(url="/dashboard", status_code=303)
