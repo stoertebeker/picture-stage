@@ -72,6 +72,18 @@ class Settings(BaseSettings):
     max_upload_file_mb: int = 50
     max_files_per_upload: int = 500
 
+    # Global request-body size limit (picture-stage-m4ct). Defense-in-depth in
+    # front of the per-file/count guards above: Starlette spools the whole
+    # multipart body to a temp file before the in-handler checks run, so a huge
+    # body could fill disk first. RequestBodySizeLimitMiddleware rejects an
+    # over-sized body with 413 at the ASGI layer — via the declared
+    # Content-Length before any byte is read, and by counting received bytes to
+    # also catch a missing/lying Content-Length (chunked). The default (1024 MB)
+    # sits well above any legitimate multi-upload request yet caps absurd bodies.
+    # An outer reverse-proxy limit (Caddy request_body / Cloudflare) is the
+    # recommended additional layer. 0 = no app-level limit.
+    max_request_body_mb: int = 1024
+
     # Decompression-bomb guard (picture-stage-ccx). Caps the decoded pixel count
     # Pillow will process before raising DecompressionBombError instead of
     # allocating hundreds of MB of RAM. Applied module-wide in

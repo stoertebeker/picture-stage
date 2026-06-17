@@ -26,7 +26,7 @@ from app.guest.router import router as guest_router
 from app.i18n import detect_locale
 from app.images.router import router as images_router
 from app.notifications.router import router as notifications_router
-from app.security.middleware import CSRFMiddleware, SecurityHeadersMiddleware
+from app.security.middleware import CSRFMiddleware, RequestBodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.security.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,9 @@ class LocaleMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(LocaleMiddleware)
+# Outermost middleware (last added runs first): cap the request body before any
+# other layer reads it — in particular before CSRF calls request.body() (m4ct).
+app.add_middleware(RequestBodySizeLimitMiddleware)
 
 app.mount("/static", StaticFiles(directory="frontend/static"), name="static")
 
