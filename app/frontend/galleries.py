@@ -339,9 +339,7 @@ async def upload_images(
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
 
     # Get current image count for sort_order offset
-    existing_result = await db.execute(
-        select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
-    )
+    existing_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id))
     sort_offset = existing_result.scalar() or 0
 
     # Snapshot the gallery's watermark config now; the worker resolves text /

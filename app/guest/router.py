@@ -79,9 +79,7 @@ async def get_shared_gallery(
 
     check_gallery_accessible(gallery)
 
-    image_count_result = await db.execute(
-        select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
-    )
+    image_count_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
     image_count = image_count_result.scalar() or 0
 
     requires_password = gallery.password_hash is not None
@@ -133,9 +131,7 @@ async def verify_gallery_password(
     await db.commit()
     await db.refresh(session)
 
-    image_count_result = await db.execute(
-        select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
-    )
+    image_count_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
     image_count = image_count_result.scalar() or 0
 
     return GuestGalleryResponse(
@@ -238,9 +234,7 @@ async def get_selections(
 
     selections = await get_current_selections(gallery.id, db)
 
-    image_count_result = await db.execute(
-        select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
-    )
+    image_count_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
     total = image_count_result.scalar() or 0
 
     return SelectionSummary(
