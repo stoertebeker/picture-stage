@@ -122,12 +122,18 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-17
-**Wachwechsel-Tag:** `handover-2026-06-17` (neuester Wachwechsel dieser Wache)
+**Datum:** 2026-06-18
+**Wachwechsel-Tag:** `handover-2026-06-18` (neuester Wachwechsel dieser Wache)
 **Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung). Passwort NICHT im Repo — lokal in bd-Memory bzw. Passwort-Manager.
 **Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`. **Lokaler Admin: `testadmin@example.com` / `testpass123`** (NICHT `admin@local.test` — s. Memory `local-dev-admin-login`). **Frontend-Änderungen lokal abnehmen:** Stack mit frischer `ASSET_VERSION` neu bauen (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`), sonst stale Cache. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads .venv/bin/pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
 
-### Erledigt in dieser Wache (2026-06-17) — 6 P3-Härtungen/Refactorings + Observability; 3 davon LIVE abgenommen
+### Erledigt in dieser Wache (2026-06-18) — Guest-Lightbox: Tastatur-Shortcuts + Filter/Sort-Navigation
+**Kein aktiver Epic/Plan.** Beide Tickets gepusht, lokal im Browser (haiku, READ-ONLY) am Docker-Stack abgenommen, `main` = `origin/main`. 352 Unit-Tests grün, ruff+format+mypy sauber.
+- **`9q3.6` (feature P3, `c0f8e0c`, closed) — lokal abgenommen:** Tastatur-Shortcuts in der Guest-Lightbox. Navigation ←/→/Esc waren bereits gebaut; ergänzt: `j`=Auswählen, `f`=Favorisieren, `c`=Kommentarfeld fokussieren, `?`=Hilfe-Overlay (`hidden sm:flex`, Desktop-only). Zwei Leitplanken: Aktions-Shortcuts achten das read-only `completed`-Gate; Fokus-Guard unterdrückt `j/f/c/?` bei fokussiertem Kommentarfeld (Esc gibt dann nur Feld-Fokus frei). Logik in `components.js` (`handleKeydown` + `_shortcut*`), Overlay/`x-ref="commentInput"` in `_lightbox.html`, i18n `guest.shortcuts_*`. CSP-safe. 3 Unit-Tests.
+- **`rfii` (bug P2, `ff2ea5a`, closed) — lokal abgenommen, aus Model-Feedback:** Guest-Lightbox folgte nicht dem aktiven Filter/Sort — bei Filter „Ausgewählt" blätterten die Pfeiltasten durch ALLE Bilder statt nur die gefilterten. Zweite Front von `ml0` (dort nur Owner-Lightbox via `visibleImages` gefixt). Ursache: Grid filtert server-seitig (HTMX), Lightbox navigierte eingefrorenes ungefiltertes `data-images`. **Fix (Option B, Server = Single Source of Truth):** Server liefert die gefilterte+sortierte ID-Reihenfolge mit (`image_order` → `data-image-order` am Root + verstecktes Element bei jedem `#image-grid`-Swap); Lightbox navigiert `activeOrder` über die `imageById`-Map (Counter/Pfeile/Swipe/Preload). Deckt Filter UND Sort, `am9`-kompatibel (Infinite-Scroll lässt Order weg). `htmx:afterSwap`-Hook in `app.js` (CSP-safe). 5 Unit-Tests. Browser-Abnahme: Filter „Ausgewählt" → Lightbox 1/3, „Alle" → 1/24.
+- **Tooling:** Whisper-Transkription eingerichtet (`whisper-cli` + `ffmpeg` via apt, Modelle base+small in `~/.cache/whisper`) → Sprachnachrichten direkt auswertbar. Memory `kommunikation-keine-deploy-hinweise` angelegt (Kapitän-Feedback).
+
+### Erledigt in der Wache davor (2026-06-17) — 6 P3-Härtungen/Refactorings + Observability; 3 davon LIVE abgenommen
 
 Abgearbeitet die gesamte P3-Code-Queue aus den externen Security-Reviews (2026-06-16) plus ein Observability-Ticket. **Kein aktiver Epic/Plan.** Alle gepusht, CI grün, `main` = `origin/main`.
 - **`41j4` (bug P3, `f462a16`, closed):** Vergangenheits-Check für `expires_at` auch im **API-Pfad** (Follow-up zu `ath`, das nur das Frontend abdeckte). Gemeinsamer `field_validator` `_reject_past_expiry` auf `GalleryCreate` **und** `GalleryUpdate` (`app/galleries/schemas.py`) → 422; naive Werte als UTC behandelt. 10 Unit-Tests.
@@ -190,20 +196,17 @@ Abgearbeitet die gesamte P3-Code-Queue aus den externen Security-Reviews (2026-0
 ### ✅ Betrieblicher Rest — alle Tickets prod-deployed und abgenommen
 Kapitän hat nach Abend-Wache-Deploy bestätigt: alles live, IP-Erfassung funktioniert (CF-Connecting-IP), Abschluss-Mail-Kette (`16l`+`4gr`) prod-verifiziert.
 
-### Offene Tickets — Stand 2026-06-17
-**Ready-Queue: 2 offen** (beide P3/ops, **kein aktiver Epic/Plan**, **kein reiner Code mehr** — beide brauchen Kapitäns-Input zum Deployment/Proxy-Setup). `bd ready`:
-- **`wr2s` (P3, ops):** Reverse-Proxy Request-Body-Limit (Caddy `request_body` / Cloudflare) als **äußere** Schicht zu `m4ct`. Braucht Klärung: Läuft Prod hinter CF/Caddy, App-Container nur über Proxy erreichbar? (gekoppelt an `8ox`-Thema).
-- **`1gd` (P3, ops):** Betriebsrisiken — Alembic-Migration-Race bei Multi-Instance + unbegrenztes Wachstum von `selection_events`. Hängt am Deployment-Modell (mehrere App-Instanzen?).
-- Plus `9q3.6` deferred (Tastatur-Shortcuts).
+### Offene Tickets — Stand 2026-06-18
+**Ready-Queue LEER.** Alle 236 Beads-Issues closed — 0 open, 0 in_progress, 0 deferred, **kein aktiver Epic/Plan**. Die beiden ops-Tickets der Vorwache (`wr2s`/`1gd`) wurden am 2026-06-18 geschlossen (Kapitän-Entscheidung): `wr2s` out-of-scope (Reverse-Proxy-Body-Limit ist Betreiber-Sache, App-Schicht via `m4ct` abgedeckt), `1gd` wontfix (kein Multi-Instance-Hosting geplant). `9q3.6` (deferred) wurde umgesetzt und geschlossen.
+
+Neue Arbeit kommt typischerweise aus **User-/Model-Feedback** (wie `rfii` diese Wache) — neues Ticket via `bd create`, dann Standard-Fix-Workflow.
 
 ### Offene Punkte für die nächste Wache
-1. **Deploy-Stand:** Die 6 Fixes dieser Wache (`41j4`/`m4ct`/`q9td`/`e5n`/`bkw`/`vblf`) sind gepusht und CI-grün, aber NICHT prod-deployed — Kapitän deployt + nimmt gegen Prod ab. Reine Backend/Observability-Änderungen (kein visueller Test nötig). `q9td` bringt eine **neue Dependency (`pebble`)** → Prod-Image muss frisch gebaut werden (CI macht das). `q9td`/`bkw`/`vblf` wurden bereits gegen den **lokalen Docker-Stack** abgenommen. Auch die 8 Fixes der Vorwachen (`vre`/`pc6`/`0y7`/`6bs`/`fbq`/`3rl`/`ggx`/`ml0`) warten noch auf Prod-Deploy/Abnahme.
-2. **`wr2s` + `1gd` brauchen Kapitän-Input** (s. Ready-Queue oben) — beide hängen am Prod-Deployment/Proxy-Setup. `wr2s` ist mit dem alten `8ox`-Thema gekoppelt (läuft Prod hinter CF/Caddy, App nur über Proxy erreichbar?).
-3. **Logging lokal verifizieren = am echten Container-Log** (s. neue Lesson `vblf`): Unit-Tests allein hätten die zwei Fallstricke (Alembic-fileConfig-Override, handlerlose uvicorn-Logger) nicht gefunden.
-4. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
-5. **CI prüft `ruff format --check` als eigenen Schritt** — vor dem Commit immer `ruff format --check .` zusätzlich zu `ruff check` laufen (e5n-Lauf war deswegen einmal rot, per Fix-Forward `212c1b0` behoben).
-6. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen (nur **Issues** syncen via git, kein Dolt-Remote; **Memories** bleiben bewusst lokal — s. „Session Completion").
-7. **Lokaler Stack:** am Ende dieser Wache via `docker compose down` heruntergefahren (Container + Netzwerk entfernt; DB-Volume bleibt → `testadmin@example.com`/`testpass123` weiter gültig). Test-DB `picstage_test` musste im frischen DB-Container einmalig via `CREATE DATABASE` angelegt werden.
+1. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
+2. **CI prüft `ruff format --check` als eigenen Schritt** — vor dem Commit immer `ruff format --check .` zusätzlich zu `ruff check` laufen (sonst Fix-Forward nötig).
+3. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen (nur **Issues** syncen via git, kein Dolt-Remote; **Memories** bleiben bewusst lokal — s. „Session Completion").
+4. **Frontend-Abnahme nur lokal:** Prod ist via Playwright/Headless nicht testbar (Cloudflare-Challenge). Frontend-Änderungen am lokalen Docker-Stack abnehmen (frische `ASSET_VERSION` neu bauen, sonst stale JS/CSS) — Browser-Tests via haiku-Subagent (READ-ONLY).
+5. **Lokaler Stack:** am Ende dieser Wache via `docker compose down` heruntergefahren (Container + Netzwerk entfernt; DB-Volume bleibt → `testadmin@example.com`/`testpass123` weiter gültig). Der für die `rfii`-Abnahme gesetzte Share-Token der QA-Galerie `766dc953…` wurde wieder widerrufen.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed
 - **Cache-Busting (`d33`; Commits `9f1ef27` Code, `fd3b01b` Doku) — prod-verifiziert:** JS/CSS-Assets tragen jetzt `?v=<ASSET_VERSION>` via zentralem `asset()`-Jinja-Helper (`app/frontend/deps.py`) + Setting `asset_version` (`config.py`). `Dockerfile` ARG `ASSET_VERSION` (Default `dev`), CI (`docker-publish.yml`) setzt den **Build-Timestamp** (kein Git-SHA → kein Commit-Leak im HTML). 6 Templates umgestellt; **Fonts bewusst un-versioniert** (Preload/`url()`-Mismatch → Doppellading). Deploy-Runbook im README (`pull → up -d → grep version → curl ?v= → CF-Purge`), Fallstricke in `docs/lessons-learned.md`. Verifiziert: ruff+mypy+76 Frontend-Unit-Tests grün; **Prod-Live (2026-06-10, Playwright): Assets liefern `?v=20260610130149` (echter Build-Timestamp), HTTP 200.** **Betrieblicher Rest:** CF-Caching-Level einmalig auf „Standard" bestätigen (nicht „Ignore Query String"), damit der Edge-Bust bei künftigen Builds greift.
