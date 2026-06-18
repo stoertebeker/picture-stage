@@ -24,6 +24,16 @@
             </svg>
         </button>
 
+        <!-- Shortcut help trigger (desktop only — shortcuts need a keyboard) -->
+        <button @click="showShortcutHelp = true"
+                type="button"
+                aria-label="{{ t('guest.shortcuts_help') }}"
+                class="absolute top-3 right-16 z-10 hidden sm:flex h-11 w-11 items-center justify-center rounded-full text-text-primary/70 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+            <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9a3.001 3.001 0 015.772 1c0 2-3 3-3 3m.03 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+        </button>
+
         <!-- Previous button (left edge, hidden on mobile — swipe instead) -->
         <button @click="prevImage()"
                 x-show="lightboxIndex > 0"
@@ -100,6 +110,7 @@
                     </button>
                     <!-- Comment field -->
                     <input type="text"
+                           x-ref="commentInput"
                            :value="currentImage.comment || ''"
                            :disabled="completed"
                            @keydown.enter="submitComment(currentImage.id, $event.target.value)"
@@ -113,4 +124,59 @@
             </div>
         </div>
     </template>
+
+    <!-- Keyboard shortcut help overlay (desktop). Dismissed by click on the
+         backdrop, the close button, or Escape (handled in handleKeydown). -->
+    <div x-show="showShortcutHelp"
+         x-transition.opacity
+         @click="showShortcutHelp = false"
+         role="dialog"
+         aria-modal="true"
+         aria-label="{{ t('guest.shortcuts_title') }}"
+         class="absolute inset-0 z-20 hidden sm:flex items-center justify-center bg-surface-sunken/80 backdrop-blur-sm p-6"
+         style="display: none;">
+        <div @click.stop
+             class="w-full max-w-sm rounded-2xl border border-border-subtle bg-surface-overlay p-6 shadow-xl">
+            <div class="mb-4 flex items-center justify-between">
+                <h2 class="text-base font-semibold text-text-primary">{{ t('guest.shortcuts_title') }}</h2>
+                <button @click="showShortcutHelp = false"
+                        type="button"
+                        aria-label="{{ t('guest.shortcuts_close') }}"
+                        class="flex h-8 w-8 items-center justify-center rounded-full text-text-primary/70 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
+                    <svg class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                    </svg>
+                </button>
+            </div>
+            <dl class="space-y-2.5 text-sm">
+                <div class="flex items-center justify-between gap-4">
+                    <dt class="text-text-secondary">{{ t('guest.shortcuts_nav') }}</dt>
+                    <dd class="flex gap-1">
+                        <kbd class="rounded border border-border-subtle bg-surface-raised px-2 py-0.5 font-mono text-xs text-text-primary">←</kbd>
+                        <kbd class="rounded border border-border-subtle bg-surface-raised px-2 py-0.5 font-mono text-xs text-text-primary">→</kbd>
+                    </dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                    <dt class="text-text-secondary">{{ t('guest.shortcuts_select') }}</dt>
+                    <dd><kbd class="rounded border border-border-subtle bg-surface-raised px-2 py-0.5 font-mono text-xs text-text-primary">J</kbd></dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                    <dt class="text-text-secondary">{{ t('guest.shortcuts_favorite') }}</dt>
+                    <dd><kbd class="rounded border border-border-subtle bg-surface-raised px-2 py-0.5 font-mono text-xs text-text-primary">F</kbd></dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                    <dt class="text-text-secondary">{{ t('guest.shortcuts_comment') }}</dt>
+                    <dd><kbd class="rounded border border-border-subtle bg-surface-raised px-2 py-0.5 font-mono text-xs text-text-primary">C</kbd></dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                    <dt class="text-text-secondary">{{ t('guest.shortcuts_close') }}</dt>
+                    <dd><kbd class="rounded border border-border-subtle bg-surface-raised px-2 py-0.5 font-mono text-xs text-text-primary">Esc</kbd></dd>
+                </div>
+                <div class="flex items-center justify-between gap-4">
+                    <dt class="text-text-secondary">{{ t('guest.shortcuts_help_key') }}</dt>
+                    <dd><kbd class="rounded border border-border-subtle bg-surface-raised px-2 py-0.5 font-mono text-xs text-text-primary">?</kbd></dd>
+                </div>
+            </dl>
+        </div>
+    </div>
 </div>

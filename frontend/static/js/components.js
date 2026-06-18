@@ -73,6 +73,7 @@ function guestViewerComponent() {
         showCompleteModal: false,
         completed: false,
         showSwipeHint: false,
+        showShortcutHelp: false,
         _swipeHintTimer: null,
 
         init() {
@@ -243,11 +244,60 @@ function guestViewerComponent() {
             window.location.reload();
         },
 
+        // Desktop keyboard shortcuts (9q3.6). Active only while the lightbox is
+        // open. Two guards keep this safe:
+        //   1. When a text field (the comment input) is focused, the action
+        //      shortcuts (j/f/c/?) must NOT fire — otherwise typing a "j" would
+        //      both insert the character AND toggle the selection. Escape only
+        //      releases focus in that case.
+        //   2. The action shortcuts respect the read-only `completed` gate, so
+        //      no write path slips past the lock via the keyboard.
         handleKeydown(e) {
             if (!this.lightboxOpen) return;
+
+            // The help overlay toggles with "?" and is dismissed first by Escape.
+            if (e.key === '?') {
+                this.showShortcutHelp = !this.showShortcutHelp;
+                return;
+            }
+            if (this.showShortcutHelp && e.key === 'Escape') {
+                this.showShortcutHelp = false;
+                return;
+            }
+
+            // Focus guard: while the comment field is focused, only Escape acts
+            // (releasing focus); typing must not trigger action shortcuts.
+            const t = e.target;
+            const inField = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+            if (inField) {
+                if (e.key === 'Escape') t.blur();
+                return;
+            }
+
             if (e.key === 'ArrowRight') this.nextImage();
             else if (e.key === 'ArrowLeft') this.prevImage();
             else if (e.key === 'Escape') this.closeLightbox();
+            else if (e.key === 'j' || e.key === 'J') this._shortcutSelect();
+            else if (e.key === 'f' || e.key === 'F') this._shortcutFavorite();
+            else if (e.key === 'c' || e.key === 'C') this._shortcutComment(e);
+        },
+
+        _shortcutSelect() {
+            if (this.completed || !this.currentImage) return;
+            this.toggleSelect(this.currentImage.id);
+        },
+
+        _shortcutFavorite() {
+            if (this.completed || !this.currentImage) return;
+            this.toggleFavorite(this.currentImage.id);
+        },
+
+        // "c" focuses the comment field. preventDefault stops the "c" from being
+        // typed into the field we are about to focus.
+        _shortcutComment(e) {
+            if (this.completed || !this.currentImage) return;
+            e.preventDefault();
+            if (this.$refs.commentInput) this.$refs.commentInput.focus();
         },
     };
 };

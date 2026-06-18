@@ -487,3 +487,65 @@ def test_guest_expired_renders_with_minimal_context():
     html = templates.env.get_template("guest/expired.html").render(t=_t, locale="de", gallery_name="Sommer-Shooting")
     assert _t("guest.expired_title") in html
     assert "Sommer-Shooting" in html
+
+
+def test_guest_lightbox_keyboard_shortcuts():
+    """Desktop keyboard shortcuts (9q3.6): j=select, f=favorite, c=comment,
+    ?=help. Navigation (arrows) + Escape were already present. The action
+    shortcuts must respect the read-only `completed` gate and a focus guard so
+    typing into the comment field never triggers them."""
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+    lightbox = (PROJECT_ROOT / "app" / "templates" / "guest" / "_lightbox.html").read_text()
+
+    # Shortcut routing exists in handleKeydown.
+    assert "_shortcutSelect" in components_js
+    assert "_shortcutFavorite" in components_js
+    assert "_shortcutComment" in components_js
+    assert "'j'" in components_js and "'f'" in components_js and "'c'" in components_js
+    assert "'?'" in components_js
+
+    # Focus guard: typing into the comment field must not fire action shortcuts.
+    assert "isContentEditable" in components_js
+    assert "'TEXTAREA'" in components_js
+
+    # Read-only gate honoured by the shortcut helpers.
+    assert "if (this.completed" in components_js
+
+    # Comment shortcut focuses the field via the ref defined in the template.
+    assert 'x-ref="commentInput"' in lightbox
+    assert "this.$refs.commentInput" in components_js
+
+
+def test_guest_lightbox_shortcut_help_overlay():
+    """The "?" key reveals a help overlay listing the shortcuts; it is a
+    desktop-only dialog (shortcuts need a keyboard) and is dismissible."""
+    lightbox = (PROJECT_ROOT / "app" / "templates" / "guest" / "_lightbox.html").read_text()
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+
+    assert "showShortcutHelp" in components_js
+    assert "showShortcutHelp" in lightbox
+    assert 'role="dialog"' in lightbox
+    # Desktop-only (hidden on mobile, shown from the sm breakpoint).
+    assert "hidden sm:flex" in lightbox
+    # Token-styled, not legacy utilities.
+    assert "bg-surface-overlay" in lightbox
+
+
+def test_guest_lightbox_shortcut_i18n_keys_exist():
+    """All shortcut-help i18n keys exist in DE and EN."""
+    import json
+
+    de = json.loads((PROJECT_ROOT / "app" / "i18n" / "de.json").read_text())["guest"]
+    en = json.loads((PROJECT_ROOT / "app" / "i18n" / "en.json").read_text())["guest"]
+    for key in (
+        "shortcuts_help",
+        "shortcuts_title",
+        "shortcuts_nav",
+        "shortcuts_select",
+        "shortcuts_favorite",
+        "shortcuts_comment",
+        "shortcuts_close",
+        "shortcuts_help_key",
+    ):
+        assert key in de, f"DE missing guest.{key}"
+        assert key in en, f"EN missing guest.{key}"
