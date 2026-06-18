@@ -1,4 +1,10 @@
 {% if images %}
+{# Ordered id list of the current filtered+sorted view (rfii). Read by the
+   htmx:afterSwap handler in app.js on a filter/sort refresh so the lightbox
+   navigates this subset. Omitted on infinite-scroll loads (image_order is None). #}
+{% if image_order is defined and image_order is not none %}
+<div hidden data-image-order='{{ image_order | tojson }}'></div>
+{% endif %}
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
     {% for img in images %}
     <div class="group relative aspect-[4/5] overflow-hidden rounded-md"

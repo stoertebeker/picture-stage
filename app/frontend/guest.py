@@ -130,6 +130,7 @@ def _render_password_gate(
             "requires_password": True,
             "error_key": error_key,
             "all_images": [],
+            "image_order": [],
             "images": [],
             "session_id": None,
             "total_images": 0,
@@ -171,6 +172,10 @@ async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str,
             # Full list for the Alpine state (data-images): lightbox + selection
             # need every image. The grid renders only the first page (am9).
             "all_images": images,
+            # Ordered id list the lightbox navigates (rfii). Initially unfiltered
+            # in sort_order; replaced on each filter/sort grid refresh so the
+            # lightbox walks exactly the visible subset in the grid's order.
+            "image_order": [img["id"] for img in images],
             "images": images[:GALLERY_PAGE_SIZE],
             "next_offset": GALLERY_PAGE_SIZE,
             "has_more": total > GALLERY_PAGE_SIZE,
@@ -214,6 +219,11 @@ async def guest_gallery_images(
     selected_count = sum(1 for img in images if img["selected"])
     favorited_count = sum(1 for img in images if img["favorited"])
     page = images[offset : offset + GALLERY_PAGE_SIZE]
+    # Full ordered id list of the current (filtered+sorted) view so the lightbox
+    # navigates the visible subset (rfii). Only consumed on a filter/sort refresh
+    # (offset==0, swaps #image-grid); the infinite-scroll path (offset>0) leaves
+    # the order unchanged and the afterSwap handler ignores it.
+    image_order = [img["id"] for img in images] if offset == 0 else None
 
     return templates.TemplateResponse(
         request,
@@ -221,6 +231,7 @@ async def guest_gallery_images(
         {
             "request": request,
             "images": page,
+            "image_order": image_order,
             "token": token,
             "session_id": str(session_id) if session_id else None,
             "total_images": total,

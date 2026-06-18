@@ -36,6 +36,24 @@ class _DataImagesExtractor(HTMLParser):
                 return
 
 
+class _AttrExtractor(HTMLParser):
+    """Capture the decoded value of the first occurrence of a given attribute,
+    using a browser-faithful HTML parse (entities/quotes resolved)."""
+
+    def __init__(self, attr: str) -> None:
+        super().__init__()
+        self.attr = attr
+        self.value: str | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if self.value is not None:
+            return
+        for name, val in attrs:
+            if name == self.attr:
+                self.value = val or ""
+                return
+
+
 def _make_image(filename: str, idx: int = 0) -> dict[str, object]:
     """Mirror the dict shape produced by app.frontend.guest._load_images."""
     return {
@@ -60,6 +78,7 @@ def _render_viewer(images: list[dict[str, object]], gallery_message: str | None 
         token="tok123",
         session_id="sess123",
         all_images=images,
+        image_order=[img["id"] for img in images],
         images=images,
         total_images=len(images),
         selected_count=0,
@@ -395,6 +414,7 @@ def _render_image_grid(
     filter: str = "all",
     token: str = "tok123",  # noqa: S107 — share token, not a password
     session_id: str = "sess123",
+    image_order: list[str] | None = None,
 ) -> str:
     return templates.env.get_template("guest/_image_grid.html").render(
         t=_t,
@@ -408,6 +428,7 @@ def _render_image_grid(
         sort_dir=sort_dir,
         filter=filter,
         session_completed=False,
+        image_order=image_order,
     )
 
 
@@ -549,3 +570,63 @@ def test_guest_lightbox_shortcut_i18n_keys_exist():
     ):
         assert key in de, f"DE missing guest.{key}"
         assert key in en, f"EN missing guest.{key}"
+
+
+def test_guest_viewer_ships_image_order_for_lightbox():
+    """rfii: the viewer root carries data-image-order — the ordered id list the
+    lightbox navigates — so it can walk the filtered/sorted subset, not the raw
+    image array. Initially that is every image in sort order."""
+    images = [_make_image("a.jpg", 0), _make_image("b.jpg", 1), _make_image("c.jpg", 2)]
+    html = _render_viewer(images)
+    parser = _AttrExtractor("data-image-order")
+    parser.feed(html)
+    assert parser.value is not None, "viewer root must carry data-image-order"
+    order = json.loads(parser.value)
+    assert order == [img["id"] for img in images]
+
+
+def test_guest_grid_emits_image_order_on_filter_sort_refresh():
+    """rfii: a filter/sort refresh (offset==0) ships the full ordered id list in a
+    hidden [data-image-order] element so the afterSwap handler can hand it to the
+    lightbox. The list reflects the (filtered) view passed in."""
+    imgs = [_make_image("a.jpg", 0), _make_image("b.jpg", 1)]
+    html = _render_image_grid(imgs, image_order=[img["id"] for img in imgs])
+    assert "data-image-order=" in html
+    parser = _AttrExtractor("data-image-order")
+    parser.feed(html)
+    assert json.loads(parser.value) == [img["id"] for img in imgs]
+
+
+def test_guest_grid_omits_image_order_on_infinite_scroll():
+    """rfii: infinite-scroll loads (offset>0 -> image_order is None) must NOT emit
+    the order element; they target the sentinel, not #image-grid, and leave the
+    navigation order unchanged."""
+    html = _render_image_grid([_make_image("a.jpg", 0)], image_order=None)
+    assert "data-image-order" not in html
+
+
+def test_guest_lightbox_navigation_uses_active_order():
+    """rfii: lightbox navigation (counter, arrows, open, next/prev, preload) keys
+    off activeOrder — the filtered/sorted subset — not the raw image array."""
+    lightbox = (PROJECT_ROOT / "app" / "templates" / "guest" / "_lightbox.html").read_text()
+    components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
+
+    # Template counter + arrow visibility + swipe hint use activeOrder.length.
+    assert "activeOrder.length" in lightbox
+    assert "images.length" not in lightbox, "lightbox must not navigate the raw image array"
+
+    # Component navigates via activeOrder and exposes setActiveOrder.
+    assert "activeOrder" in components_js
+    assert "setActiveOrder" in components_js
+    assert "this.imageById[this.activeOrder[this.lightboxIndex]]" in components_js
+
+
+def test_guest_afterswap_refreshes_lightbox_order():
+    """rfii: app.js wires an htmx:afterSwap handler that reads data-image-order
+    from a swapped #image-grid and pushes it into the guestViewer via
+    setActiveOrder — only for #image-grid (filter/sort), not infinite-scroll."""
+    app_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "app.js").read_text()
+    assert "htmx:afterSwap" in app_js
+    assert "image-grid" in app_js
+    assert "data-image-order" in app_js or "imageOrder" in app_js
+    assert "setActiveOrder" in app_js

@@ -65,6 +65,10 @@ function guestViewerComponent() {
         sessionId: '',
         images: [],
         imageById: {},
+        // Ordered id list the lightbox navigates (rfii). Mirrors the current
+        // grid view (filter + sort); the server ships it via data-image-order
+        // and refreshes it on every filter/sort swap (see setActiveOrder).
+        activeOrder: [],
         totalImages: 0,
         selectedCount: 0,
         favoritedCount: 0,
@@ -87,6 +91,10 @@ function guestViewerComponent() {
             this.images.forEach((img) => {
                 this.imageById[img.id] = img;
             });
+            // Initial navigation order = the unfiltered list in sort_order.
+            // Falls back to the full image order if the attribute is missing.
+            const order = JSON.parse(root.dataset.imageOrder || '[]');
+            this.activeOrder = order.length ? order : this.images.map((img) => img.id);
             this.totalImages = parseInt(root.dataset.totalImages || '0', 10);
             this.selectedCount = parseInt(root.dataset.selectedCount || '0', 10);
             this.favoritedCount = parseInt(root.dataset.favoritedCount || '0', 10);
@@ -95,7 +103,25 @@ function guestViewerComponent() {
         },
 
         get currentImage() {
-            return this.images[this.lightboxIndex] || null;
+            return this.imageById[this.activeOrder[this.lightboxIndex]] || null;
+        },
+
+        // Replace the lightbox navigation order after a filter/sort grid refresh
+        // (called from the htmx:afterSwap handler in app.js, rfii). If the
+        // lightbox is open, keep showing the current image when it survives the
+        // new filter, otherwise clamp the index into range.
+        setActiveOrder(ids) {
+            if (!Array.isArray(ids)) return;
+            const currentId = this.activeOrder[this.lightboxIndex];
+            this.activeOrder = ids;
+            if (!this.lightboxOpen) return;
+            const idx = ids.indexOf(currentId);
+            if (idx >= 0) {
+                this.lightboxIndex = idx;
+            } else {
+                this.lightboxIndex = Math.min(this.lightboxIndex, ids.length - 1);
+                if (this.lightboxIndex < 0) this.closeLightbox();
+            }
         },
 
         // Null-safe grid lookups by image id. The grid is loaded progressively
@@ -113,7 +139,7 @@ function guestViewerComponent() {
         },
 
         openLightboxById(id) {
-            const idx = this.images.findIndex((i) => i.id === id);
+            const idx = this.activeOrder.indexOf(id);
             if (idx >= 0) this.openLightbox(idx);
         },
 
@@ -142,7 +168,7 @@ function guestViewerComponent() {
         },
 
         nextImage() {
-            if (this.lightboxIndex < this.images.length - 1) {
+            if (this.lightboxIndex < this.activeOrder.length - 1) {
                 this.lightboxIndex++;
                 this._preloadAdjacent();
             }
@@ -159,7 +185,7 @@ function guestViewerComponent() {
         _preloadAdjacent() {
             const targets = [this.lightboxIndex + 1, this.lightboxIndex - 1];
             targets.forEach((idx) => {
-                const img = this.images[idx];
+                const img = this.imageById[this.activeOrder[idx]];
                 if (!img) return;
                 const url = img.preview_url || img.thumb_md_url;
                 if (!url) return;

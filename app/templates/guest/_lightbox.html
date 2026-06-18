@@ -12,7 +12,7 @@
 
         <!-- Image counter (top-left) -->
         <div class="absolute top-4 left-4 z-10 text-sm text-text-primary/70 tabular-nums">
-            <span class="text-text-primary font-medium" x-text="lightboxIndex + 1"></span> / <span x-text="images.length"></span>
+            <span class="text-text-primary font-medium" x-text="lightboxIndex + 1"></span> / <span x-text="activeOrder.length"></span>
         </div>
 
         <!-- Close button (top-right) -->
@@ -55,7 +55,7 @@
 
         <!-- Next button (right edge, hidden on mobile — swipe instead) -->
         <button @click="nextImage()"
-                x-show="lightboxIndex < images.length - 1"
+                x-show="lightboxIndex < activeOrder.length - 1"
                 aria-label="{{ t('guest.lightbox_next') }}"
                 class="absolute right-2 sm:right-4 top-1/2 -translate-y-1/2 z-10 hidden sm:flex h-12 w-12 items-center justify-center rounded-full text-text-primary/60 hover:text-text-primary hover:bg-text-primary/10 transition-colors focus:outline-none focus-visible:ring focus-visible:ring-focus">
             <svg class="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -64,7 +64,7 @@
         </button>
 
         <!-- Swipe hint (mobile only): shown briefly when a photo opens, then fades out (jwc) -->
-        <div x-show="images.length > 1 && showSwipeHint"
+        <div x-show="activeOrder.length > 1 && showSwipeHint"
              x-transition.opacity.duration.500ms
              class="absolute bottom-4 inset-x-0 z-10 flex sm:hidden items-center justify-center text-text-primary/60"
              style="display: none;">

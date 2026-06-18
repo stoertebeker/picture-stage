@@ -129,6 +129,28 @@
         if (removeId) document.getElementById(removeId)?.remove();
     });
 
+    /* Refresh the guest lightbox navigation order after a filter/sort grid swap
+     * (rfii). The server ships the current filtered+sorted id order in a hidden
+     * [data-image-order] element inside the swapped #image-grid; hand it to the
+     * guestViewer Alpine component so the lightbox walks exactly the visible
+     * subset in the grid's order. Infinite-scroll loads (offset>0) target the
+     * sentinel, not #image-grid, and omit the element, so they are ignored.
+     */
+    document.addEventListener('htmx:afterSwap', (e) => {
+        const target = e.detail && e.detail.target;
+        if (!target || target.id !== 'image-grid') return;
+        const orderEl = target.querySelector('[data-image-order]');
+        if (!orderEl || !window.Alpine) return;
+        const root = target.closest('[x-data]');
+        if (!root) return;
+        try {
+            const ids = JSON.parse(orderEl.dataset.imageOrder);
+            window.Alpine.$data(root).setActiveOrder(ids);
+        } catch (err) {
+            /* ignore malformed order payloads */
+        }
+    });
+
     /* Toast system (ps-ux-13).
      *
      * Triggered by:
