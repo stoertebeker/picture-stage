@@ -177,6 +177,7 @@ async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str,
             # lightbox walks exactly the visible subset in the grid's order.
             "image_order": [img["id"] for img in images],
             "images": images[:GALLERY_PAGE_SIZE],
+            "append_mode": False,
             "next_offset": GALLERY_PAGE_SIZE,
             "has_more": total > GALLERY_PAGE_SIZE,
             "session_id": str(session.id),
@@ -231,6 +232,11 @@ async def guest_gallery_images(
         {
             "request": request,
             "images": page,
+            # A progressive load replaces the sentinel itself (outerHTML), so
+            # its response must be bare sibling tiles rather than another grid
+            # wrapper. Filter/sort refreshes still replace #image-grid and need
+            # the wrapper (picture-stage-4k2g).
+            "append_mode": offset > 0,
             "image_order": image_order,
             "token": token,
             "session_id": str(session_id) if session_id else None,

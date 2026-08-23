@@ -3,8 +3,14 @@
 import json
 import pathlib
 from html.parser import HTMLParser
+from types import SimpleNamespace
 
+from starlette.requests import Request
+
+from app.db.models import GalleryStatus
+from app.frontend import guest as guest_frontend
 from app.frontend.deps import templates
+from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.i18n import t as translate
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
@@ -408,6 +414,7 @@ def _render_image_grid(
     images: list[dict[str, object]],
     *,
     has_more: bool = False,
+    append_mode: bool = False,
     next_offset: int = 30,
     sort_by: str = "sort_order",
     sort_dir: str = "asc",
@@ -423,6 +430,7 @@ def _render_image_grid(
         token=token,
         session_id=session_id,
         has_more=has_more,
+        append_mode=append_mode,
         next_offset=next_offset,
         sort_by=sort_by,
         sort_dir=sort_dir,
@@ -445,6 +453,65 @@ def test_guest_grid_no_sentinel_on_last_page():
     """am9: the last page has no sentinel, so progressive loading stops."""
     html = _render_image_grid([_make_image("a.jpg", 0)], has_more=False)
     assert 'hx-trigger="revealed"' not in html
+
+
+def test_guest_grid_infinite_scroll_response_returns_sibling_tiles():
+    """A sentinel's outerHTML swap must receive bare sibling tiles.
+
+    Returning another ``div.grid`` here nests every later page inside the
+    sentinel's grid cell: image 31 then contains images 31-60, whose sentinel
+    recursively contains the next page.
+    """
+    images = [_make_image("31.jpg", 30), _make_image("32.jpg", 31)]
+    html = _render_image_grid(images, append_mode=True, has_more=True, next_offset=60)
+
+    assert 'class="grid grid-cols-' not in html
+    assert html.count('class="group relative aspect-[4/5]') == len(images)
+    assert html.count('hx-trigger="revealed"') == 1
+    assert "offset=60" in html
+
+
+async def test_guest_grid_route_returns_flat_second_page(monkeypatch):
+    """The real offset route must select append mode after the first page."""
+    images = [_make_image(f"{idx + 1}.jpg", idx) for idx in range(61)]
+
+    async def fake_resolve_gallery_by_token(token, db):
+        return SimpleNamespace(status=GalleryStatus.shared)
+
+    async def fake_load_images(gallery, db, sort_by, sort_dir, filter_mode):
+        return images
+
+    monkeypatch.setattr(guest_frontend, "resolve_gallery_by_token", fake_resolve_gallery_by_token)
+    monkeypatch.setattr(guest_frontend, "check_gallery_accessible", lambda gallery: None)
+    monkeypatch.setattr(guest_frontend, "_load_images", fake_load_images)
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/g/tok123/gallery-images",
+            "headers": [],
+            "query_string": b"offset=30",
+            "scheme": "http",
+            "server": ("testserver", 80),
+            "client": ("127.0.0.1", 1234),
+        }
+    )
+
+    response = await guest_frontend.guest_gallery_images(
+        token="tok123",
+        request=request,
+        sort_by=ImageSortBy.sort_order,
+        sort_dir=SortDirection.asc,
+        filter=ImageFilter.all,
+        offset=30,
+        session_id=None,
+        db=object(),  # type: ignore[arg-type]
+    )
+    html = response.body.decode()
+
+    assert 'class="grid grid-cols-' not in html
+    assert html.count('class="group relative aspect-[4/5]') == 30
+    assert "offset=60" in html
 
 
 def test_guest_grid_items_keyed_by_id():

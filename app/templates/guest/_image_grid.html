@@ -1,4 +1,8 @@
 {% if images %}
+{# Filter/sort refreshes replace #image-grid and therefore need the grid
+   wrapper. Infinite-scroll requests replace their sentinel via outerHTML;
+   they must return bare sibling tiles or every page becomes a nested grid. #}
+{% if not append_mode %}
 {# Ordered id list of the current filtered+sorted view (rfii). Read by the
    htmx:afterSwap handler in app.js on a filter/sort refresh so the lightbox
    navigates this subset. Omitted on infinite-scroll loads (image_order is None). #}
@@ -6,6 +10,7 @@
 <div hidden data-image-order='{{ image_order | tojson }}'></div>
 {% endif %}
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 sm:gap-3">
+{% endif %}
     {% for img in images %}
     <div class="group relative aspect-[4/5] overflow-hidden rounded-md"
          :class="isSelectedById('{{ img.id }}') ? 'ring-2 ring-inset ring-accent' : ''">
@@ -95,7 +100,9 @@
         <span class="text-xs text-text-muted">{{ t('guest.loading_more') }}</span>
     </div>
     {% endif %}
+{% if not append_mode %}
 </div>
+{% endif %}
 {% else %}
 {% from "_macros/empty.html" import empty_state, icon_image %}
 {{ empty_state(icon=icon_image(), title=t('guest.no_images')) }}
