@@ -36,7 +36,11 @@ RUN curl -fsSL -o fonts/fraunces-variable.woff2 \
     curl -fsSL -o fonts/inter-variable.woff2 \
         "https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@latest/latin-wght-normal.woff2"
 
-FROM node:20-alpine AS css-builder
+# The generated stylesheet is architecture-independent. Run this stage on the
+# native build host instead of emulating Node under QEMU for ARM64; the latter
+# can terminate npm/Tailwind with SIGILL and prevent the multi-arch image from
+# being published even though the application itself built successfully.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS css-builder
 
 WORKDIR /css
 COPY tailwind.config.js ./
