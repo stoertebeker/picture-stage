@@ -1,4 +1,11 @@
-<div x-data="uploadZone" class="relative">
+<div x-data="uploadZone"
+     class="relative"
+     data-uploading-label="{{ t('gallery.upload_progress') }}"
+     data-processing-label="{{ t('gallery.upload_processing') }}"
+     data-processing-resumed-label="{{ t('gallery.upload_processing_resumed') }}"
+     data-complete-label="{{ t('gallery.upload_complete') }}"
+     data-upload-failed-label="{{ t('gallery.upload_failed') }}"
+     data-processing-failed-label="{{ t('gallery.upload_processing_failed') }}">
     <form method="post"
           action="/galleries/{{ gallery.id }}/upload"
           enctype="multipart/form-data"
@@ -7,8 +14,9 @@
           hx-swap="innerHTML"
           hx-encoding="multipart/form-data"
           x-ref="uploadForm"
-          @htmx:xhr:progress.window="onProgress($event)"
-          @htmx:after-request.window="onUploadComplete()">
+          @htmx:xhr:progress="onProgress($event)"
+          @htmx:after-request="onUploadComplete($event)"
+          @htmx:after-swap.window="onGridSwap($event)">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
 
         <div class="rounded-md border border-dashed px-5 py-8 text-center transition-colors"
@@ -30,6 +38,7 @@
                            accept="image/jpeg,image/png,image/webp"
                            class="hidden"
                            x-ref="fileInput"
+                           :disabled="isUploadInFlight()"
                            @change="handleFiles($event)">
                 </label>
             </p>
@@ -37,14 +46,24 @@
         </div>
     </form>
 
-    <div x-show="uploading" x-transition class="mt-4">
+    <div x-show="isStatusVisible()"
+         x-transition
+         class="mt-4"
+         :role="statusRole()"
+         :aria-live="statusLive()">
         <div class="mb-1 flex items-center justify-between text-sm text-text-muted">
-            <span>{{ t('gallery.upload_progress') }}</span>
-            <span x-text="uploadProgress + '%'"></span>
+            <span x-text="statusText()"></span>
+            <span x-text="progressPercentText()" aria-hidden="true"></span>
         </div>
-        <div class="h-2 w-full rounded-full bg-surface-sunken">
-            <div class="h-2 rounded-full bg-accent transition-all duration-300"
-                 :style="'width: ' + uploadProgress + '%'"></div>
+        <div class="h-2 w-full rounded-full bg-surface-sunken"
+             role="progressbar"
+             aria-valuemin="0"
+             aria-valuemax="100"
+             :aria-valuenow="progressValue()"
+             :aria-valuetext="statusText()">
+            <div class="h-2 rounded-full transition-all duration-300"
+                 :class="progressBarClass()"
+                 :style="progressStyle()"></div>
         </div>
     </div>
 </div>

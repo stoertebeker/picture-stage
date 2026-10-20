@@ -1,6 +1,9 @@
 """Structural tests for the owner gallery detail templates."""
 
 from pathlib import Path
+from types import SimpleNamespace
+
+from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 TEMPLATE_ROOT = PROJECT_ROOT / "app" / "templates" / "galleries"
@@ -8,6 +11,34 @@ TEMPLATE_ROOT = PROJECT_ROOT / "app" / "templates" / "galleries"
 
 def _template(name: str) -> str:
     return (TEMPLATE_ROOT / name).read_text()
+
+
+def _render_image_grid(*statuses: str) -> str:
+    """Render the owner grid with lightweight image objects.
+
+    This exercises the Jinja condition that controls polling instead of only
+    asserting that the condition happens to be present in the template source.
+    """
+    environment = Environment(
+        loader=FileSystemLoader(PROJECT_ROOT / "app" / "templates"),
+        autoescape=select_autoescape(("html",)),
+    )
+    template = environment.get_template("galleries/_image_grid.html")
+    images = [
+        SimpleNamespace(
+            id=f"image-{index}",
+            processing_status=status,
+            previews={"thumb_md": f"/media/image-{index}.webp"},
+            filename=f"photo-{index}.jpg",
+            sort_order=index,
+        )
+        for index, status in enumerate(statuses)
+    ]
+    return template.render(
+        gallery=SimpleNamespace(id="gallery-1"),
+        images=images,
+        t=lambda key, **_kwargs: key,
+    )
 
 
 def test_gallery_detail_preserves_htmx_contracts() -> None:
@@ -48,8 +79,42 @@ def test_upload_handler_avoids_multi_statement_inline_expression() -> None:
     components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
 
     assert "uploadProgress = 0; uploading = false" not in upload
-    assert "onUploadComplete()" in upload
+    assert "onUploadComplete($event)" in upload
     assert "onUploadComplete(" in components_js
+
+
+def test_upload_progress_handlers_are_scoped_and_csp_safe() -> None:
+    """Only the grid swap is global, and every inline handler is a method call.
+
+    Progress and request completion events originate on the upload form, so
+    listening on ``window`` would let unrelated HTMX requests mutate this
+    component.  Grid swaps happen outside its DOM subtree and therefore retain
+    a filtered window listener.
+    """
+    upload = _template("_upload.html")
+
+    assert '@htmx:xhr:progress="onProgress($event)"' in upload
+    assert "@htmx:xhr:progress.window=" not in upload
+    assert '@htmx:after-request="onUploadComplete($event)"' in upload
+    assert "@htmx:after-request.window=" not in upload
+    assert '@htmx:after-swap.window="onGridSwap($event)"' in upload
+
+    # Keep @alpinejs/csp expressions as method calls: no assignment,
+    # concatenation, optional chaining, globals, or chained statements.
+    for expression in (
+        "onProgress($event)",
+        "onUploadComplete($event)",
+        "onGridSwap($event)",
+        "isStatusVisible()",
+        "statusText()",
+        "progressPercentText()",
+        "progressValue()",
+        "progressStyle()",
+        "progressBarClass()",
+        "statusRole()",
+        "statusLive()",
+    ):
+        assert f'="{expression}"' in upload
 
 
 def test_gallery_templates_have_no_multi_statement_alpine_handlers() -> None:
@@ -155,6 +220,27 @@ def test_image_grid_polls_only_while_previews_pending() -> None:
     assert 'hx-target="#image-grid"' in image_grid
 
 
+def test_rendered_image_grid_exports_processing_state_and_only_polls_pending() -> None:
+    """Issue #3: the upload UI consumes each image's id and terminal state.
+
+    A failed preview is terminal just like a ready preview: neither may keep the
+    grid polling forever.  A mixed grid still polls while any image is pending.
+    """
+    pending = _render_image_grid("ready", "pending", "failed")
+    assert 'data-image-id="image-0"' in pending
+    assert 'data-processing-status="ready"' in pending
+    assert 'data-image-id="image-1"' in pending
+    assert 'data-processing-status="pending"' in pending
+    assert 'data-image-id="image-2"' in pending
+    assert 'data-processing-status="failed"' in pending
+    assert 'hx-trigger="every 2s"' in pending
+
+    for terminal_status in ("ready", "failed"):
+        terminal = _render_image_grid(terminal_status, terminal_status)
+        assert 'hx-trigger="every 2s"' not in terminal
+        assert 'hx-get="/galleries/gallery-1/images-grid"' not in terminal
+
+
 def test_image_grid_branches_on_processing_status() -> None:
     """Each tile renders by status: ready -> thumbnail, pending -> spinner, failed -> error."""
     image_grid = _template("_image_grid.html")
@@ -167,6 +253,32 @@ def test_image_grid_branches_on_processing_status() -> None:
     # Status semantics for assistive tech.
     assert 'role="status"' in image_grid
     assert 'role="alert"' in image_grid
+
+
+def test_upload_preview_progress_i18n_keys_exist_in_de_and_en() -> None:
+    """Every state-machine message is translated in both supported locales."""
+    import json
+
+    translations = {
+        locale: json.loads((PROJECT_ROOT / "app" / "i18n" / f"{locale}.json").read_text())["gallery"]
+        for locale in ("de", "en")
+    }
+    for key in (
+        "upload_progress",
+        "upload_processing",
+        "upload_processing_resumed",
+        "upload_complete",
+        "upload_failed",
+        "upload_processing_failed",
+    ):
+        for locale, gallery in translations.items():
+            assert key in gallery, f"{locale.upper()} missing gallery.{key}"
+            assert gallery[key].strip(), f"{locale.upper()} gallery.{key} is empty"
+
+    for locale, gallery in translations.items():
+        processing = gallery["upload_processing"]
+        assert "{ready}" in processing, f"{locale.upper()} progress omits ready count"
+        assert "{total}" in processing, f"{locale.upper()} progress omits total count"
 
 
 def test_share_modal_can_update_password_without_rotating_token() -> None:

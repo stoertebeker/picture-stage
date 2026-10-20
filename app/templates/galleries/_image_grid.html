@@ -12,7 +12,8 @@
     {% for img in images %}
     <article class="group relative overflow-hidden rounded-md border border-border-subtle bg-surface-raised transition-colors hover:border-border-strong"
              x-show="isVisible('{{ img.id }}')"
-             data-image-id="{{ img.id }}">
+             data-image-id="{{ img.id }}"
+             data-processing-status="{{ img.processing_status }}">
         {% if img.processing_status == 'ready' %}
         <button type="button"
                 @click.stop="toggleImage('{{ img.id }}')"

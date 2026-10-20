@@ -9,15 +9,62 @@
  * Jinja template (CSP blocks it). See docs/design/build.md.
  */
 
-// Upload zone for gallery detail. No server-rendered initial state.
+// Upload zone for gallery detail. The upload request only persists originals;
+// preview generation continues in background workers and is reflected by the
+// polling owner grid. Keep one state machine across both phases so "complete"
+// really means that every preview from the current batch is ready.
 function uploadZoneComponent() {
     return {
         dragOver: false,
-        uploading: false,
+        state: 'idle',
         uploadProgress: 0,
+        trackedImages: {},
+        _uploadBaseline: {},
+        _awaitingUploadGrid: false,
+        _failureStage: '',
+        _batchStarted: false,
+        _expectedUploadCount: 0,
+        _progressFloor: 0,
+        _resumedProcessing: false,
+        _resumedHasPending: false,
+        _uploadGeneration: 0,
+        _beforeRequestHandler: null,
+        _beforeSwapHandler: null,
+        _afterRequestHandler: null,
+
+        init() {
+            const statuses = this._readGridStatuses();
+            const hasPendingImages = Object.values(statuses).some((status) => status === 'pending');
+            if (hasPendingImages) {
+                // A reload loses the identity of the upload batch. Observe
+                // gallery-wide pending work without inventing exact totals or
+                // letting unrelated historical failures poison the result.
+                this._resumedProcessing = true;
+                this._resumedHasPending = true;
+                this.state = 'processing';
+            }
+
+            // A poll started before a newer upload can finish afterwards and
+            // otherwise replace the grid with stale terminal HTML, removing
+            // its hx-trigger and stopping all future polling. Tag poll requests
+            // at launch and reject stale swaps before HTMX mutates the DOM.
+            this._beforeRequestHandler = (event) => this.onBeforeHtmxRequest(event);
+            this._beforeSwapHandler = (event) => this.onBeforeGridSwap(event);
+            this._afterRequestHandler = (event) => this.onAfterHtmxRequest(event);
+            document.addEventListener('htmx:beforeRequest', this._beforeRequestHandler);
+            document.addEventListener('htmx:beforeSwap', this._beforeSwapHandler);
+            document.addEventListener('htmx:afterRequest', this._afterRequestHandler);
+        },
+
+        destroy() {
+            document.removeEventListener('htmx:beforeRequest', this._beforeRequestHandler);
+            document.removeEventListener('htmx:beforeSwap', this._beforeSwapHandler);
+            document.removeEventListener('htmx:afterRequest', this._afterRequestHandler);
+        },
 
         handleDrop(event) {
             this.dragOver = false;
+            if (this.isUploadInFlight()) return;
             const files = event.dataTransfer.files;
             if (files.length > 0) {
                 this.$refs.fileInput.files = files;
@@ -26,7 +73,7 @@ function uploadZoneComponent() {
         },
 
         handleFiles(event) {
-            if (event.target.files.length > 0) {
+            if (!this.isUploadInFlight() && event.target.files.length > 0) {
                 this.startUpload();
             }
         },
@@ -34,11 +81,36 @@ function uploadZoneComponent() {
         // Math.round lives here in JS — globals are forbidden in inline
         // expressions under the @alpinejs/csp build.
         onProgress(event) {
+            if (!this._isUploadEvent(event) || !event.detail.total) return;
             this.uploadProgress = Math.round((event.detail.loaded / event.detail.total) * 100);
         },
 
         startUpload() {
-            this.uploading = true;
+            if (this.isUploadInFlight() || !this.$refs.fileInput.files.length) return;
+
+            const continuingBatch = this.state === 'processing' && !this._resumedProcessing;
+            const currentProgress = this.progressValue();
+
+            // A completed/failed batch should not inflate the next batch's
+            // denominator. Pending work discovered in the grid is retained;
+            // when a second upload starts during processing, all of the first
+            // batch remains tracked and the new ids are appended after swap.
+            if (!continuingBatch) {
+                this.trackedImages = {};
+                this._progressFloor = 0;
+            } else {
+                this._progressFloor = Math.max(this._progressFloor, currentProgress);
+            }
+
+            this._uploadBaseline = this._readGridStatuses();
+            this._expectedUploadCount = this.$refs.fileInput.files.length;
+            this._awaitingUploadGrid = true;
+            this._failureStage = '';
+            this._batchStarted = true;
+            this._resumedProcessing = false;
+            this._resumedHasPending = false;
+            this._uploadGeneration += 1;
+            this.state = 'uploading';
             this.uploadProgress = 0;
             // requestSubmit() triggers a real SubmitEvent that HTMX can
             // intercept and preventDefault. htmx.trigger(form, 'submit')
@@ -47,12 +119,247 @@ function uploadZoneComponent() {
             this.$refs.uploadForm.requestSubmit();
         },
 
-        // Reset after the HTMX upload request settles. Lives here because the
-        // @alpinejs/csp build cannot parse multi-statement inline expressions
-        // (uploadProgress = 0; uploading = false threw "Unexpected token").
-        onUploadComplete() {
-            this.uploadProgress = 0;
-            this.uploading = false;
+        // Move from the network phase to preview processing only for this
+        // component's form. Other HTMX requests on the page must not affect it.
+        onUploadComplete(event) {
+            if (!this._isUploadEvent(event)) return;
+
+            if (!event.detail.successful) {
+                this._awaitingUploadGrid = false;
+                this._expectedUploadCount = 0;
+                this._failureStage = 'upload';
+                this.state = 'failed';
+                this.$refs.fileInput.value = '';
+                return;
+            }
+
+            const uploadPhaseProgress = this.progressValue();
+            // afterSwap normally precedes afterRequest, but syncing here too
+            // keeps the component correct if HTMX event ordering changes.
+            this._syncFromGrid(true);
+            this._failureStage = '';
+            this.uploadProgress = 100;
+            this.$refs.fileInput.value = '';
+            this._progressFloor = Math.max(this._progressFloor, uploadPhaseProgress);
+            this.state = 'processing';
+            this._updateState();
+        },
+
+        // The upload response and each two-second polling response replace
+        // #image-grid. Re-read only those swaps and update tracked ids from the
+        // server-rendered data attributes.
+        onGridSwap(event) {
+            const target = event.detail && event.detail.target;
+            if (!target || target.id !== 'image-grid') return;
+            this._syncFromGrid(this._awaitingUploadGrid);
+            this._updateState();
+        },
+
+        onBeforeHtmxRequest(event) {
+            if (!this._isGridPollEvent(event)) return;
+            const request = event.detail.xhr || event.detail.requestConfig;
+            if (!request) return;
+            // Store ordering metadata on HTMX's raw request object. Keeping an
+            // XMLHttpRequest inside Alpine state would proxy it and break the
+            // strict identity check when beforeSwap later exposes the raw XHR.
+            request.__pictureStageUploadProgressContext = {
+                generation: this._uploadGeneration,
+                duringUpload: this.state === 'uploading',
+            };
+        },
+
+        onBeforeGridSwap(event) {
+            const target = event.detail && event.detail.target;
+            if (!target || target.id !== 'image-grid' || this._isUploadEvent(event)) return;
+
+            const context = this._takeGridRequestContext(event);
+            if (!context) return;
+            const stale = context.generation < this._uploadGeneration || context.duringUpload;
+            if (stale) {
+                event.detail.shouldSwap = false;
+                event.preventDefault();
+            }
+        },
+
+        onAfterHtmxRequest(event) {
+            this._takeGridRequestContext(event);
+        },
+
+        isStatusVisible() {
+            return this.state !== 'idle';
+        },
+
+        isUploadInFlight() {
+            return this.state === 'uploading';
+        },
+
+        progressValue() {
+            if (this._resumedProcessing) return null;
+            if (this.state === 'complete') return 100;
+            if (this.state === 'uploading') {
+                // Uploading consumes half of the remaining visual range. A
+                // follow-up upload therefore never moves an in-flight batch
+                // backwards and can never claim completion by itself.
+                const remaining = 100 - this._progressFloor;
+                const uploadShare = (remaining / 2) * (this.uploadProgress / 100);
+                return Math.min(99, Math.round(this._progressFloor + uploadShare));
+            }
+
+            const statuses = Object.values(this.trackedImages);
+            const total = statuses.length + (this._awaitingUploadGrid ? this._expectedUploadCount : 0);
+            if (total === 0) return Math.min(99, Math.round(this._progressFloor));
+            const terminal = statuses.filter((status) => status !== 'pending').length;
+            const previewProgress = 50 + (terminal / total) * 50;
+            return Math.min(99, Math.round(Math.max(this._progressFloor, previewProgress)));
+        },
+
+        progressPercentText() {
+            if (this._resumedProcessing) return '';
+            return `${this.progressValue()}%`;
+        },
+
+        statusText() {
+            const root = this.$root.dataset;
+            if (this._resumedProcessing) return root.processingResumedLabel || '';
+            if (this.state === 'uploading') return root.uploadingLabel || '';
+            if (this.state === 'complete') return root.completeLabel || '';
+            if (this.state === 'failed') {
+                return this._failureStage === 'upload'
+                    ? root.uploadFailedLabel || ''
+                    : root.processingFailedLabel || '';
+            }
+
+            const statuses = Object.values(this.trackedImages);
+            const ready = statuses.filter((status) => status === 'ready').length;
+            const total = statuses.length + (this._awaitingUploadGrid ? this._expectedUploadCount : 0);
+            return (root.processingLabel || '')
+                .replace('{ready}', String(ready))
+                .replace('{total}', String(total));
+        },
+
+        statusRole() {
+            return this.state === 'failed' ? 'alert' : 'status';
+        },
+
+        statusLive() {
+            return this.state === 'failed' ? 'assertive' : 'polite';
+        },
+
+        progressStyle() {
+            if (this._resumedProcessing) return 'width: 100%';
+            return `width: ${this.progressValue()}%`;
+        },
+
+        progressBarClass() {
+            if (this.state === 'failed') return 'bg-status-danger';
+            if (this.state === 'complete') return 'bg-status-success';
+            if (this._resumedProcessing) return 'bg-accent animate-pulse';
+            return 'bg-accent';
+        },
+
+        _isUploadEvent(event) {
+            if (!event || !event.detail) return false;
+            const form = this.$refs.uploadForm;
+            const requestElement = event.detail.requestConfig && event.detail.requestConfig.elt;
+            return event.target === form || event.detail.elt === form || requestElement === form;
+        },
+
+        _isGridPollEvent(event) {
+            if (!event || !event.detail || this._isUploadEvent(event)) return false;
+            const requestElement = event.detail.elt || (event.detail.requestConfig && event.detail.requestConfig.elt);
+            if (!requestElement || typeof requestElement.getAttribute !== 'function') return false;
+            const path = requestElement.getAttribute('hx-get') || '';
+            return path.endsWith('/images-grid');
+        },
+
+        _takeGridRequestContext(event) {
+            if (!event || !event.detail) return null;
+            const request = event.detail.xhr || event.detail.requestConfig;
+            if (!request) return null;
+            const context = request.__pictureStageUploadProgressContext || null;
+            delete request.__pictureStageUploadProgressContext;
+            return context;
+        },
+
+        _readGridStatuses() {
+            const grid = document.getElementById('image-grid');
+            if (!grid) return {};
+            const statuses = {};
+            grid.querySelectorAll('[data-image-id][data-processing-status]').forEach((element) => {
+                statuses[element.dataset.imageId] = element.dataset.processingStatus;
+            });
+            return statuses;
+        },
+
+        _syncFromGrid(collectNewImages) {
+            const statuses = this._readGridStatuses();
+
+            if (this._resumedProcessing) {
+                this._resumedHasPending = Object.values(statuses).some((status) => status === 'pending');
+                return;
+            }
+
+            Object.entries(statuses).forEach(([id, status]) => {
+                if (id in this.trackedImages) this._mergeTrackedStatus(id, status);
+            });
+
+            if (collectNewImages) {
+                let foundNewImage = false;
+                Object.entries(statuses).forEach(([id, status]) => {
+                    if (!(id in this._uploadBaseline)) {
+                        this._mergeTrackedStatus(id, status);
+                        foundNewImage = true;
+                    }
+                });
+                if (foundNewImage) {
+                    this._awaitingUploadGrid = false;
+                    this._expectedUploadCount = 0;
+                }
+            }
+        },
+
+        _mergeTrackedStatus(id, incomingStatus) {
+            const currentStatus = this.trackedImages[id];
+            if (currentStatus === undefined) {
+                this.trackedImages[id] = incomingStatus;
+                return;
+            }
+            // Image processing is monotonic. Omitted ids are retained by
+            // _syncFromGrid, and stale pending/terminal responses cannot undo
+            // a terminal state already observed from a newer response.
+            if (currentStatus === 'pending' && incomingStatus !== 'pending') {
+                this.trackedImages[id] = incomingStatus;
+            }
+        },
+
+        _updateState() {
+            if (this._resumedProcessing) {
+                if (this._resumedHasPending) {
+                    this.state = 'processing';
+                } else {
+                    this._resumedProcessing = false;
+                    this.state = 'idle';
+                }
+                return;
+            }
+            if (this.state === 'failed' && this._failureStage) return;
+            if (this.state === 'uploading') return;
+            if (this._awaitingUploadGrid) {
+                this.state = 'processing';
+                return;
+            }
+
+            const statuses = Object.values(this.trackedImages);
+            if (statuses.some((status) => status === 'pending')) {
+                this.state = 'processing';
+            } else if (statuses.some((status) => status === 'failed')) {
+                this._failureStage = 'processing';
+                this.state = 'failed';
+            } else if (this._batchStarted) {
+                this.state = 'complete';
+            } else {
+                this.state = 'idle';
+            }
         },
     };
 };
