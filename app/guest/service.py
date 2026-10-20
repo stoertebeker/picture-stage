@@ -24,6 +24,7 @@ from app.db.models import (
     GalleryStatus,
     Image,
     PreviewVariant,
+    ShareSession,
     User,
 )
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
@@ -67,6 +68,34 @@ def check_gallery_accessible(gallery: Gallery) -> None:
     """Raise 410 Gone if the gallery's share link has expired."""
     if is_gallery_expired(gallery):
         raise HTTPException(status_code=status.HTTP_410_GONE, detail="Gallery link has expired")
+
+
+async def require_gallery_read_access(
+    gallery: Gallery,
+    session_id: uuid.UUID | None,
+    db: AsyncSession,
+) -> None:
+    """Require an unlocked gallery session before returning password-protected data.
+
+    The share token identifies the gallery, but a configured password is a second
+    access-control boundary. Passwordless galleries intentionally remain usable
+    with the token alone; protected galleries require a session created by the
+    successful password-verification flow.
+    """
+    if gallery.password_hash is None:
+        return
+
+    if session_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
+
+    result = await db.execute(
+        select(ShareSession.id).where(
+            ShareSession.id == session_id,
+            ShareSession.gallery_id == gallery.id,
+        )
+    )
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
 
 
 def parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:

@@ -476,7 +476,7 @@ async def test_guest_grid_route_returns_flat_second_page(monkeypatch):
     images = [_make_image(f"{idx + 1}.jpg", idx) for idx in range(61)]
 
     async def fake_resolve_gallery_by_token(token, db):
-        return SimpleNamespace(status=GalleryStatus.shared)
+        return SimpleNamespace(status=GalleryStatus.shared, password_hash=None)
 
     async def fake_load_images(gallery, db, sort_by, sort_dir, filter_mode):
         return images

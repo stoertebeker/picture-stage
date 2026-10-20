@@ -22,6 +22,7 @@ from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
     load_sorted_filtered_images,
+    require_gallery_read_access,
     resolve_gallery_by_token,
     sign_preview_urls,
 )
@@ -157,6 +158,7 @@ async def list_shared_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
+    await require_gallery_read_access(gallery, session_id, db)
 
     # Selection map is unused here (the JSON API omits selection fields), but the
     # shared loader always materialises it from a single query (d7z).
@@ -231,6 +233,7 @@ async def get_selections(
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     check_gallery_accessible(gallery)
+    await require_gallery_read_access(gallery, session_id, db)
 
     selections = await get_current_selections(gallery.id, db)
 

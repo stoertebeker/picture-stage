@@ -21,6 +21,7 @@ from app.guest.service import (
     check_gallery_accessible,
     is_gallery_expired,
     load_sorted_filtered_images,
+    require_gallery_read_access,
     resolve_gallery_by_token,
     sign_preview_urls,
 )
@@ -214,6 +215,7 @@ async def guest_gallery_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
+    await require_gallery_read_access(gallery, session_id, db)
 
     images = await _load_images(gallery, db, sort_by, sort_dir, filter)
     total = len(images)
