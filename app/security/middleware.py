@@ -1,3 +1,6 @@
+import base64
+import hashlib
+import hmac
 import secrets
 from typing import ClassVar
 from urllib.parse import parse_qs
@@ -8,6 +11,26 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import settings
+
+
+def _mint_csrf_token(session_token: str | None) -> str:
+    """Create a CSRF token, stable across concurrent GETs for one session.
+
+    A returning authenticated browser can legitimately have a session cookie
+    while its shorter-lived/readable CSRF cookie is missing. Multiple safe
+    requests may then race (for example the gallery navigation and a dashboard
+    HTMX request). Deriving the replacement from the opaque session makes every
+    one of those responses render and set the same token. The domain separator
+    keeps this HMAC independent from other uses of ``SECRET_KEY``.
+    """
+    if not session_token:
+        return secrets.token_urlsafe(32)
+    digest = hmac.new(
+        settings.secret_key.encode(),
+        b"picture-stage:csrf:v1\0" + session_token.encode(),
+        hashlib.sha256,
+    ).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
@@ -27,10 +50,29 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         if request.method in self.SAFE_METHODS:
+            session_token = request.cookies.get("session")
+            csrf_token = request.cookies.get("csrf_token")
+            issue_cookie = False
+            if request.method == "GET" and session_token:
+                # Authenticated requests use a signed, session-bound token. In
+                # addition to preventing cookie injection, this gives every
+                # concurrent GET for the same session the same replacement.
+                expected_token = _mint_csrf_token(session_token)
+                issue_cookie = not csrf_token or not hmac.compare_digest(csrf_token, expected_token)
+                csrf_token = expected_token
+            elif request.method == "GET" and not csrf_token:
+                # Generate before rendering so the response body and the cookie
+                # carry the same token. Generating only after call_next left the
+                # first rendered form with an empty/stale token, making its very
+                # first POST fail with a 403 CSRF mismatch.
+                csrf_token = _mint_csrf_token(None)
+                issue_cookie = True
+            if csrf_token:
+                request.state.csrf_token = csrf_token
+
             response = await call_next(request)
             # Set CSRF cookie on GET requests if not already present
-            if request.method == "GET" and not request.cookies.get("csrf_token"):
-                csrf_token = secrets.token_urlsafe(32)
+            if issue_cookie and csrf_token is not None:
                 response.set_cookie(
                     key="csrf_token",
                     value=csrf_token,
@@ -45,6 +87,11 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         cookie_token = request.cookies.get("csrf_token")
         if not cookie_token:
             return Response("CSRF token missing", status_code=403)
+        request.state.csrf_token = cookie_token
+
+        session_token = request.cookies.get("session")
+        if session_token and not hmac.compare_digest(cookie_token, _mint_csrf_token(session_token)):
+            return Response("CSRF token mismatch", status_code=403)
 
         # Check header first, then form body (without consuming request.form())
         header_token = request.headers.get("X-CSRF-Token")
@@ -57,7 +104,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
         submitted_token = header_token or form_token
 
-        if not submitted_token or submitted_token != cookie_token:
+        if not submitted_token or not hmac.compare_digest(submitted_token, cookie_token):
             return Response("CSRF token mismatch", status_code=403)
 
         return await call_next(request)

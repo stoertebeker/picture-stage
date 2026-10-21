@@ -61,6 +61,14 @@ def _patched_template_response(
     # Expose the logged-in user (set by get_user_from_cookie) for the nav/admin menu.
     current_user = getattr(request.state, "current_user", None) if hasattr(request, "state") else None
     context.setdefault("current_user", current_user)
+    # CSRFMiddleware may mint a replacement token for this very GET response.
+    # It is not present in request.cookies yet, so always prefer the request
+    # state value and override route contexts that read the stale cookie.
+    csrf_token = getattr(request.state, "csrf_token", None) if hasattr(request, "state") else None
+    if csrf_token is not None:
+        context["csrf_token"] = csrf_token
+    else:
+        context.setdefault("csrf_token", request.cookies.get("csrf_token", ""))
     return _original_TemplateResponse(request, name, context, **kwargs)
 
 

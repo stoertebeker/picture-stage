@@ -12,6 +12,7 @@ from sqlalchemy import select
 from app.auth.tokens import create_access_token
 from app.db.models import Gallery, GalleryStatus, Image, ImagePreview, PreviewVariant
 from app.main import app
+from app.security.middleware import _mint_csrf_token
 from app.storage.dependencies import get_storage
 
 
@@ -61,13 +62,15 @@ async def test_frontend_delete_purges_storage_files(client, db, owner, verify_db
 
     fake = _RecordingStorage()
     app.dependency_overrides[get_storage] = lambda: fake
-    client.cookies.set("session", create_access_token(str(owner.id)))
-    client.cookies.set("csrf_token", "test-csrf")
+    session_token = create_access_token(str(owner.id))
+    csrf_token = _mint_csrf_token(session_token)
+    client.cookies.set("session", session_token)
+    client.cookies.set("csrf_token", csrf_token)
     try:
         resp = await client.post(
             f"/galleries/{gallery.id}/delete",
             data={"confirm_name": "Zu löschen"},
-            headers={"X-CSRF-Token": "test-csrf"},
+            headers={"X-CSRF-Token": csrf_token},
         )
     finally:
         app.dependency_overrides.pop(get_storage, None)
@@ -85,13 +88,15 @@ async def test_frontend_delete_name_mismatch_keeps_gallery_and_files(client, db,
 
     fake = _RecordingStorage()
     app.dependency_overrides[get_storage] = lambda: fake
-    client.cookies.set("session", create_access_token(str(owner.id)))
-    client.cookies.set("csrf_token", "test-csrf")
+    session_token = create_access_token(str(owner.id))
+    csrf_token = _mint_csrf_token(session_token)
+    client.cookies.set("session", session_token)
+    client.cookies.set("csrf_token", csrf_token)
     try:
         resp = await client.post(
             f"/galleries/{gallery.id}/delete",
             data={"confirm_name": "falscher Name"},
-            headers={"X-CSRF-Token": "test-csrf"},
+            headers={"X-CSRF-Token": csrf_token},
         )
     finally:
         app.dependency_overrides.pop(get_storage, None)
