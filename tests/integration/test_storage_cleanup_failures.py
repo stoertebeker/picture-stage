@@ -502,14 +502,16 @@ async def test_gallery_delete_waits_for_upload_commit(client, db, owner, auth_he
     assert _files(local_storage, gallery) == {}
 
 
-@pytest.mark.parametrize("entrypoint", ["api_bulk", "frontend_bulk"])
+@pytest.mark.parametrize(("entrypoint", "unknown_count"), [("api_bulk", 1024), ("frontend_bulk", 998)])
 async def test_bulk_unknown_ids_do_not_allocate_unbounded_advisory_locks(
-    client, db, owner, auth_headers, local_storage, monkeypatch, entrypoint
+    client, db, owner, auth_headers, local_storage, monkeypatch, entrypoint, unknown_count
 ):
     from sqlalchemy import text
 
     gallery, image = await _pending_image(db, owner, local_storage)
-    ids = [str(image.id)] + [str(uuid.uuid4()) for _ in range(1024)]
+    # URL-encoded forms allow 1000 fields: 999 image IDs plus the CSRF token.
+    # The JSON API has no form-field ceiling and keeps the larger test batch.
+    ids = [str(image.id)] + [str(uuid.uuid4()) for _ in range(unknown_count)]
     actual_delete = local_storage.delete
     observed = []
 
@@ -541,7 +543,7 @@ async def test_bulk_unknown_ids_do_not_allocate_unbounded_advisory_locks(
             f"/galleries/{gallery.id}/bulk-delete",
             data={"image_ids": ids, "csrf_token": csrf},
         )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     assert observed and max(observed) == 1
     assert await _image_status(image.id) is None
     assert _files(local_storage, gallery) == {}

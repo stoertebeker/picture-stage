@@ -348,3 +348,18 @@ Löschversuch kann auch bereits entfernte Dateien gefahrlos wiederholen. Das gil
 auch für die Admin-Löschung mehrerer Galerien und die einzelnen/bulk Bildpfade.
 Unbekannte Altdateien ohne Bilddatensatz und Upload-Transaktionen, die nie einen
 Bilddatensatz committed haben (`2jb0`), benötigen weiterhin eine separate Lösung.
+
+### CI-Regressionsdaten müssen Formulargrenzen einhalten (2026-10-24)
+
+GitHub-Lauf `40090444485` scheiterte nach den Storage-Fixes an einem neuen
+Bulk-Test: 1025 Bild-ID-Felder plus CSRF ergaben 1026 Formularfelder. Die frische
+CI-Installation mit Python 3.12 / Starlette 1.9.0 begrenzt auch URL-encoded-Forms
+auf 1000 Felder; lokal ließ Starlette 1.3.0 diesen Request noch durch. Der Test
+prüfte damit die Parsergrenze statt die vorgesehene konstante Advisory-Sperrzahl.
+
+Korrektur (`picture-stage-4qkf`): Frontend mit 998 unbekannten IDs plus einer
+existierenden ID und CSRF testen, also genau 1000 Felder. Die JSON-API behält
+1024 unbekannte IDs. Beide Varianten prüfen weiterhin genau eine DB-Sperre und
+echte Datei-/DB-Löschung; bei unerwartetem Status wird der Response-Body gezeigt.
+Die Formulargrenze bleibt unverändert. Bei CI-Abweichungen die betroffene Probe
+zusätzlich im Python-3.12-Runtime-Image mit frischen Test-Abhängigkeiten ausführen.
