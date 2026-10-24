@@ -296,3 +296,30 @@ Anführungszeichen und HTML-Zeichen auch im echten Browser prüfen, sowohl nach
 vollständigem Seitenaufbau als auch nach HTMX-Einfügung.
 
 Seit `picture-stage-uwnt` entfällt die Namenseingabe im Löschdialog auf Benutzerwunsch. Der Name wird dort nur als HTML-Text angezeigt; die Komponente `galleryDelete` wurde entfernt. Die Erkenntnis zu Unicode-Escapes bleibt für andere Alpine-CSP-Komponenten relevant.
+
+## Storage-Bereinigung mit echten Dateien prüfen (2026-10-24)
+
+Audit `picture-stage-4yyv` gegen `758335d`: Ein Recording-Stub beweist, dass
+`storage.delete` aufgerufen wurde. Für den Nachweis physischer Entfernung
+wurden deshalb echte PNGs über den Upload-Endpunkt in temporären LocalStorage
+geschrieben, alle drei WebP-Vorschauen erzeugt und Frontend/API-Löschung gegen
+PostgreSQL ausgeführt. In beiden Normalfällen verschwanden alle vier Dateien;
+eine zweite Galerie blieb bytegleich erhalten. Leere lokale Verzeichnisse
+werden nicht entfernt und enthalten danach keine Bilddaten.
+
+Zusätzliche, isolierte Fehlerproben bestätigten folgende Zustände:
+
+| Fall | Ergebnis nach erfolgreicher Galerielöschung | Ticket |
+| --- | --- | --- |
+| OSError beim Löschen des Originals | Galerie weg, eine Originaldatei bleibt | `picture-stage-khfp` |
+| Nicht in der DB registrierter Key im Galerie-Verzeichnis | Galerie weg, unbekannte Datei bleibt | Zusammenhang mit `picture-stage-2jb0` |
+| Worker nach Lesen des Originals angehalten, Galerie gelöscht, Worker fortgesetzt | Galerie weg, drei neue WebP-Vorschauen bleiben | `picture-stage-imux` |
+| Zweiter Vorschau-Upload schlägt fehl, danach Galerie gelöscht | Galerie weg, erste WebP-Datei bleibt unregistriert | `picture-stage-qeqc` |
+| Worker startet erst nach abgeschlossener Löschung | Keine neuen Dateien | Kontrollfall |
+
+`purge_gallery` entfernt nur bekannte DB-Keys und behandelt Löschfehler als
+best effort. Im Worker werden Dateien vor dem gemeinsamen DB-Commit geschrieben;
+Rollback oder ein gelöschter Eltern-Datensatz entfernen diese Dateien nicht.
+Physische Bereinigung braucht daher Tests für Fehler und parallele Vorgänge,
+zusätzlich zum erfolgreichen HTTP-Status. Die Prüfung verwendet ein lokales
+Dateisystem; das Verhalten eines produktiven S3-Buckets wurde damit nicht gemessen.

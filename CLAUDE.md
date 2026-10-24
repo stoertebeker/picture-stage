@@ -137,6 +137,8 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 **Lokale Verifikation:** Chrome liegt unter `/opt/google/chrome/chrome`. Frontend am lokalen Compose-Stack mit frischem `ASSET_VERSION` bauen und prüfen; das eingecheckte `styles.css` ist ein Stub. Docker-/Netzwerkzugriff hängt von den aktuellen Sandbox-Berechtigungen ab. Aktuelle Testzugänge aus lokalen Beads-Memories beziehen. Integrationstests ausschließlich gegen eine separate Test-DB ausführen: Die Fixtures löschen und erzeugen Tabellen neu. Den Zustand von Stack und Arbeitsbaum zu Beginn prüfen, statt ihn aus alten Übergaben abzuleiten.
 
+**Storage-Prüfung (2026-10-24, `picture-stage-4yyv`):** Mit echtem LocalStorage und separatem PostgreSQL bestätigt: Frontend/API entfernen im Normalfall Original plus alle drei Vorschauen; eine Kontrollgalerie bleibt unverändert (`tests/integration/test_gallery_storage_cleanup.py`). Vollständige Bereinigung ist in Fehlerfällen nicht garantiert: `picture-stage-khfp` (Storage.delete schlägt fehl, DB-Löschung trotzdem erfolgreich), `picture-stage-qeqc` (Teilabbruch im Preview-Worker lässt unregistrierte WebP-Dateien zurück), `picture-stage-imux` (Worker schreibt nach Galerielöschung weiter, drei Vorschauen reproduziert). Nicht registrierte Keys werden beim Purge nicht gesucht; das betrifft auch Reste aus `picture-stage-2jb0`. Die Befunde sind offen; bei dieser Prüfung wurde die Laufzeitlogik nicht geändert.
+
 ## Historische Übergaben (Juni 2026)
 
 Die folgenden Einträge sind ein Archiv. Angaben wie „offen“, „nächste Wache“, Testzahlen oder Abnahmestände gelten nur für das jeweilige Datum. Für aktuelle Aufgaben Beads und GitHub prüfen.
