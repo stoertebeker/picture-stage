@@ -63,11 +63,16 @@ pip install -e ".[dev]"
 
 # Lint
 ruff check .
+ruff format --check .
 
 # Type check
 mypy app/
 
-# Tests (requires PostgreSQL via DATABASE_URL)
+# DB-free tests
+pytest tests/unit/ tests/security/
+
+# Full suite (requires a separate PostgreSQL test DB via DATABASE_URL;
+# fixtures drop and recreate tables — never use the app database)
 pytest --cov=app
 
 # Tenant isolation tests
@@ -122,10 +127,19 @@ users, galleries, images, image_previews, selection_events (append-only), share_
 
 ## Aktueller Stand
 
-**Datum:** 2026-06-18
-**Wachwechsel-Tag:** `handover-2026-06-18` (neuester Wachwechsel dieser Wache)
-**Live:** `https://picture.stoertes.cloud` (Docker Hub, SMTP Mailjet produktiv). **Prod NICHT via Playwright/Headless-Browser testbar** — Cloudflares JS-Challenge/Turnstile blockt automatisierte Browser (siehe Memory `playwright-setup`). Visuelle Abnahme daher gegen den **lokalen Docker-Stack** (frischer Build inkl. Migrationen) oder durch den Kapitän selbst. **Admin-Login `stoertebeker@kkb-clan.de` bleibt für die Entwicklungsphase aktiv** (Kapitän-Entscheidung). Passwort NICHT im Repo — lokal in bd-Memory bzw. Passwort-Manager.
-**Dev-Umgebung:** Ubuntu 26.04 x86_64, Sandbox deaktiviert, Docker direkt nutzbar. Chrome: `/opt/google/chrome/chrome`. Lokaler Stack: `docker compose up -d`. **Lokaler Admin: `testadmin@example.com` / `testpass123`** (NICHT `admin@local.test` — s. Memory `local-dev-admin-login`). **Frontend-Änderungen lokal abnehmen:** Stack mit frischer `ASSET_VERSION` neu bauen (`docker compose build --build-arg ASSET_VERSION=$(date +%Y%m%d%H%M%S) app && docker compose up -d app`), sonst stale Cache. **Integration-Tests lokal:** Test-DB `picstage_test` im DB-Container (separate von Dev-DB!), `DATABASE_URL=postgresql+asyncpg://picstage:picstage@<db-container-ip>:5432/picstage_test UPLOAD_DIR=/tmp/ps_uploads .venv/bin/pytest tests/integration/` (Container-IP via `docker inspect`, Port nicht host-gemappt).
+**Stand:** 2026-10-24. Backend, Editorial-Dark-Frontend, DE/EN, Light/Dark, Gast- und Fotografen-Lightbox sowie Auswahl-Export sind umgesetzt. Die historischen Versions-Meilensteine unten beschreiben Entwicklungsphasen; die Paketversion in `pyproject.toml` ist weiterhin `0.1.0`.
+
+**Letzte Änderungen:** `5a3872a` behebt die Gast-Paginierung; `12642e0` baut das architekturunabhängige CSS auf der nativen Build-Plattform. `b811036` verfolgt Multi-Uploads bis zum Abschluss der asynchronen Vorschauen. `407ef08` synchronisiert CSRF vor dem Rendering und bindet authentifizierte Tokens per HMAC an die Session. Die Übergabe dazu ist in `f622ea2` und der Beads-Memory `handover-2026-10-24-upload-csrf` dokumentiert.
+
+**Offene Arbeit:** Die Queue ist nicht leer. Den aktuellen Stand mit `bd ready`, `bd list --status=open` und `bd list --status=in_progress` prüfen. `picture-stage-d18f` (P1) behandelt Upload-403 bei bereits vor dem CSRF-Rollout geöffneten oder aus dem BFCache wiederhergestellten Seiten. Die signierte CSRF-Prüfung dabei nicht durch pauschale Legacy-Akzeptanz abschwächen. Weitere offene Tickets betreffen Security und Maintenance, darunter `picture-stage-lnhn` (GitHub Actions/Node).
+
+**GitHub-Abgleich (2026-10-24):** #1 „Galerie löschen“ (fehlende Dashboard-Aktion) und #2 „Anzahl Galerie“ (Limit-Hinweis zu unscheinbar) sind offen. #3 „Bilder-Upload“ ist geschlossen; die verbleibende Browser-Cache-Lücke wird separat in `picture-stage-d18f` verfolgt. Für die Umsetzung von Remote-Issues verknüpfte Beads-Tickets verwenden.
+
+**Lokale Verifikation:** Chrome liegt unter `/opt/google/chrome/chrome`. Frontend am lokalen Compose-Stack mit frischem `ASSET_VERSION` bauen und prüfen; das eingecheckte `styles.css` ist ein Stub. Docker-/Netzwerkzugriff hängt von den aktuellen Sandbox-Berechtigungen ab. Aktuelle Testzugänge aus lokalen Beads-Memories beziehen. Integrationstests ausschließlich gegen eine separate Test-DB ausführen: Die Fixtures löschen und erzeugen Tabellen neu. Den Zustand von Stack und Arbeitsbaum zu Beginn prüfen, statt ihn aus alten Übergaben abzuleiten.
+
+## Historische Übergaben (Juni 2026)
+
+Die folgenden Einträge sind ein Archiv. Angaben wie „offen“, „nächste Wache“, Testzahlen oder Abnahmestände gelten nur für das jeweilige Datum. Für aktuelle Aufgaben Beads und GitHub prüfen.
 
 ### Erledigt in dieser Wache (2026-06-18) — Guest-Lightbox: Tastatur-Shortcuts + Filter/Sort-Navigation
 **Kein aktiver Epic/Plan.** Beide Tickets gepusht, lokal im Browser (haiku, READ-ONLY) am Docker-Stack abgenommen, `main` = `origin/main`. 352 Unit-Tests grün, ruff+format+mypy sauber.
@@ -196,16 +210,16 @@ Abgearbeitet die gesamte P3-Code-Queue aus den externen Security-Reviews (2026-0
 ### ✅ Betrieblicher Rest — alle Tickets prod-deployed und abgenommen
 Kapitän hat nach Abend-Wache-Deploy bestätigt: alles live, IP-Erfassung funktioniert (CF-Connecting-IP), Abschluss-Mail-Kette (`16l`+`4gr`) prod-verifiziert.
 
-### Offene Tickets — Stand 2026-06-18
+### Historischer Ticketstand — 2026-06-18
 **Ready-Queue LEER.** Alle 236 Beads-Issues closed — 0 open, 0 in_progress, 0 deferred, **kein aktiver Epic/Plan**. Die beiden ops-Tickets der Vorwache (`wr2s`/`1gd`) wurden am 2026-06-18 geschlossen (Kapitän-Entscheidung): `wr2s` out-of-scope (Reverse-Proxy-Body-Limit ist Betreiber-Sache, App-Schicht via `m4ct` abgedeckt), `1gd` wontfix (kein Multi-Instance-Hosting geplant). `9q3.6` (deferred) wurde umgesetzt und geschlossen.
 
 Neue Arbeit kommt typischerweise aus **User-/Model-Feedback** (wie `rfii` diese Wache) — neues Ticket via `bd create`, dann Standard-Fix-Workflow.
 
-### Offene Punkte für die nächste Wache
+### Historische Übergabepunkte — 2026-06-18
 1. **QEMU-Flakiness:** Docker-Build gelegentlich `exit code: 132` (SIGILL) → `gh run rerun --failed`.
 2. **CI prüft `ruff format --check` als eigenen Schritt** — vor dem Commit immer `ruff format --check .` zusätzlich zu `ruff check` laufen (sonst Fix-Forward nötig).
 3. **Beads-Export vor Wachwechsel:** `bd export > .beads/issues.jsonl` + committen (nur **Issues** syncen via git, kein Dolt-Remote; **Memories** bleiben bewusst lokal — s. „Session Completion").
-4. **Frontend-Abnahme nur lokal:** Prod ist via Playwright/Headless nicht testbar (Cloudflare-Challenge). Frontend-Änderungen am lokalen Docker-Stack abnehmen (frische `ASSET_VERSION` neu bauen, sonst stale JS/CSS) — Browser-Tests via haiku-Subagent (READ-ONLY).
+4. **Frontend-Abnahme nur lokal:** Prod ist via Playwright/Headless nicht testbar (Cloudflare-Challenge). Frontend-Änderungen am lokalen Docker-Stack abnehmen (frische `ASSET_VERSION` neu bauen, sonst stale JS/CSS).
 5. **Lokaler Stack:** am Ende dieser Wache via `docker compose down` heruntergefahren (Container + Netzwerk entfernt; DB-Volume bleibt → `testadmin@example.com`/`testpass123` weiter gültig). Der für die `rfii`-Abnahme gesetzte Share-Token der QA-Galerie `766dc953…` wurde wieder widerrufen.
 
 ### Asset-Cache-Busting + Beads-Dedup (2026-06-10) — `picture-stage-d33`, closed

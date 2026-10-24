@@ -4,7 +4,7 @@
 
 Picture-Stage lets photographers share image galleries with models for review. Models can select images for editing, mark favorites, and leave comments — all without creating an account. Self-hosted, open-source, and fully under your control.
 
-> **Status:** v0.3 complete — backend, i18n (DE+EN), 181 tests green. Next: Frontend-Redesign (Tailwind build + vendored JS + visual overhaul).
+> **Status (2026-10-24):** Backend and Editorial Dark frontend implemented, including DE/EN, light/dark themes, gallery review and selection export. Multi-file uploads track both transfer and asynchronous preview generation. Ongoing work covers usability fixes, security and maintenance; see [GitHub issues](https://github.com/stoertebeker/picture-stage/issues) and the local Beads queue (`bd ready`).
 
 ## Features
 
@@ -13,6 +13,8 @@ Picture-Stage lets photographers share image galleries with models for review. M
 - **Auto-save** — selections persist immediately (event-sourced)
 - **Export selections** as CSV/JSON, or a comma-separated filename list (TXT) ready to paste into Lightroom Classic / Capture One
 - **Server-side watermarking** — originals are never exposed to models
+- **Asynchronous previews with upload progress** — progress follows transfer and preview processing, including failed images
+- **Editorial Dark frontend** — light/dark themes, DE/EN, keyboard and touch navigation in the gallery lightbox
 - **Pluggable storage** — local Docker volume or S3-compatible (MinIO, AWS, Hetzner, R2, B2)
 - **Multi-tenant** — multiple photographers with admin approval registration
 - **Admin user management** — list users, change roles, lock/unlock, delete, reset passwords
@@ -27,7 +29,7 @@ mkdir picture-stage && cd picture-stage
 # 2. Compose und Konfiguration herunterladen
 curl -O https://raw.githubusercontent.com/stoertebeker/picture-stage/main/docker-compose.yml
 curl -O https://raw.githubusercontent.com/stoertebeker/picture-stage/main/.env.example
-cp .env.example .env
+cp -f .env.example .env
 
 # 3. .env anpassen — diese Werte MÜSSEN von CHANGE_ME abweichen, sonst startet die App nicht:
 #    SECRET_KEY         (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(64))")
@@ -186,16 +188,27 @@ pip install -e ".[dev]"
 
 # Run linter
 ruff check .
+ruff format --check .
 
 # Run type checker
 mypy app/
 
-# Run tests (requires PostgreSQL)
+# Run DB-free tests
+pytest tests/unit/ tests/security/
+
+# Run the full suite (requires a separate PostgreSQL test database;
+# integration fixtures drop and recreate tables — never use the app database)
 pytest --cov=app
 
 # Run tenant isolation tests
 pytest tests/security/ -v
 ```
+
+The checked-in `frontend/static/css/styles.css` is a placeholder. Docker builds
+the complete Tailwind stylesheet and vendors the pinned HTMX/Alpine CSP assets.
+For visual checks, build the local app with a fresh `ASSET_VERSION` and use the
+local Compose stack. CI runs lint, formatting, type checks and the full test
+suite against PostgreSQL, including migration checks.
 
 ## Docker Hub
 

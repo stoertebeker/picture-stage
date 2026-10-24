@@ -9,7 +9,7 @@ bd ready              # Find available work
 bd show <id>          # View issue details
 bd update <id> --claim  # Claim work atomically
 bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
+bd export > .beads/issues.jsonl  # Export issues for git sync
 ```
 
 ## Non-Interactive Shell Commands
@@ -67,11 +67,15 @@ bd close <id>         # Complete work
 3. **Update issue status** - Close finished work, update in-progress items
 4. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
+   bd export > .beads/issues.jsonl
+   # Commit project changes and the issue export before syncing.
    git pull --rebase
-   bd dolt push
    git push
    git status  # MUST show "up to date with origin"
    ```
+   This project has no external Dolt remote. Issues sync through the committed
+   `.beads/issues.jsonl`; memories remain in the local Dolt database. Do not run
+   `bd dolt push`.
 5. **Clean up** - Clear stashes, prune remote branches
 6. **Verify** - All changes committed AND pushed
 7. **Hand off** - Provide context for next session
