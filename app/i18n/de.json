@@ -126,6 +126,7 @@
     "search_placeholder": "Galerie suchen",
     "create_hint": "Wird als Entwurf angelegt. Upload, Share-Link und Passwortschutz folgen in der Galerie.",
     "action_open": "Öffnen",
+    "action_delete": "Löschen",
     "cancel": "Abbrechen",
     "create": "Erstellen"
   },

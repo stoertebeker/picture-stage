@@ -1,6 +1,15 @@
 """Tests for frontend dashboard: gallery list with status and progress."""
 
 import pathlib
+import uuid
+from html.parser import HTMLParser
+from types import SimpleNamespace
+
+import pytest
+from starlette.requests import Request
+
+from app.db.models import GalleryStatus
+from app.frontend.deps import templates
 
 PROJECT_ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 
@@ -98,3 +107,87 @@ def test_dashboard_extends_base():
     """Check that dashboard template extends base.html."""
     index_html = (PROJECT_ROOT / "app" / "templates" / "dashboard" / "index.html").read_text()
     assert '{% extends "base.html" %}' in index_html
+
+
+class _DashboardElements(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.elements = []
+        self.forms = {}
+        self.current_form = None
+
+    def handle_starttag(self, tag, attrs):
+        attributes = dict(attrs)
+        self.elements.append((tag, attributes))
+        if tag == "form":
+            self.current_form = attributes.get("action")
+            self.forms[self.current_form] = []
+        elif tag == "input" and self.current_form is not None:
+            self.forms[self.current_form].append(attributes)
+
+    def handle_endtag(self, tag):
+        if tag == "form":
+            self.current_form = None
+
+
+@pytest.mark.parametrize(("locale", "label"), [("de", "Löschen"), ("en", "Delete")])
+def test_dashboard_delete_dialogs_keep_gallery_identity_and_csrf(locale, label):
+    """Multiple cards must target their own forms, including quoted/HTML names."""
+    galleries = [
+        SimpleNamespace(
+            id=uuid.uuid4(),
+            name=name,
+            status=GalleryStatus.draft,
+            share_token_hash=None,
+            expires_at=None,
+        )
+        for name in ('O\'Brien "Shooting" <script>alert(1)</script> & mehr', "Andere Galerie")
+    ]
+    request = Request({"type": "http", "headers": []})
+    request.state.locale = locale
+    request.state.csrf_token = "current-session-csrf"
+    response = templates.TemplateResponse(
+        request,
+        "dashboard/index.html",
+        {
+            "galleries": [
+                dict(
+                    gallery=gallery,
+                    image_count=0,
+                    selected_count=0,
+                    favorited_count=0,
+                    commented_count=0,
+                    last_activity=None,
+                    cover_url=None,
+                )
+                for gallery in galleries
+            ]
+        },
+    )
+    html = response.body.decode()
+    parser = _DashboardElements()
+    parser.feed(html)
+    elements = parser.elements
+    ids = [attrs["id"] for _, attrs in elements if "id" in attrs]
+    assert len(ids) == len(set(ids))
+    assert not any(tag == "script" and "src" not in attrs for tag, attrs in elements)
+    assert label in html
+    for gallery in galleries:
+        dialog_id = f"deleteModal-{gallery.id}"
+        assert any(tag == "button" and attrs.get("data-open-dialog") == dialog_id for tag, attrs in elements)
+        assert any(
+            tag == "dialog" and attrs.get("id") == dialog_id and attrs.get("aria-labelledby") == f"{dialog_id}-title"
+            for tag, attrs in elements
+        )
+        assert any(
+            tag == "form" and attrs.get("method") == "post" and attrs.get("action") == f"/galleries/{gallery.id}/delete"
+            for tag, attrs in elements
+        )
+        assert any(
+            attrs.get("x-data") == "galleryDelete" and attrs.get("data-gallery-name") == gallery.name
+            for _, attrs in elements
+        )
+        assert any(
+            attrs.get("name") == "csrf_token" and attrs.get("value") == "current-session-csrf"
+            for attrs in parser.forms[f"/galleries/{gallery.id}/delete"]
+        )

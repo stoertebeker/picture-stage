@@ -280,3 +280,17 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 **Problem 1 — Alembic überschreibt das globale Logging beim Startup:** `run_migrations()` lädt `Config("alembic.ini")`; weil die ini eine `[loggers]`-Sektion hat, ruft Alembic intern `logging.config.fileConfig(...)` auf — und `fileConfig` nutzt per Default `disable_existing_loggers=True`. Das setzt die globale Config auf Alembics `generic`-Format (ohne Timestamp) und deaktiviert die App-Logger. Symptom: App-INFO-Logs erschienen, aber im Alembic-Format.
 **Problem 2 — genannte Logger ohne `handlers`-Key verlieren ihre Handler:** In einem `dictConfig` mit `disable_existing_loggers=False` bleiben *nicht genannte* Logger unangetastet — aber sobald man einen Logger explizit nennt (z.B. um `propagate=False` zu setzen) und **keine** `handlers` angibt, werden dessen Handler auf `[]` gesetzt. Konkret verschwanden so uvicorns Startup- und Access-Logs komplett (uvicorn genannt, aber handlerlos; verschärft durch Alembics vorheriges Disable).
 **Regel:** (1) `configure_logging()` **nach** `run_migrations()` erneut aufrufen (idempotent), damit die App-Config Alembics Override gewinnt. (2) uvicorn-Logger in der eigenen dictConfig explizit mit `handlers=["default"]` **und** `propagate=False` führen — dann erscheinen Request/Startup-Logs im eigenen Format, ohne Doppel-Logging über den root-Handler. (3) `disable_existing_loggers` immer `False`. (4) spawn-Worker (pebble) erben die Config nicht → `ProcessPool(initializer=configure_logging)`. Verifikation gehört zwingend an den **echten** Container-Log (Build → Upload → `docker compose logs`), nicht nur an Unit-Tests: beide Fallstricke waren erst im Live-Log sichtbar.
+
+## Alpine-CSP: Galerienamen als Daten übertragen (2026-10-24)
+
+Bei der Dashboard-Löschaktion (`picture-stage-ojld`, GitHub #1) zeigte der echte
+Browser einen Fehler im bisherigen Detailseiten-Dialog: Jinja `tojson` schützt
+HTML-Zeichen mit Unicode-Escapes, doch der CSP-Parser von Alpine 3.15.12 macht
+beispielsweise aus `\u0027` den Text `u0027`. Bei Namen mit Apostroph, `<` oder
+`&` stimmt der Alpine-Vergleich dadurch trotz korrekt eingegebener Bestätigung
+nicht. Ein Python-`json.loads`-Test erkennt diesen Unterschied nicht.
+
+Benutzereingaben als autoescaped `data-*`-Attribute übertragen und in der
+registrierten Alpine-Komponente aus `dataset` lesen. Für Löschdialoge Namen mit
+Anführungszeichen und HTML-Zeichen auch im echten Browser prüfen, sowohl nach
+vollständigem Seitenaufbau als auch nach HTMX-Einfügung.

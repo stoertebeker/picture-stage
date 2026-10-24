@@ -67,15 +67,19 @@ async def test_frontend_delete_purges_storage_files(client, db, owner, verify_db
     client.cookies.set("session", session_token)
     client.cookies.set("csrf_token", csrf_token)
     try:
+        dashboard = await client.get("/dashboard")
+        assert dashboard.status_code == 200
+        assert f'data-open-dialog="deleteModal-{gallery.id}"' in dashboard.text
+        assert f'action="/galleries/{gallery.id}/delete"' in dashboard.text
         resp = await client.post(
             f"/galleries/{gallery.id}/delete",
-            data={"confirm_name": "Zu löschen"},
-            headers={"X-CSRF-Token": csrf_token},
+            data={"confirm_name": "Zu löschen", "csrf_token": csrf_token},
         )
     finally:
         app.dependency_overrides.pop(get_storage, None)
 
     assert resp.status_code == 303
+    assert resp.headers["location"] == "/dashboard"
     # Both the original and the preview file were purged — no orphans left behind.
     assert set(fake.deleted) == {"proofs/orig.jpg", "proofs/orig_thumb_sm.webp"}
     # The gallery row is gone.
@@ -106,3 +110,46 @@ async def test_frontend_delete_name_mismatch_keeps_gallery_and_files(client, db,
     assert fake.deleted == []
     found = (await verify_db.execute(select(Gallery).where(Gallery.id == gallery.id))).scalar_one_or_none()
     assert found is not None
+
+
+async def test_frontend_delete_rejects_other_owner(client, db, owner, other_user, verify_db):
+    gallery = await _gallery_with_files(db, owner)
+    fake = _RecordingStorage()
+    app.dependency_overrides[get_storage] = lambda: fake
+    session_token = create_access_token(str(other_user.id))
+    csrf_token = _mint_csrf_token(session_token)
+    client.cookies.set("session", session_token)
+    client.cookies.set("csrf_token", csrf_token)
+    try:
+        dashboard = await client.get("/dashboard")
+        assert f'action="/galleries/{gallery.id}/delete"' not in dashboard.text
+        response = await client.post(
+            f"/galleries/{gallery.id}/delete",
+            data={"confirm_name": gallery.name, "csrf_token": csrf_token},
+        )
+    finally:
+        app.dependency_overrides.pop(get_storage, None)
+
+    assert response.status_code == 404
+    assert fake.deleted == []
+    assert await verify_db.get(Gallery, gallery.id) is not None
+
+
+async def test_frontend_delete_rejects_invalid_csrf(client, db, owner, verify_db):
+    gallery = await _gallery_with_files(db, owner)
+    fake = _RecordingStorage()
+    app.dependency_overrides[get_storage] = lambda: fake
+    session_token = create_access_token(str(owner.id))
+    client.cookies.set("session", session_token)
+    client.cookies.set("csrf_token", _mint_csrf_token(session_token))
+    try:
+        response = await client.post(
+            f"/galleries/{gallery.id}/delete",
+            data={"confirm_name": gallery.name, "csrf_token": "invalid-submission"},
+        )
+    finally:
+        app.dependency_overrides.pop(get_storage, None)
+
+    assert response.status_code == 403
+    assert fake.deleted == []
+    assert await verify_db.get(Gallery, gallery.id) is not None

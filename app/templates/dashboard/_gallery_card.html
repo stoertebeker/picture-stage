@@ -73,6 +73,9 @@
             <a href="/galleries/{{ g.gallery.id }}" class="rounded-md bg-accent px-3 py-2 font-medium text-text-on-accent hover:bg-accent-hover">{{ t('dashboard.action_open') }}</a>
             <a href="/galleries/{{ g.gallery.id }}#share-section" class="rounded-md border border-border-subtle px-3 py-2 text-text-secondary hover:border-border-strong hover:text-text-primary">{{ t('gallery.share') }}</a>
             <a href="/api/v1/galleries/{{ g.gallery.id }}/export?format=csv" class="rounded-md border border-border-subtle px-3 py-2 text-text-secondary hover:border-border-strong hover:text-text-primary">{{ t('gallery.export') }}</a>
+            {% with gallery=g.gallery, delete_dialog_id='deleteModal-' ~ g.gallery.id, delete_button_label=t('dashboard.action_delete') %}
+                {% include "galleries/_delete_modal.html" %}
+            {% endwith %}
         </footer>
     </div>
 </article>

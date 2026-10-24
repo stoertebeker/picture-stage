@@ -126,6 +126,7 @@
     "search_placeholder": "Search gallery",
     "create_hint": "Created as a draft. Upload, share link, and password protection follow in the gallery.",
     "action_open": "Open",
+    "action_delete": "Delete",
     "cancel": "Cancel",
     "create": "Create"
   },
