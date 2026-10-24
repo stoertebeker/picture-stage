@@ -4,9 +4,10 @@ The HTMX delete (`POST /galleries/{id}/delete`) now routes through the shared
 ``purge_gallery`` helper (same as the JSON API), so a deleted gallery's storage
 files are removed — no orphaned image/preview files (a storage leak + GDPR
 problem). These tests assert the storage backend is asked to delete every file
-key, and that a name-mismatch deletes nothing.
+key, and that an unconfirmed request deletes nothing.
 """
 
+import pytest
 from sqlalchemy import select
 
 from app.auth.tokens import create_access_token
@@ -73,7 +74,7 @@ async def test_frontend_delete_purges_storage_files(client, db, owner, verify_db
         assert f'action="/galleries/{gallery.id}/delete"' in dashboard.text
         resp = await client.post(
             f"/galleries/{gallery.id}/delete",
-            data={"confirm_name": "Zu löschen", "csrf_token": csrf_token},
+            data={"confirm_delete": "yes", "csrf_token": csrf_token},
         )
     finally:
         app.dependency_overrides.pop(get_storage, None)
@@ -87,7 +88,8 @@ async def test_frontend_delete_purges_storage_files(client, db, owner, verify_db
     assert found is None
 
 
-async def test_frontend_delete_name_mismatch_keeps_gallery_and_files(client, db, owner, verify_db):
+@pytest.mark.parametrize("confirmation", [None, "no"])
+async def test_frontend_delete_without_confirmation_keeps_gallery_and_files(client, db, owner, verify_db, confirmation):
     gallery = await _gallery_with_files(db, owner)
 
     fake = _RecordingStorage()
@@ -99,14 +101,14 @@ async def test_frontend_delete_name_mismatch_keeps_gallery_and_files(client, db,
     try:
         resp = await client.post(
             f"/galleries/{gallery.id}/delete",
-            data={"confirm_name": "falscher Name"},
+            data={} if confirmation is None else {"confirm_delete": confirmation},
             headers={"X-CSRF-Token": csrf_token},
         )
     finally:
         app.dependency_overrides.pop(get_storage, None)
 
-    # Confirmation gate: re-renders the detail page, deletes nothing.
-    assert resp.status_code == 200
+    # Confirmation gate rejects requests that did not confirm deletion.
+    assert resp.status_code == 400
     assert fake.deleted == []
     found = (await verify_db.execute(select(Gallery).where(Gallery.id == gallery.id))).scalar_one_or_none()
     assert found is not None
@@ -125,7 +127,7 @@ async def test_frontend_delete_rejects_other_owner(client, db, owner, other_user
         assert f'action="/galleries/{gallery.id}/delete"' not in dashboard.text
         response = await client.post(
             f"/galleries/{gallery.id}/delete",
-            data={"confirm_name": gallery.name, "csrf_token": csrf_token},
+            data={"confirm_delete": "yes", "csrf_token": csrf_token},
         )
     finally:
         app.dependency_overrides.pop(get_storage, None)
@@ -145,7 +147,7 @@ async def test_frontend_delete_rejects_invalid_csrf(client, db, owner, verify_db
     try:
         response = await client.post(
             f"/galleries/{gallery.id}/delete",
-            data={"confirm_name": gallery.name, "csrf_token": "invalid-submission"},
+            data={"confirm_delete": "yes", "csrf_token": "invalid-submission"},
         )
     finally:
         app.dependency_overrides.pop(get_storage, None)

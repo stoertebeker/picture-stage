@@ -1,9 +1,9 @@
 {% from "_macros/buttons.html" import button %}
 {% set delete_dialog_id = delete_dialog_id | default('deleteModal') %}
 
-<div x-data="galleryDelete" data-gallery-name="{{ gallery.name }}">
+<div>
     <button type="button"
-            @click="reset" data-open-dialog="{{ delete_dialog_id }}"
+            data-open-dialog="{{ delete_dialog_id }}"
             class="inline-flex h-11 items-center justify-center gap-2 rounded-md border border-status-danger text-status-danger hover:bg-surface-raised {% if delete_button_label | default('') %}px-3{% else %}w-11{% endif %}"
             aria-label="{{ t('gallery.delete_button') }}: {{ gallery.name }}">
         <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
@@ -15,7 +15,6 @@
     <dialog id="{{ delete_dialog_id }}"
             aria-labelledby="{{ delete_dialog_id }}-title"
             data-backdrop-close
-            {% if delete_error is defined and delete_error %}data-auto-open{% endif %}
             class="w-full max-w-md rounded-md border border-border-subtle bg-surface-raised p-0 shadow-2xl backdrop:bg-black/70">
         <div class="p-6">
             <h3 id="{{ delete_dialog_id }}-title" class="text-lg font-semibold text-status-danger">{{ t('gallery.delete_title') }}</h3>
@@ -24,31 +23,12 @@
                 {{ t('gallery.delete_confirm_prefix') }}<strong>{{ gallery.name }}</strong>{{ t('gallery.delete_confirm_suffix') }}
             </p>
 
-            {% if delete_error is defined and delete_error %}
-            <div class="mt-3 rounded-md border border-status-danger bg-surface-base p-2 text-sm text-status-danger">
-                {{ t(delete_error) }}
-            </div>
-            {% endif %}
-
             <form method="post" action="/galleries/{{ gallery.id }}/delete" class="mt-4">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-                <label for="{{ delete_dialog_id }}-confirm" class="sr-only">{{ t('gallery.delete_confirm_placeholder') }}</label>
-                <input type="text"
-                       id="{{ delete_dialog_id }}-confirm"
-                       name="confirm_name"
-                       x-model="deleteConfirmName"
-                       autocomplete="off"
-                       placeholder="{{ t('gallery.delete_confirm_placeholder') }}"
-                       class="mb-4 w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-sm text-text-primary focus:outline-none focus-visible:ring focus-visible:ring-focus">
                 <div class="flex items-center justify-end gap-3">
-                    {% call button(variant='ghost', size='sm', type='button', attrs={'data-close-dialog': ''}) %}{{ t('gallery.cancel') }}{% endcall %}
-                    <button type="submit"
-                            disabled
-                            :disabled="deleteConfirmName !== galleryName"
-                            :class="deleteConfirmName === galleryName
-                                ? 'bg-status-danger text-white cursor-pointer'
-                                : 'bg-surface-sunken text-text-muted cursor-not-allowed'"
-                            class="rounded-md px-4 py-2 text-sm font-medium transition-colors disabled:opacity-60">
+                    {% call button(variant='ghost', size='sm', type='button', attrs={'data-close-dialog': '', 'autofocus': ''}) %}{{ t('gallery.cancel') }}{% endcall %}
+                    <button type="submit" name="confirm_delete" value="yes"
+                            class="rounded-md bg-status-danger px-4 py-2 text-sm font-medium text-white transition-colors hover:opacity-90 focus:outline-none focus-visible:ring focus-visible:ring-focus">
                         {{ t('gallery.delete_confirm_button') }}
                     </button>
                 </div>

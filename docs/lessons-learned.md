@@ -283,7 +283,7 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 
 ## Alpine-CSP: Galerienamen als Daten übertragen (2026-10-24)
 
-Bei der Dashboard-Löschaktion (`picture-stage-ojld`, GitHub #1) zeigte der echte
+Historischer Befund: Bei der Dashboard-Löschaktion (`picture-stage-ojld`, GitHub #1) zeigte der echte
 Browser einen Fehler im bisherigen Detailseiten-Dialog: Jinja `tojson` schützt
 HTML-Zeichen mit Unicode-Escapes, doch der CSP-Parser von Alpine 3.15.12 macht
 beispielsweise aus `\u0027` den Text `u0027`. Bei Namen mit Apostroph, `<` oder
@@ -294,3 +294,5 @@ Benutzereingaben als autoescaped `data-*`-Attribute übertragen und in der
 registrierten Alpine-Komponente aus `dataset` lesen. Für Löschdialoge Namen mit
 Anführungszeichen und HTML-Zeichen auch im echten Browser prüfen, sowohl nach
 vollständigem Seitenaufbau als auch nach HTMX-Einfügung.
+
+Seit `picture-stage-uwnt` entfällt die Namenseingabe im Löschdialog auf Benutzerwunsch. Der Name wird dort nur als HTML-Text angezeigt; die Komponente `galleryDelete` wurde entfernt. Die Erkenntnis zu Unicode-Escapes bleibt für andere Alpine-CSP-Komponenten relevant.

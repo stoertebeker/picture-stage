@@ -1,184 +1,131 @@
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 
-// Run against the local Compose app and a disposable Chrome/CDP instance:
-// E2E_PASSWORD=... node tests/e2e/dashboard_delete_browser.mjs
-const debugBase = process.env.CHROME_DEBUG_URL || 'http://127.0.0.1:9222';
+// Playwright against the local Compose app, using the installed Chrome binary.
+// Install Playwright locally, or separately without changing project dependencies:
+// npm install --prefix /tmp/picture-stage-playwright --no-save playwright
+// PLAYWRIGHT_MODULE=/tmp/picture-stage-playwright/node_modules/playwright/index.mjs \
+//   E2E_PASSWORD=... node tests/e2e/dashboard_delete_browser.mjs
+const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
 const baseUrl = process.env.E2E_BASE_URL || 'http://127.0.0.1:8000';
-const email = process.env.E2E_EMAIL || 'testadmin@example.com';
 const password = process.env.E2E_PASSWORD;
 assert.ok(password, 'E2E_PASSWORD is required');
-const targets = await fetch(`${debugBase}/json/list`).then((response) => response.json());
-const target = targets.find((item) => item.type === 'page');
-assert.ok(target, 'Chrome must expose a page target');
-const socket = new WebSocket(target.webSocketDebuggerUrl);
-await new Promise((resolve, reject) => {
-    socket.addEventListener('open', resolve, { once: true });
-    socket.addEventListener('error', reject, { once: true });
+const browser = await chromium.launch({
+    executablePath: process.env.CHROME_EXECUTABLE || '/opt/google/chrome/chrome',
+    headless: true,
 });
-let commandId = 0;
-const pending = new Map();
-const exceptions = [];
-socket.addEventListener('message', (event) => {
-    const message = JSON.parse(event.data);
-    if (message.method === 'Runtime.exceptionThrown') {
-        exceptions.push(message.params.exceptionDetails.exception?.description || message.params.exceptionDetails.text);
-    }
-    if (message.method === 'Runtime.consoleAPICalled' && message.params.type === 'error') {
-        exceptions.push(message.params.args.map((arg) => arg.description || arg.value).join(' '));
-    }
-    if (!pending.has(message.id)) return;
-    const { resolve, reject } = pending.get(message.id);
-    pending.delete(message.id);
-    if (message.error) reject(new Error(message.error.message));
-    else resolve(message.result);
+const context = await browser.newContext({
+    baseURL: baseUrl,
+    locale: 'de-DE',
+    viewport: { width: 1280, height: 900 },
 });
-function command(method, params = {}) {
-    commandId += 1;
-    return new Promise((resolve, reject) => {
-        pending.set(commandId, { resolve, reject });
-        socket.send(JSON.stringify({ id: commandId, method, params }));
-    });
-}
-async function evaluate(expression, awaitPromise = false) {
-    const result = await command('Runtime.evaluate', { expression, awaitPromise, returnByValue: true, userGesture: true });
-    if (result.exceptionDetails) {
-        throw new Error(result.exceptionDetails.exception?.description || result.exceptionDetails.text);
-    }
-    return result.result.value;
-}
-async function waitFor(expression, description) {
-    const deadline = Date.now() + 15_000;
-    while (Date.now() < deadline) {
-        if (await evaluate(expression)) return;
-        await new Promise((resolve) => setTimeout(resolve, 100));
-    }
-    const state = await evaluate(`[...document.querySelectorAll('dialog[open]')].map((dialog) => ({
-        id: dialog.id,
-        input: dialog.querySelector('[name=confirm_name]')?.value,
-        state: window.Alpine ? JSON.stringify(window.Alpine.$data(dialog.parentElement)) : null,
-    }))`);
-    await screenshot('dashboard-delete-failure');
-    throw new Error(`Timed out waiting for ${description}: ${JSON.stringify({ state, exceptions })}`);
-}
-async function navigate(path) {
-    await command('Page.navigate', { url: `${baseUrl}${path}` });
-    await waitFor(`location.pathname === ${JSON.stringify(path)} && document.readyState === 'complete'`, path);
-}
-async function click(selector) {
-    await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);
-}
+const page = await context.newPage();
+const errors = [];
+page.on('pageerror', (error) => errors.push(error.message));
+page.on('console', (message) => {
+    if (message.type() === 'error') errors.push(message.text());
+});
+const galleries = [];
 async function screenshot(name) {
     if (process.env.E2E_SCREENSHOTS !== '1') return;
     await mkdir('.playwright', { recursive: true });
-    const result = await command('Page.captureScreenshot', { format: 'png' });
-    await writeFile(`.playwright/${name}.png`, Buffer.from(result.data, 'base64'));
+    await page.screenshot({ path: `.playwright/${name}.png` });
 }
-async function setConfirmation(dialogId, value) {
-    await evaluate(`(() => {
-        const input = document.getElementById(${JSON.stringify(dialogId)}).querySelector('[name=confirm_name]');
-        input.value = ${JSON.stringify(value)};
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-    })()`);
-}
-const galleries = [];
 async function createGallery(name) {
-    await click('[data-open-dialog=createModal]');
-    await evaluate(`(() => {
-        const form = document.querySelector('form[action="/dashboard/galleries"]');
-        form.elements.name.value = ${JSON.stringify(name)};
-        form.requestSubmit();
-    })()`);
-    await waitFor(`[...document.querySelectorAll('#gallery-grid h2 a')]
-        .some((link) => link.textContent.trim() === ${JSON.stringify(name)})`, 'HTMX-created card');
-    const path = await evaluate(`[...document.querySelectorAll('#gallery-grid h2 a')]
-        .find((link) => link.textContent.trim() === ${JSON.stringify(name)}).getAttribute('href')`);
+    await page.locator('[data-open-dialog=createModal]').first().click();
+    const form = page.locator('form[action="/dashboard/galleries"]');
+    await form.locator('[name=name]').fill(name);
+    await form.locator('button[type=submit]').click();
+    const link = page.locator('#gallery-grid h2 a').filter({ hasText: name });
+    await link.waitFor();
+    const path = await link.getAttribute('href');
     const gallery = { name, path, dialogId: `deleteModal-${path.split('/').pop()}` };
     galleries.push(gallery);
-    await waitFor("!document.getElementById('createModal').open", 'creation dialog closed');
+    await page.locator('#createModal').waitFor({ state: 'hidden' });
     return gallery;
 }
 async function openDelete(gallery) {
-    await click(`[data-open-dialog="${gallery.dialogId}"]`);
-    await waitFor(`document.getElementById('${gallery.dialogId}').open`, 'delete dialog');
-    assert.equal(await evaluate(`document.querySelectorAll('dialog[open]').length`), 1);
-    assert.equal(await evaluate(`document.getElementById('${gallery.dialogId}').querySelector('strong').textContent`), gallery.name);
-    assert.equal(await evaluate(`document.getElementById('${gallery.dialogId}').querySelector('button[type=submit]').disabled`), true);
+    await page.locator(`[data-open-dialog="${gallery.dialogId}"]`).click();
+    const dialog = page.locator(`#${gallery.dialogId}`);
+    await dialog.waitFor({ state: 'visible' });
+    assert.equal(await page.locator('dialog[open]').count(), 1);
+    assert.equal(await dialog.locator('strong').textContent(), gallery.name);
+    assert.equal(await dialog.locator('input:not([type=hidden])').count(), 0, 'No name entry is required');
+    assert.equal(await dialog.locator('button[type=submit]').isEnabled(), true);
+    assert.equal(await dialog.locator('[data-close-dialog]').evaluate((button) => button === document.activeElement), true);
+    return dialog;
 }
 async function submitDelete(gallery) {
-    await setConfirmation(gallery.dialogId, gallery.name);
-    await waitFor(`!document.getElementById('${gallery.dialogId}').querySelector('button[type=submit]').disabled`, 'matching name');
-    await click(`#${gallery.dialogId} button[type=submit]`);
-    await waitFor(`location.pathname === '/dashboard' && document.readyState === 'complete'
-        && !document.getElementById('${gallery.dialogId}')`, 'dashboard after deletion');
-    assert.equal(await evaluate(`fetch(${JSON.stringify(gallery.path)}).then((r) => r.status)`, true), 404);
+    const responsePromise = page.waitForResponse((response) =>
+        response.url() === `${baseUrl}${gallery.path}/delete` && response.request().method() === 'POST');
+    await page.locator(`#${gallery.dialogId} button[type=submit]`).click();
+    const response = await responsePromise;
+    assert.equal(response.status(), 303);
+    await page.waitForURL((url) => url.pathname === '/dashboard');
+    await page.waitForLoadState();
+    assert.equal(await page.locator(`#${gallery.dialogId}`).count(), 0);
+    const deleted = await context.request.get(gallery.path);
+    assert.equal(deleted.status(), 404);
 }
 try {
-    await command('Page.enable');
-    await command('Page.bringToFront');
-    await command('Emulation.setFocusEmulationEnabled', { enabled: true });
-    await command('Runtime.enable');
-    await command('Network.enable');
-    await command('Network.clearBrowserCookies');
-    await command('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
-    await navigate('/login');
-    await evaluate(`(() => {
-        const form = document.querySelector('form[action="/login"]');
-        form.elements.email.value = ${JSON.stringify(email)};
-        form.elements.password.value = ${JSON.stringify(password)};
-        form.requestSubmit();
-    })()`);
-    await waitFor("location.pathname === '/dashboard' && !!window.Alpine && document.readyState === 'complete'", 'login');
+    await page.goto('/login');
+    const login = page.locator('form[action="/login"]');
+    await login.locator('[name=email]').fill(process.env.E2E_EMAIL || 'testadmin@example.com');
+    await login.locator('[name=password]').fill(password);
+    await login.locator('button[type=submit]').click();
+    await page.waitForURL((url) => url.pathname === '/dashboard');
     const stamp = Date.now();
     const first = await createGallery(`Dashboard E2E ${stamp} O'Brien "A" <b> & mehr`);
     const second = await createGallery(`Dashboard E2E ${stamp} B`);
-    await openDelete(first);
-    await setConfirmation(first.dialogId, second.name);
-    assert.equal(await evaluate(`document.getElementById('${first.dialogId}').querySelector('button[type=submit]').disabled`), true);
-    await setConfirmation(first.dialogId, first.name);
-    await waitFor(`!document.getElementById('${first.dialogId}').querySelector('button[type=submit]').disabled`, 'enabled confirmation');
+    const firstDialog = await openDelete(first);
     await screenshot('dashboard-delete-desktop');
-    await click(`#${first.dialogId} [data-close-dialog]`);
-    assert.equal(await evaluate(`document.getElementById('${first.dialogId}').open`), false);
-    assert.equal(await evaluate(`fetch(${JSON.stringify(first.path)}).then((r) => r.status)`, true), 200);
+    await firstDialog.locator('[data-close-dialog]').click();
+    await firstDialog.waitFor({ state: 'hidden' });
+    assert.equal((await context.request.get(first.path)).status(), 200, 'Cancel keeps the gallery');
     await openDelete(first);
-    assert.equal(await evaluate(`document.getElementById('${first.dialogId}').querySelector('[name=confirm_name]').value`), '');
-    await evaluate(`document.getElementById('${first.dialogId}').requestClose()`);
-    await waitFor(`!document.getElementById('${first.dialogId}').open`, 'native cancel closes dialog');
-    // The same partial also serves the existing gallery-detail delete action.
-    await navigate(first.path);
-    const detailGallery = { ...first, dialogId: 'deleteModal' };
-    await openDelete(detailGallery);
-    await setConfirmation(detailGallery.dialogId, first.name);
-    await waitFor("!document.getElementById('deleteModal').querySelector('button[type=submit]').disabled", 'detail name confirmation');
-    await evaluate("document.getElementById('deleteModal').querySelector('[data-close-dialog]').click()");
-    await navigate('/dashboard');
+    await page.keyboard.press('Escape');
+    await firstDialog.waitFor({ state: 'hidden' });
+    assert.equal((await context.request.get(first.path)).status(), 200, 'Escape keeps the gallery');
     await openDelete(first);
+    // Opening the dialog alone must not send the destructive POST.
+    assert.equal((await context.request.get(first.path)).status(), 200);
     await submitDelete(first);
-    assert.equal(await evaluate(`!!document.getElementById('${second.dialogId}')`), true, 'Only the chosen gallery is deleted');
-    await command('Emulation.setDeviceMetricsOverride', { width: 375, height: 812, deviceScaleFactor: 1, mobile: true });
-    await evaluate("localStorage.setItem('theme', 'light')");
-    await navigate('/dashboard');
+    assert.equal(await page.locator(`#${second.dialogId}`).count(), 1, 'The other gallery remains');
+
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.evaluate(() => localStorage.setItem('theme', 'light'));
+    await page.goto(second.path);
+    const detail = { ...second, dialogId: 'deleteModal' };
+    const detailDialog = await openDelete(detail);
+    await detailDialog.locator('[data-close-dialog]').click();
+    await detailDialog.waitFor({ state: 'hidden' });
+    assert.equal((await context.request.get(second.path)).status(), 200);
+    await page.goto('/dashboard');
     await openDelete(second);
-    assert.equal(await evaluate('document.documentElement.scrollWidth <= window.innerWidth'), true, 'No mobile horizontal overflow');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
     await screenshot('dashboard-delete-mobile');
     await submitDelete(second);
-    assert.deepEqual(exceptions, [], 'No Alpine/CSP or other browser errors');
-    console.log('Dashboard delete passed: HTMX cards, independent dialogs, escaped names, cancel/native close/reset, desktop/mobile, light/dark, native form deletion and cleanup.');
+    // A second real submission from the detail view exercises both entry points.
+    const third = await createGallery(`Dashboard E2E ${stamp} Detail`);
+    await page.goto(third.path);
+    await openDelete({ ...third, dialogId: 'deleteModal' });
+    await submitDelete({ ...third, dialogId: 'deleteModal' });
+    // 404 checks above deliberately produce network errors; Alpine/runtime errors must be absent.
+    assert.deepEqual(errors.filter((message) => !message.includes('404 (Not Found)')), []);
+    console.log('Playwright passed: real clicks, Escape/cancel, no name input, HTMX cards, escaped names, dashboard/detail deletion, desktop/mobile and dark/light.');
 } finally {
     try {
-        // Idempotent cleanup touches only the dedicated galleries created above.
-        await navigate('/dashboard');
-        for (const gallery of galleries) {
-            await evaluate(`fetch(${JSON.stringify(`${gallery.path}/delete`)}, {
-                method: 'POST',
-                body: new URLSearchParams({
-                    confirm_name: ${JSON.stringify(gallery.name)},
-                    csrf_token: document.querySelector('meta[name=csrf-token]').content,
-                }),
-            }).then((r) => r.status)`, true);
+        if (galleries.length > 0) {
+            await page.goto('/dashboard');
+            const csrf = await page.locator('meta[name=csrf-token]').getAttribute('content');
+            for (const gallery of galleries) {
+                const response = await context.request.post(`${gallery.path}/delete`, {
+                    form: { confirm_delete: 'yes', csrf_token: csrf },
+                });
+                assert.ok([200, 404].includes(response.status()), `Cleanup failed for ${gallery.path}`);
+            }
         }
     } finally {
-        socket.close();
+        await browser.close();
     }
 }

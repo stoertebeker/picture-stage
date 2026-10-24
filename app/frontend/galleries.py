@@ -687,23 +687,12 @@ async def delete_gallery(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> Response:
-    """Delete a gallery after name confirmation. Redirects to dashboard."""
+    """Delete a gallery after explicit confirmation. Redirects to dashboard."""
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
     form = await request.form()
-    confirm_name = str(form.get("confirm_name", "")).strip()
-
-    if confirm_name != gallery.name:
-        # Name mismatch — re-render detail page with error
-        images = await _load_images_with_signed_urls(gallery_id, db)
-        ctx = _build_context(
-            request,
-            gallery,
-            images,
-            user,
-            delete_error="gallery.delete_name_mismatch",
-        )
-        return templates.TemplateResponse(request, "galleries/detail.html", ctx)
+    if form.get("confirm_delete") != "yes":
+        raise HTTPException(status_code=400, detail="Deletion confirmation required")
 
     # 1. Audit log entry BEFORE deletion
     audit_entry = AuditLog(

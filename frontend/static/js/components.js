@@ -860,21 +860,6 @@ function auditFilterComponent() {
     };
 }
 
-// Read names as HTML data: the CSP expression parser does not decode JSON's
-// Unicode escapes (e.g. \u0027), which breaks confirmation for quoted names.
-function galleryDeleteComponent() {
-    return {
-        deleteConfirmName: '',
-        galleryName: '',
-        init() {
-            this.galleryName = this.$root.dataset.galleryName;
-        },
-        reset() {
-            this.deleteConfirmName = '';
-        },
-    };
-}
-
 // Share-URL copy button. navigator.clipboard + setTimeout live here in JS.
 function shareUrlComponent() {
     return {
@@ -949,7 +934,6 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('uploadZone', uploadZoneComponent);
     Alpine.data('guestViewer', guestViewerComponent);
     Alpine.data('galleryManager', galleryManagerComponent);
-    Alpine.data('galleryDelete', galleryDeleteComponent);
     Alpine.data('langSwitcher', langSwitcherComponent);
     Alpine.data('auditFilter', auditFilterComponent);
     Alpine.data('shareUrl', shareUrlComponent);

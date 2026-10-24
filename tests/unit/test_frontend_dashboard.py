@@ -184,10 +184,19 @@ def test_dashboard_delete_dialogs_keep_gallery_identity_and_csrf(locale, label):
             for tag, attrs in elements
         )
         assert any(
-            attrs.get("x-data") == "galleryDelete" and attrs.get("data-gallery-name") == gallery.name
+            attrs.get("data-open-dialog") == dialog_id and attrs.get("aria-label", "").endswith(gallery.name)
             for _, attrs in elements
         )
         assert any(
             attrs.get("name") == "csrf_token" and attrs.get("value") == "current-session-csrf"
             for attrs in parser.forms[f"/galleries/{gallery.id}/delete"]
         )
+
+    assert not any(attrs.get("name") == "confirm_name" for _, attrs in elements)
+    assert sum(
+        tag == "button"
+        and attrs.get("name") == "confirm_delete"
+        and attrs.get("value") == "yes"
+        and "disabled" not in attrs
+        for tag, attrs in elements
+    ) == len(galleries)

@@ -175,8 +175,7 @@ def test_gallery_detail_escapes_alpine_embedded_values() -> None:
     # (as data, never evaluated as code) — u3s CSP migration.
     assert 'data-share-url="{{ share_url' in share
     assert 'x-data="shareUrl"' in share
-    assert 'data-gallery-name="{{ gallery.name }}"' in delete
-    assert 'x-data="galleryDelete"' in delete
+    assert "<strong>{{ gallery.name }}</strong>" in delete
 
 
 def test_owner_lightbox_has_readonly_navigation() -> None:

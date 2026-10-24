@@ -71,7 +71,7 @@ async function navigate(url) {
     await waitFor("document.readyState === 'complete'", `navigation to ${url}`);
 }
 
-async function deleteGallery(galleryUrl, galleryName) {
+async function deleteGallery(galleryUrl) {
     await navigate(galleryUrl);
     const endpoint = `${new URL(galleryUrl).pathname}/delete`;
     const result = await evaluate(
@@ -83,7 +83,7 @@ async function deleteGallery(galleryUrl, galleryName) {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'X-CSRF-Token': token,
                 },
-                body: new URLSearchParams({ confirm_name: ${JSON.stringify(galleryName)} }),
+                body: new URLSearchParams({ confirm_delete: 'yes' }),
             });
             return {
                 ok: response.ok,
@@ -229,13 +229,13 @@ try {
         "Alpine.$data(document.querySelector('[x-data=uploadZone]')).state",
     );
     assert.equal(finalState, 'complete');
-    await deleteGallery(galleryUrl, galleryName);
+    await deleteGallery(galleryUrl);
     galleryUrl = null;
     console.log(JSON.stringify({ ...outcome, finalState }, null, 2));
 } finally {
     if (galleryUrl) {
         try {
-            await deleteGallery(galleryUrl, galleryName);
+            await deleteGallery(galleryUrl);
         } catch (cleanupError) {
             console.error(`E2E cleanup failed: ${cleanupError.message}`);
         }
