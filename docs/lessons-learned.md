@@ -323,3 +323,28 @@ Rollback oder ein gelöschter Eltern-Datensatz entfernen diese Dateien nicht.
 Physische Bereinigung braucht daher Tests für Fehler und parallele Vorgänge,
 zusätzlich zum erfolgreichen HTTP-Status. Die Prüfung verwendet ein lokales
 Dateisystem; das Verhalten eines produktiven S3-Buckets wurde damit nicht gemessen.
+
+
+### Korrektur der drei Storage-Lücken
+
+`khfp`, `qeqc` und `imux` teilen denselben Lebenszyklus und wurden gemeinsam
+abgesichert. Geteilte PostgreSQL-Transaktionssperren erlauben weiterhin parallele
+Worker für unterschiedliche Bilder; exklusive Galerie-/Bildlöschung wartet auf
+laufende Produzenten. Doppelte Worker für dasselbe Bild werden serialisiert.
+Alle Sperren werden vor Audit-/FK-Schreibzugriffen erworben; mehrere IDs werden
+sortiert. Hintergrund: [PostgreSQL 16, Advisory Locks](https://www.postgresql.org/docs/16/explicit-locking.html#ADVISORY-LOCKS).
+
+Datei-Keys werden vor dem Upload als begonnen erfasst, weil auch ein fehlgeschlagener
+Upload bereits Bytes hinterlassen kann. Fehler und Task-Abbruch kompensieren diese
+Keys unter einer erneut erworbenen Sperre. Nach verlorenem Commit-Acknowledgement
+wird zuerst der aktuelle DB-Status geprüft, damit ein bereits erfolgreiches Ergebnis
+nicht nachträglich gelöscht wird. Schlägt die Kompensation selbst fehl, bleiben die
+kanonischen Vorschau-Keys aus der dauerhaft vorhandenen Bild-UUID rekonstruierbar.
+
+Die gemeinsame Löschroutine berücksichtigt diese Keys zusätzlich zu registrierten
+Legacy-Keys und löscht DB-Referenzen erst nach erfolgreicher Storage-Bereinigung.
+Bei Fehlern erscheint HTTP 503 mit einer verständlichen DE/EN-Meldung; ein erneuter
+Löschversuch kann auch bereits entfernte Dateien gefahrlos wiederholen. Das gilt
+auch für die Admin-Löschung mehrerer Galerien und die einzelnen/bulk Bildpfade.
+Unbekannte Altdateien ohne Bilddatensatz und Upload-Transaktionen, die nie einen
+Bilddatensatz committed haben (`2jb0`), benötigen weiterhin eine separate Lösung.

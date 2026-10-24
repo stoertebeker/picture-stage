@@ -7,6 +7,7 @@ mocked DB session and storage — no Postgres required.
 
 import io
 import uuid
+from contextlib import nullcontext
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -28,6 +29,7 @@ class _FakeSession:
 
     def __init__(self, image: Any) -> None:
         self._image = image
+        self.no_autoflush = nullcontext()
         self.committed = False
         self.added: list[Any] = []
 
@@ -64,6 +66,7 @@ def _storage_with_original(raw: bytes, *, upload: AsyncMock | None = None) -> Ma
     storage = MagicMock()
     storage.download_stream = fake_stream
     storage.upload = upload or AsyncMock()
+    storage.delete = AsyncMock()
     return storage
 
 
@@ -145,7 +148,7 @@ async def test_worker_scopes_query_by_image_and_gallery() -> None:
         await preview_worker.process_image_previews(image.id, gallery_id, None)
 
     # The compiled WHERE clause references both columns.
-    where_sql = str(captured[0].compile()).lower()
+    where_sql = str(next(statement for statement in captured if hasattr(statement, "whereclause")).compile()).lower()
     assert "image" in where_sql and "gallery_id" in where_sql
 
 

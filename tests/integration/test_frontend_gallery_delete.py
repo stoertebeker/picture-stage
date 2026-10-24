@@ -82,7 +82,8 @@ async def test_frontend_delete_purges_storage_files(client, db, owner, verify_db
     assert resp.status_code == 303
     assert resp.headers["location"] == "/dashboard"
     # Both the original and the preview file were purged — no orphans left behind.
-    assert set(fake.deleted) == {"proofs/orig.jpg", "proofs/orig_thumb_sm.webp"}
+    assert {"proofs/orig.jpg", "proofs/orig_thumb_sm.webp"} <= set(fake.deleted)
+    assert len(fake.deleted) == 5  # Original, legacy preview and three recoverable canonical variants.
     # The gallery row is gone.
     found = (await verify_db.execute(select(Gallery).where(Gallery.id == gallery.id))).scalar_one_or_none()
     assert found is None

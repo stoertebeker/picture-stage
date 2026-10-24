@@ -77,6 +77,25 @@ try {
     const stamp = Date.now();
     const first = await createGallery(`Dashboard E2E ${stamp} O'Brien "A" <b> & mehr`);
     const second = await createGallery(`Dashboard E2E ${stamp} B`);
+    // Exercise the real multipart upload and background process-pool worker
+    // before deleting the gallery containing its original and three previews.
+    await page.goto(first.path);
+    const png = await page.evaluate(() => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 48;
+        canvas.getContext('2d').fillRect(0, 0, canvas.width, canvas.height);
+        return canvas.toDataURL('image/png').split(',')[1];
+    });
+    const uploaded = page.waitForResponse((response) =>
+        response.url() === `${baseUrl}${first.path}/upload` && response.request().method() === 'POST');
+    await page.locator('[x-data=uploadZone] input[type=file]').setInputFiles({
+        name: 'storage-proof.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64'),
+    });
+    assert.equal((await uploaded).status(), 200);
+    await page.locator('#image-grid [data-processing-status=ready]').waitFor({ timeout: 30_000 });
+    console.log(`File-backed test gallery: ${first.path.split('/').pop()}`);
+    await page.goto('/dashboard');
     const firstDialog = await openDelete(first);
     await screenshot('dashboard-delete-desktop');
     await firstDialog.locator('[data-close-dialog]').click();
@@ -112,7 +131,7 @@ try {
     await submitDelete({ ...third, dialogId: 'deleteModal' });
     // 404 checks above deliberately produce network errors; Alpine/runtime errors must be absent.
     assert.deepEqual(errors.filter((message) => !message.includes('404 (Not Found)')), []);
-    console.log('Playwright passed: real clicks, Escape/cancel, no name input, HTMX cards, escaped names, dashboard/detail deletion, desktop/mobile and dark/light.');
+    console.log('Playwright passed: real upload and preview worker, real clicks, Escape/cancel, HTMX cards, escaped names, dashboard/detail deletion, desktop/mobile and dark/light.');
 } finally {
     try {
         if (galleries.length > 0) {

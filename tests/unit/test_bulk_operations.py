@@ -52,13 +52,6 @@ class TestBulkDeleteEndpoint:
             source = f.read()
         assert "Image.gallery_id == gallery_id" in source
 
-    def test_deletes_storage_files(self) -> None:
-        with open("app/images/router.py") as f:
-            source = f.read()
-        idx = source.index("bulk_delete")
-        block = source[idx : idx + 1500]
-        assert "storage.delete" in block
-
     def test_returns_deleted_count(self) -> None:
         with open("app/images/router.py") as f:
             source = f.read()

@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 from app.auth.dependencies import require_active_user
 from app.db.models import Gallery, Image, ImagePreview, PreviewVariant, User
 from app.db.session import get_db
+from app.galleries.lifecycle import lock_gallery, lock_images
 from app.images.processing import (
     PREVIEW_SIZES,
     compute_sha256,
@@ -19,6 +20,7 @@ from app.images.processing import (
     get_image_dimensions,
 )
 from app.images.schemas import BulkDeleteRequest, BulkDeleteResponse, ImageResponse, ImageUploadResponse
+from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
 from app.images.upload_limits import enforce_file_count, read_within_limit
 from app.security.signing import verify_signed_url
 from app.storage.base import StorageBackend, storage_key
@@ -59,6 +61,7 @@ async def upload_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> ImageUploadResponse:
+    await lock_gallery(db, gallery_id, shared=True)
     gal_result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     gallery = gal_result.scalar_one_or_none()
     if gallery is None:
@@ -180,10 +183,12 @@ async def delete_image(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> None:
+    await lock_gallery(db, gallery_id, shared=True)
     gal_check = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     if gal_check.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
+    await lock_images(db, gallery_id, [image_id])
     img_result = await db.execute(
         select(Image).where(Image.id == image_id, Image.gallery_id == gallery_id).options(selectinload(Image.previews))
     )
@@ -191,15 +196,7 @@ async def delete_image(
     if image is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
-    try:
-        await storage.delete(image.storage_key)
-    except Exception:  # noqa: S110
-        pass
-    for preview in image.previews:
-        try:
-            await storage.delete(preview.storage_key)
-        except Exception:  # noqa: S110
-            pass
+    await delete_storage_keys(storage, image_storage_keys(image))
 
     await db.delete(image)
     await db.commit()
@@ -216,6 +213,7 @@ async def bulk_delete_images(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> BulkDeleteResponse:
+    await lock_gallery(db, gallery_id)
     gal_check = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
     if gal_check.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -231,15 +229,7 @@ async def bulk_delete_images(
     images = img_result.scalars().all()
 
     for image in images:
-        try:
-            await storage.delete(image.storage_key)
-        except Exception:  # noqa: S110
-            pass
-        for preview in image.previews:
-            try:
-                await storage.delete(preview.storage_key)
-            except Exception:  # noqa: S110
-                pass
+        await delete_storage_keys(storage, image_storage_keys(image))
         await db.delete(image)
 
     await db.commit()

@@ -17,7 +17,7 @@ Picture-Stage lets photographers share image galleries with models for review. M
 - **Editorial Dark frontend** — light/dark themes, DE/EN, keyboard and touch navigation in the gallery lightbox
 - **Pluggable storage** — local Docker volume or S3-compatible (MinIO, AWS, Hetzner, R2, B2)
 - **Multi-tenant** — multiple photographers with admin approval registration
-- **Gallery deletion from dashboard or detail view** — a confirmation dialog with Cancel / Delete permanently; removes its images and previews
+- **Gallery deletion from dashboard or detail view** — a confirmation dialog with Cancel / Delete permanently; removes its images and previews, reports storage failures and retains references for retry
 - **Admin user management** — list users, change roles, lock/unlock, delete, reset passwords
 - **Multi-arch Docker image** — runs on amd64 and arm64 (Raspberry Pi, Synology)
 

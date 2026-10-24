@@ -157,7 +157,9 @@ async def delete_user(
     await db.flush()
 
     # Storage-aware: purge each gallery (files + DB rows) so no image data is orphaned.
-    galleries = (await db.execute(select(Gallery).where(Gallery.owner_id == target.id))).scalars().all()
+    galleries = (
+        (await db.execute(select(Gallery).where(Gallery.owner_id == target.id).order_by(Gallery.id))).scalars().all()
+    )
     for gallery in galleries:
         await purge_gallery(gallery, db, storage)
 

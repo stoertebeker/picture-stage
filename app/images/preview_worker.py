@@ -9,6 +9,7 @@ keeps the event loop free and can kill a hung variant), and flips
 ``images.processing_status`` to ``ready`` (or ``failed`` on error).
 """
 
+import asyncio
 import io
 import logging
 import uuid
@@ -18,12 +19,14 @@ from sqlalchemy import select
 
 from app.db.base import async_session
 from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
+from app.galleries.lifecycle import lock_gallery, lock_images
 from app.images.process_pool import run_in_pool
 from app.images.processing import (
     PREVIEW_SIZES,
     render_preview_bytes,
     render_thumbnail_bytes,
 )
+from app.images.storage_cleanup import StorageCleanupError, delete_storage_keys
 from app.storage.base import storage_key
 from app.storage.dependencies import get_storage
 
@@ -39,22 +42,32 @@ async def _read_original(storage_key_str: str) -> bytes:
     return b"".join(chunks)
 
 
-async def _mark_failed(image_id: uuid.UUID, gallery_id: uuid.UUID) -> None:
-    """Set processing_status=failed in a fresh transaction.
+async def _mark_failed(image_id: uuid.UUID, gallery_id: uuid.UUID, attempted_keys: set[str] | None = None) -> None:
+    """Compensate a failed attempt under a fresh fence, then persist failure.
 
-    Runs in its own session so the status write survives even if the main
-    processing transaction was rolled back.
+    Reacquire after rollback/commit errors: the processing transaction may have
+    released its locks. A newer successful attempt (or an acknowledged-late
+    commit) owns its ready files and must never be cleaned up by an older one.
+    Failed cleanup remains recoverable from the durable Image UUID, even if
+    its preview rows rolled back; all deletion paths derive canonical keys.
     """
     try:
         async with async_session() as db:
+            await lock_gallery(db, gallery_id, shared=True)
+            await lock_images(db, gallery_id, [image_id])
             result = await db.execute(select(Image).where(Image.id == image_id, Image.gallery_id == gallery_id))
             image = result.scalar_one_or_none()
+            if image is not None and image.processing_status == ImageProcessingStatus.ready:
+                return
+            try:
+                await delete_storage_keys(get_storage(), attempted_keys or set())
+            except StorageCleanupError:
+                logger.warning("Preview cleanup incomplete for image %s; retaining its recovery reference", image_id)
             if image is not None:
                 image.processing_status = ImageProcessingStatus.failed
                 await db.commit()
     except Exception:
-        # Last-resort: the failure handler must never raise.
-        logger.exception("Failed to mark image %s as failed", image_id)
+        logger.exception("Failed to recover preview attempt for image %s", image_id)
 
 
 async def process_image_previews(
@@ -73,8 +86,11 @@ async def process_image_previews(
     ``ready``; any exception flips it to ``failed`` (in a separate transaction).
     """
     storage = get_storage()
+    attempted_keys: set[str] = set()
     try:
         async with async_session() as db:
+            await lock_gallery(db, gallery_id, shared=True)
+            await lock_images(db, gallery_id, [image_id])
             result = await db.execute(select(Image).where(Image.id == image_id, Image.gallery_id == gallery_id))
             image = result.scalar_one_or_none()
             if image is None:
@@ -83,6 +99,9 @@ async def process_image_previews(
                     image_id,
                     gallery_id,
                 )
+                return
+
+            if image.processing_status == ImageProcessingStatus.ready:
                 return
 
             original_bytes = await _read_original(image.storage_key)
@@ -102,6 +121,7 @@ async def process_image_previews(
                     preview_bytes, pw, ph = await run_in_pool(render_thumbnail_bytes, original_bytes, max_width)
 
                 preview_key = storage_key(str(gallery_id), "previews", f"{image_id}_{variant_name}.webp")
+                attempted_keys.add(preview_key)
                 await storage.upload(preview_key, io.BytesIO(preview_bytes), "image/webp")
 
                 db.add(
@@ -118,6 +138,9 @@ async def process_image_previews(
             image.processing_status = ImageProcessingStatus.ready
             await db.commit()
             logger.info("Preview worker: image %s ready (%d variants)", image_id, len(PREVIEW_SIZES))
+    except asyncio.CancelledError:
+        await asyncio.shield(_mark_failed(image_id, gallery_id, attempted_keys))
+        raise
     except Exception:
         logger.exception("Preview worker failed for image %s", image_id)
-        await _mark_failed(image_id, gallery_id)
+        await _mark_failed(image_id, gallery_id, attempted_keys)

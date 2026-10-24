@@ -1,9 +1,10 @@
+import json
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -23,8 +24,9 @@ from app.galleries.export import router as export_router
 from app.galleries.router import router as galleries_router
 from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
-from app.i18n import detect_locale
+from app.i18n import detect_locale, t
 from app.images.router import router as images_router
+from app.images.storage_cleanup import StorageCleanupError
 from app.logging_config import configure_logging
 from app.notifications.router import router as notifications_router
 from app.security.middleware import CSRFMiddleware, RequestBodySizeLimitMiddleware, SecurityHeadersMiddleware
@@ -105,6 +107,31 @@ app.include_router(frontend_galleries_router)
 app.include_router(frontend_admin_router)
 app.include_router(frontend_setup_router)
 app.include_router(frontend_legal_router)
+
+
+@app.exception_handler(StorageCleanupError)
+async def storage_cleanup_error(request: Request, _error: StorageCleanupError) -> Response:
+    """Report incomplete deletion without removing the retained recovery rows."""
+    locale = getattr(request.state, "locale", "de")
+    message = t("gallery.delete_failed_message", locale)
+    if request.url.path.startswith("/api/"):
+        return JSONResponse({"detail": message}, status_code=503)
+    if request.headers.get("HX-Request") == "true":
+        return Response(
+            status_code=503,
+            headers={
+                "HX-Reswap": "none",
+                "HX-Trigger": json.dumps({"showToast": {"kind": "error", "message": message}}),
+            },
+        )
+    from app.frontend.deps import templates
+
+    return templates.TemplateResponse(
+        request,
+        "galleries/delete_failed.html",
+        {"return_url": "/admin/users" if request.url.path.startswith("/admin/") else "/dashboard"},
+        status_code=503,
+    )
 
 
 @app.get("/health")

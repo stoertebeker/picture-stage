@@ -27,9 +27,11 @@ from app.db.models import (
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.galleries.deletion import purge_gallery
+from app.galleries.lifecycle import lock_gallery
 from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.i18n import t
+from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
 from app.security.signing import sign_url
 from app.selections.service import get_current_selections
 from app.storage.base import StorageBackend
@@ -307,6 +309,7 @@ async def upload_images(
     from app.images.upload_limits import enforce_file_count, read_within_limit
     from app.storage.base import storage_key
 
+    await lock_gallery(db, gallery_id, shared=True)
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
     logger.info(
@@ -633,6 +636,7 @@ async def bulk_delete_images(
     storage: StorageBackend = Depends(get_storage),
 ) -> HTMLResponse:
     """Bulk delete selected images and return refreshed image grid."""
+    await lock_gallery(db, gallery_id)
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
     form = await request.form()
@@ -661,15 +665,7 @@ async def bulk_delete_images(
         images_to_delete = result.scalars().all()
 
         for image in images_to_delete:
-            try:
-                await storage.delete(image.storage_key)
-            except Exception:
-                logger.warning("Failed to delete storage key %s", image.storage_key)
-            for preview in image.previews:
-                try:
-                    await storage.delete(preview.storage_key)
-                except Exception:
-                    logger.warning("Failed to delete preview key %s", preview.storage_key)
+            await delete_storage_keys(storage, image_storage_keys(image))
             await db.delete(image)
 
         await db.commit()
@@ -688,6 +684,7 @@ async def delete_gallery(
     storage: StorageBackend = Depends(get_storage),
 ) -> Response:
     """Delete a gallery after explicit confirmation. Redirects to dashboard."""
+    await lock_gallery(db, gallery_id, shared=False)
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
     form = await request.form()

@@ -30,6 +30,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.galleries.deletion import purge_gallery
+from app.galleries.lifecycle import lock_gallery
 from app.galleries.quota import GalleryQuotaExceeded, assert_within_gallery_quota
 from app.galleries.schemas import (
     AuditLogEntry,
@@ -249,6 +250,7 @@ async def delete_gallery(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> None:
+    await lock_gallery(db, gallery_id)
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
     # Write audit log entry BEFORE deletion; purge_gallery anonymises + detaches it.
