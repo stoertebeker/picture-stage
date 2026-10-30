@@ -835,16 +835,16 @@ function galleryManagerComponent() {
     };
 }
 
-// Language switcher in the top nav. Reads the active language from the `lang`
-// cookie. document.* access lives here in JS (not in an inline expression),
+// Language switcher in the top nav. Use the rendered document language so an
+// automatic browser-language choice is highlighted even without a `lang` cookie.
+// document.* access lives here in JS (not in an inline expression),
 // which the @alpinejs/csp build forbids in templates.
 function langSwitcherComponent() {
     return {
         currentLang: 'de',
 
         init() {
-            const match = document.cookie.match(/lang=(\w+)/);
-            this.currentLang = (match && match[1]) || 'de';
+            this.currentLang = document.documentElement.lang === 'en' ? 'en' : 'de';
         },
     };
 }

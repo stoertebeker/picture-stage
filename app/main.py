@@ -2,6 +2,7 @@ import json
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -148,12 +149,25 @@ async def set_language(locale: str, request: Request) -> Response:
         locale = "de"
 
     referer = request.headers.get("referer", "/")
+    # Password verification renders the viewer at its POST-only URL. A language
+    # switch must return to the canonical GET page, just like a normal gallery visit.
+    try:
+        referer_parts = urlsplit(referer).path.split("/")
+    except ValueError:
+        referer_parts = []
+    if (
+        len(referer_parts) == 4
+        and referer_parts[1] == "g"
+        and referer_parts[2]
+        and referer_parts[3] == "verify-password"
+    ):
+        referer = f"/g/{referer_parts[2]}"
     response = RedirectResponse(url=referer, status_code=303)
     response.set_cookie(
         key="lang",
         value=locale,
         max_age=365 * 24 * 3600,  # 1 year
-        httponly=False,  # needs to be readable by JS for language switcher state
+        httponly=False,
         secure=settings.cookie_secure,
         samesite="lax",
         path="/",

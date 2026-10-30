@@ -74,15 +74,49 @@ def t(key: str, locale: str = _DEFAULT_LOCALE, **kwargs: Any) -> str:
     return result
 
 
+def _guest_browser_locale(accept_language: str) -> str:
+    """Pick the highest-weight supported browser language; international default is English."""
+    locale = "en"
+    best_weight = 0.0
+    for part in accept_language.split(","):
+        language, *parameters = part.strip().split(";")
+        prefix = language.strip().lower().split("-")[0]
+        if prefix not in _SUPPORTED_LOCALES:
+            continue
+
+        weight = 1.0
+        for parameter in parameters:
+            name, _, value = parameter.partition("=")
+            if name.strip().lower() == "q":
+                try:
+                    weight = float(value.strip())
+                except ValueError:
+                    weight = 0.0
+                break
+        # This comparison also rejects NaN, infinity and explicitly excluded q=0.
+        # A strict improvement preserves the header order for equal weights.
+        if 0.0 < weight <= 1.0 and weight > best_weight:
+            locale = prefix
+            best_weight = weight
+    return locale
+
+
 def detect_locale(request: Request) -> str:
     """Detect the preferred locale from the request.
 
-    Priority:
+    Guest gallery paths use an explicit language cookie, then weighted browser
+    preferences, then English. Other pages retain their existing priority:
     1. Authenticated user's locale preference (from request.state.user)
     2. Cookie "lang"
     3. Accept-Language header
     4. Default: "de"
     """
+    if request.url.path.startswith("/g/"):
+        lang_cookie = request.cookies.get("lang")
+        if lang_cookie in _SUPPORTED_LOCALES:
+            return str(lang_cookie)
+        return _guest_browser_locale(request.headers.get("accept-language", ""))
+
     # 1. Check authenticated user's locale
     user = getattr(request.state, "user", None) if hasattr(request, "state") else None
     if user is not None:
