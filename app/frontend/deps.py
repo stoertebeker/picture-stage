@@ -7,6 +7,7 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.i18n import t as _translate
+from app.security.middleware import _csrf_recovery_path
 
 # Stores the current request's locale so imported Jinja2 macros (which have no
 # access to the template context) can still call t() via the env global.
@@ -55,6 +56,14 @@ def _patched_template_response(
     context.setdefault("request", request)
     locale = getattr(request.state, "locale", "de") if hasattr(request, "state") else "de"
     context.setdefault("locale", locale)
+    # A successfully rendered GET already identifies a safe page to revisit.
+    # POST-rendered documents instead need their canonical GET destination.
+    request_path = request.scope.get("path", "/dashboard")
+    recovery_url = _csrf_recovery_path(request_path)
+    if request.scope.get("method", "GET") == "GET":
+        query = request.scope.get("query_string", b"").decode("latin-1")
+        recovery_url = request_path + (f"?{query}" if query else "")
+    context.setdefault("csrf_recovery_url", recovery_url)
     _locale_ctx.set(locale)
     # Provide request-aware t() bound to the current request
     context.setdefault("t", partial(_t_for_request, request))

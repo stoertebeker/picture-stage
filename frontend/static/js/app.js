@@ -17,6 +17,75 @@
     if (window.__psAppInit) return;
     window.__psAppInit = true;
 
+    // Cookies can rotate while a tab keeps an older document alive. Resolve
+    // the token when sending, rather than trusting a render-time hx-headers.
+    function currentCsrfToken() {
+        const cookie = document.cookie.split(';').map((part) => part.trim())
+            .find((part) => part.startsWith('csrf_token='));
+        return cookie ? cookie.slice('csrf_token='.length) : null;
+    }
+
+    function setCsrfHeader(headers, token) {
+        // XHR combines differently-cased duplicates into one header value.
+        for (const key of Object.keys(headers)) {
+            if (key.toLowerCase() === 'x-csrf-token') delete headers[key];
+        }
+        headers['X-CSRF-Token'] = token;
+    }
+
+    function sameOrigin(path) {
+        try {
+            return new URL(path, document.baseURI).origin === window.location.origin;
+        } catch {
+            return false;
+        }
+    }
+
+    function syncCsrfToken() {
+        const token = currentCsrfToken();
+        if (!token || !document.querySelector('meta[name="csrf-token"]')) return null;
+        document.querySelectorAll('meta[name="csrf-token"]').forEach((meta) => { meta.content = token; });
+        document.querySelectorAll('input[name="csrf_token"]').forEach((input) => { input.value = token; });
+        document.querySelectorAll('[hx-headers]').forEach((element) => {
+            try {
+                const headers = JSON.parse(element.getAttribute('hx-headers'));
+                if (!headers || Array.isArray(headers) || typeof headers !== 'object') return;
+                if (!Object.keys(headers).some((key) => key.toLowerCase() === 'x-csrf-token')) return;
+                setCsrfHeader(headers, token);
+                element.setAttribute('hx-headers', JSON.stringify(headers));
+            } catch {
+                // Never evaluate dynamic header expressions to synchronize a token.
+            }
+        });
+        return token;
+    }
+
+    document.addEventListener('htmx:configRequest', (event) => {
+        const detail = event.detail;
+        if (!detail || !sameOrigin(detail.path || window.location.href)) return;
+        const token = syncCsrfToken();
+        if (!token) return;
+        setCsrfHeader(detail.headers, token);
+        if (detail.parameters && Object.prototype.hasOwnProperty.call(detail.parameters, 'csrf_token')) {
+            detail.parameters.csrf_token = token;
+        }
+    });
+    // Capture before HTMX or the browser collects native form values.
+    document.addEventListener('submit', (event) => {
+        if (event.target instanceof HTMLFormElement && sameOrigin(event.target.action)) syncCsrfToken();
+    }, true);
+    document.addEventListener('htmx:afterSwap', syncCsrfToken);
+    window.addEventListener('pageshow', (event) => {
+        syncCsrfToken();
+        if (event.persisted && document.body.dataset.csrfRecoveryUrl && document.querySelector('meta[name="csrf-token"]')) {
+            // A restored document cannot inspect the HttpOnly session cookie.
+            // Fetch its current authentication state and signed token via GET.
+            const recovery = document.body.dataset.csrfRecoveryUrl || '/dashboard';
+            window.location.replace(sameOrigin(recovery) ? recovery : '/dashboard');
+        }
+    });
+    syncCsrfToken();
+
     (function () {
         const stored = localStorage.getItem('theme');
         const theme = stored === 'light' ? 'light' : 'dark';

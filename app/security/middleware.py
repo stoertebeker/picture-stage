@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import uuid
 from typing import ClassVar
 from urllib.parse import parse_qs
 
@@ -11,6 +12,21 @@ from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.config import settings
+
+
+def _csrf_recovery_path(path: str) -> str:
+    """Return a known GET route, never a POST-only URL or external Referer."""
+    parts = path.split("/")
+    if len(parts) >= 3 and parts[1] == "galleries":
+        try:
+            gallery_id = uuid.UUID(parts[2])
+        except ValueError:
+            pass
+        else:
+            return f"/galleries/{gallery_id}"
+    if path in {"/login", "/signup"}:
+        return path
+    return "/dashboard"
 
 
 def _mint_csrf_token(session_token: str | None) -> str:
@@ -41,6 +57,19 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 
     SAFE_METHODS: ClassVar[set[str]] = {"GET", "HEAD", "OPTIONS", "TRACE"}
     EXEMPT_PREFIXES: ClassVar[tuple[str, ...]] = ("/api/", "/g/")
+
+    @staticmethod
+    def _reject(request: Request, message: str) -> Response:
+        # Old pages may still run the pre-rollout script and cannot repair
+        # their stale token themselves. HTMX handles this header before its
+        # error swap. Navigate to a known GET route: location.reload() could
+        # repeat a prior native POST that originally rendered the document.
+        headers = (
+            {"HX-Redirect": _csrf_recovery_path(request.url.path)}
+            if request.headers.get("HX-Request") == "true"
+            else None
+        )
+        return Response(message, status_code=403, headers=headers)
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         path = request.url.path
@@ -86,12 +115,12 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         # Unsafe method — verify CSRF token
         cookie_token = request.cookies.get("csrf_token")
         if not cookie_token:
-            return Response("CSRF token missing", status_code=403)
+            return self._reject(request, "CSRF token missing")
         request.state.csrf_token = cookie_token
 
         session_token = request.cookies.get("session")
         if session_token and not hmac.compare_digest(cookie_token, _mint_csrf_token(session_token)):
-            return Response("CSRF token mismatch", status_code=403)
+            return self._reject(request, "CSRF token mismatch")
 
         # Check header first, then form body (without consuming request.form())
         header_token = request.headers.get("X-CSRF-Token")
@@ -105,7 +134,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         submitted_token = header_token or form_token
 
         if not submitted_token or not hmac.compare_digest(submitted_token, cookie_token):
-            return Response("CSRF token mismatch", status_code=403)
+            return self._reject(request, "CSRF token mismatch")
 
         return await call_next(request)
 
@@ -113,6 +142,12 @@ class CSRFMiddleware(BaseHTTPMiddleware):
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
+
+        if request.cookies.get("session") and response.headers.get("content-type", "").startswith("text/html"):
+            # Revalidate authenticated documents and fragments after cookie or
+            # session rotation; retain a stronger endpoint-specific no-store.
+            no_store = "no-store" in response.headers.get("cache-control", "").lower()
+            response.headers["Cache-Control"] = "private, no-cache" + (", no-store" if no_store else "")
 
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"

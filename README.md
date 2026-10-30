@@ -160,6 +160,7 @@ database infinity values retain their access semantics without crashing guest li
 - **Signed URLs:** HMAC-SHA256 with configurable TTL (thumbnails 1h, previews 15min)
 - **Rate limiting:** signup 5/min, login 10/min, token resolution 20/10min
 - **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy
+- **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; rejected POSTs are never automatically replayed.
 - **Tenant isolation:** all queries filtered by owner_id, verified by structural tests
 - **Non-root container:** app runs as unprivileged user
 
