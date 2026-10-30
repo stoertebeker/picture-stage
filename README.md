@@ -171,6 +171,7 @@ and frontend preview dispatch is not automatically retried.
 - **Rate limiting:** signup 5/min, login 10/min, token resolution 20/10min
 - **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy
 - **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; rejected POSTs are never automatically replayed.
+- **Request bodies:** ordinary JSON/forms are capped at 1 MiB before CSRF and parsing. The two image-upload POST routes retain the global upload budget. Declared lengths and received bytes are checked; the smaller enabled ceiling applies.
 - **Tenant isolation:** all queries filtered by owner_id, verified by structural tests
 - **Non-root container:** app runs as unprivileged user
 
@@ -200,6 +201,8 @@ Key variables:
 | `APP_URL` | Public base URL for share links — set to your real HTTPS domain in production (forced to https behind a TLS proxy) |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `STORAGE_BACKEND` | `local` or `s3` |
+| `MAX_REQUEST_BODY_MB` | Global body ceiling in MiB, default `1024`; `0` disables this ceiling |
+| `MAX_NON_UPLOAD_REQUEST_BODY_KB` | Additional ceiling for non-upload requests in KiB, default `1024`; `0` disables this additional ceiling |
 
 ## Development
 

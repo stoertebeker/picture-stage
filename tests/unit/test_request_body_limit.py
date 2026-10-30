@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 import pytest
 from starlette.applications import Starlette
+from starlette.requests import ClientDisconnect
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 from starlette.testclient import TestClient
@@ -165,7 +166,7 @@ async def test_zero_disables_the_limit() -> None:
         return {"type": "http.request", "body": b"", "more_body": False}
 
     mw = RequestBodySizeLimitMiddleware(app)
-    with patch_setting("max_request_body_mb", 0):
+    with patch_setting("max_request_body_mb", 0), patch_setting("max_non_upload_request_body_kb", 0):
         huge = str(99 * 1024 * 1024 * 1024).encode()
         await mw(http_scope([(b"content-length", huge)]), receive, send)
 
@@ -219,3 +220,55 @@ def test_testclient_small_body_passes() -> None:
         response = client.post("/echo", content=b"hello")
     assert response.status_code == 200
     assert "got 5" in response.text
+
+
+@pytest.mark.parametrize("global_mb", [0, 1])
+@pytest.mark.parametrize(("size", "expected"), [(1024, 200), (1025, 413)])
+async def test_non_upload_ceiling_is_independent_and_exact(global_mb, size, expected):
+    async def echo(scope, receive, send):
+        message = await receive()
+        if message["type"] != "http.disconnect":
+            await PlainTextResponse(str(len(message["body"])))(scope, receive, send)
+
+    with patch_setting("max_request_body_mb", global_mb), patch_setting("max_non_upload_request_body_kb", 1):
+        sent = []
+
+        async def receive():
+            return {"type": "http.request", "body": b"x" * size, "more_body": False}
+
+        async def send(message):
+            sent.append(message)
+
+        await RequestBodySizeLimitMiddleware(echo)(http_scope(), receive, send)
+        assert [m["status"] for m in sent if m["type"] == "http.response.start"] == [expected]
+
+
+async def test_global_ceiling_still_caps_uploads_and_can_be_stricter():
+    async def unexpected(scope, receive, send):
+        pytest.fail("Declared oversize should be rejected before inner application")
+
+    async def receive():
+        pytest.fail("Declared oversize should not read the body")
+
+    async def send(message):
+        sent.append(message)
+
+    sent = []
+    scope = http_scope([(b"content-length", str(2 * 1024 * 1024).encode())])
+    scope["path"] = "/galleries/00000000-0000-0000-0000-000000000001/upload"
+    with patch_setting("max_request_body_mb", 1), patch_setting("max_non_upload_request_body_kb", 4096):
+        await RequestBodySizeLimitMiddleware(unexpected)(scope, receive, send)
+        scope["path"] = "/login"
+        await RequestBodySizeLimitMiddleware(unexpected)(scope, receive, send)
+    assert [m["status"] for m in sent if m["type"] == "http.response.start"] == [413, 413]
+
+
+async def test_unrelated_client_disconnect_is_not_swallowed():
+    async def disconnected(scope, receive, send):
+        raise ClientDisconnect
+
+    async def unused():
+        pytest.fail("Unused")
+
+    with pytest.raises(ClientDisconnect):
+        await RequestBodySizeLimitMiddleware(disconnected)(http_scope(), unused, unused)

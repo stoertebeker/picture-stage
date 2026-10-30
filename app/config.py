@@ -1,4 +1,4 @@
-from pydantic import model_validator
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Sentinel default for crypto secrets. A production instance MUST override these
@@ -83,6 +83,12 @@ class Settings(BaseSettings):
     # An outer reverse-proxy limit (Caddy request_body / Cloudflare) is the
     # recommended additional layer. 0 = no app-level limit.
     max_request_body_mb: int = 1024
+
+    # Ordinary JSON/forms must not inherit the upload-sized body budget. This
+    # additional ceiling is enforced before routing, CSRF and request parsing.
+    # Only POSTs to the two image upload routes use the larger global budget.
+    # 0 disables this additional ceiling; the global ceiling still applies.
+    max_non_upload_request_body_kb: int = Field(default=1024, ge=0)
 
     # Decompression-bomb guard (picture-stage-ccx). Caps the decoded pixel count
     # Pillow will process before raising DecompressionBombError instead of

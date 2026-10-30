@@ -7,7 +7,7 @@ from typing import ClassVar
 from urllib.parse import parse_qs
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.requests import Request
+from starlette.requests import ClientDisconnect, Request
 from starlette.responses import Response
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -191,24 +191,52 @@ class RequestBodySizeLimitMiddleware:
     2. Robust path — the received bytes are counted, so a missing or lying
        ``Content-Length`` (e.g. ``Transfer-Encoding: chunked``) is caught mid-stream.
 
-    Registered as the outermost middleware so it runs before CSRF (which itself reads
-    ``request.body()``). The limit is read from ``settings`` per request; ``0`` disables it.
+    Registered outermost, before CSRF and parsers. The effective ceiling is the
+    smaller enabled global/non-upload budget; only the two image-upload POST
+    routes get the larger budget. Each setting is read per request, with 0
+    disabling only that setting's ceiling.
     """
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+
+    @staticmethod
+    def _is_image_upload(scope: Scope) -> bool:
+        if scope["method"] != "POST":
+            return False
+        path = scope["path"]
+        root = scope.get("root_path", "").rstrip("/")
+        if root and path.startswith(root + "/"):
+            path = path[len(root) :]
+        # The router redirects trailing slashes to these same upload handlers.
+        parts = path.rstrip("/").split("/")
+        if len(parts) == 4 and parts[1] == "galleries" and parts[3] == "upload":
+            gallery_id = parts[2]
+        elif len(parts) == 6 and parts[1:4] == ["api", "v1", "galleries"] and parts[5] == "images":
+            gallery_id = parts[4]
+        else:
+            return False
+        try:
+            uuid.UUID(gallery_id)
+        except ValueError:
+            return False
+        return True
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
 
-        max_mb = settings.max_request_body_mb
-        if not max_mb:
+        limits = []
+        if settings.max_request_body_mb:
+            limits.append(settings.max_request_body_mb * 1024 * 1024)
+        if settings.max_non_upload_request_body_kb and not self._is_image_upload(scope):
+            limits.append(settings.max_non_upload_request_body_kb * 1024)
+        if not limits:
             await self.app(scope, receive, send)
             return
 
-        max_bytes = max_mb * 1024 * 1024
+        max_bytes = min(limits)
 
         # Fast path: reject on the declared Content-Length before reading a byte.
         for name, value in scope["headers"]:
@@ -227,26 +255,38 @@ class RequestBodySizeLimitMiddleware:
         received = 0
         response_started = False
         limit_hit = False
+        rejected = False
 
         async def guarded_send(message: Message) -> None:
             nonlocal response_started
+            if rejected:
+                # Parsing may translate our disconnect into an inner 400. The
+                # outer 413 has already completed; never send a second response.
+                return
             if message["type"] == "http.response.start":
                 response_started = True
             await send(message)
 
         async def limited_receive() -> Message:
-            nonlocal received, limit_hit
+            nonlocal received, limit_hit, rejected
+            if limit_hit:
+                return {"type": "http.disconnect"}
             message = await receive()
             if message["type"] == "http.request":
                 received += len(message.get("body", b""))
                 if received > max_bytes and not limit_hit:
                     limit_hit = True
                     if not response_started:
+                        rejected = True
                         await self._send_413(send)
                     return {"type": "http.disconnect"}
             return message
 
-        await self.app(scope, limited_receive, guarded_send)
+        try:
+            await self.app(scope, limited_receive, guarded_send)
+        except ClientDisconnect:
+            if not rejected:
+                raise
 
     @staticmethod
     async def _send_413(send: Send) -> None:
