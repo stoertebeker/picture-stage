@@ -122,6 +122,9 @@ database infinity values retain their access semantics without crashing guest li
 | DELETE | `/api/v1/galleries/{id}/share` | Revoke share link |
 | GET | `/api/v1/galleries/{id}/export` | Export selections (CSV/JSON/TXT, `filter=all\|selected\|favorited\|marked`) |
 
+CSV exports prefix spreadsheet formula-like text with an apostrophe, including
+filenames and comments. Stored values and JSON/TXT exports are unchanged.
+
 ### Images (`/api/v1/galleries/{id}/images/`)
 
 Multi-file uploads commit their image records as one batch. Migration `0008`
@@ -167,7 +170,9 @@ and frontend preview dispatch is not automatically retried.
 ## Security
 
 - **Share links:** long random capability URLs are hashed for lookup and stored replayable for the owner UI; optional gallery passwords protect sensitive galleries
+- **Token lookup:** new verification links and recoverable gallery links use indexed lookup keys. Older links remain valid through a compatibility scan; each app process allows up to two gallery scans and two verification scans at once, with excess requests receiving 503 and `Retry-After`. Invalid and non-indexed tokens can still require a linear scan.
 - **Signed URLs:** HMAC-SHA256 with configurable TTL (thumbnails 1h, previews 15min)
+- **Webhook delivery:** destinations must resolve entirely to public unicast addresses. Delivery connects directly to a checked address with the original hostname for TLS verification; environment HTTP proxies are not used for webhooks. Redirects are rejected and response bodies are not read.
 - **Rate limiting:** undecorated application routes use 200/min per matched route template and client address, before endpoint parsing. Dynamic token values share that default budget. Explicit limits retain their existing scopes (signup 5/min, login 10/min, password verification 5/min). Counters use process-local memory by default; `RATELIMIT_ENABLED=false` disables enforcement. Forwarding headers are not used directly as client identity. Static mounts and unmatched/redirect requests retain their normal handling.
 - **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy
 - **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; rejected POSTs are never automatically replayed.
