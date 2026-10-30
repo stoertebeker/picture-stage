@@ -3,9 +3,10 @@ from typing import Any
 
 from pydantic import BaseModel, HttpUrl, field_validator
 
-VALID_EVENT_TYPES = {"gallery_completed", "signup_pending"}
+from app.notifications.webhook import BLOCKED_HOSTS as BLOCKED_HOSTS
+from app.notifications.webhook import parse_webhook_url
 
-BLOCKED_HOSTS = {"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]", "metadata.google.internal", "169.254.169.254"}  # noqa: S104
+VALID_EVENT_TYPES = {"gallery_completed", "signup_pending"}
 
 
 class NotificationConfigUpdate(BaseModel):
@@ -26,12 +27,8 @@ class NotificationConfigUpdate(BaseModel):
     def validate_webhook_url(cls, v: str | None) -> str | None:
         if v is None:
             return v
-        url = HttpUrl(v)
-        host = (url.host or "").lower()
-        if host in BLOCKED_HOSTS or host.endswith(".internal") or host.endswith(".local"):
-            raise ValueError("Webhook URL must not point to internal addresses")
-        if url.scheme not in ("https",):
-            raise ValueError("Webhook URL must use HTTPS")
+        HttpUrl(v)
+        parse_webhook_url(v)
         return v
 
 

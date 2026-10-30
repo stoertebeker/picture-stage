@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Any
 
 import aiosmtplib
-import httpx
 from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.email import normalize_delivery_mailbox
 from app.config import settings
 from app.db.models import NotificationConfig, NotificationDelivery, User, UserStatus
+from app.notifications.webhook import post_webhook
 
 logger = logging.getLogger(__name__)
 
@@ -278,13 +278,7 @@ async def _send_webhook(
     if webhook_url is None:
         return
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.post(
-                webhook_url,
-                json={"event": event_type, "data": payload},
-                headers={"Content-Type": "application/json", "User-Agent": "Picture-Stage/0.1"},
-            )
-            response.raise_for_status()
+        await post_webhook(webhook_url, event_type, payload)
         delivery.status = "sent"
     except Exception as exc:
         logger.warning("Webhook notification failed for config %s: %s", config.id, exc)
