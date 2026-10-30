@@ -98,6 +98,15 @@ curl -s https://DEINE-DOMAIN/login | grep -o "/static/css/styles.css?v=[^\"]*"
 
 ### Galleries (`/api/v1/galleries/`)
 
+The gallery detail form accepts an optional expiry **date**. A saved date expires
+at 23:59:59.999999 UTC on that day, independent of the browser/server timezone;
+today is allowed until that instant. Existing expiry timestamps stay unchanged
+until explicitly saved. The JSON API continues to accept precise `expires_at`
+timestamps with its existing future-time validation.
+The form's latest supported date is `9999-12-30`: asyncpg reserves the following
+day's final microsecond for its PostgreSQL infinity sentinel. Date-only frontend
+values are bounded consistently in HTML and on the server; API codecs are unchanged.
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/galleries` | Create gallery |

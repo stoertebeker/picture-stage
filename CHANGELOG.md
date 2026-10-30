@@ -51,6 +51,7 @@ All notable changes to Picture-Stage are documented in this file.
 
 ### Fixed
 
+- **Choose gallery expiry by date only** (GitHub #6, `picture-stage-3frk`). The detail form saves the selected day's end in UTC, accepts today, and displays the UTC date without time controls. Existing timestamps remain untouched until saved; the JSON API retains precise timestamp support.
 - **Guest galleries follow the browser language** (GitHub #5, `picture-stage-loj3`). Visitors receive German or English according to their supported browser preferences and quality weights, with English as the international fallback. The existing DE/EN switch remains available, keeps manual choices across requests, and highlights the actual page language even before a choice is saved. Switching after password verification returns to the gallery instead of a POST-only URL. Photographer and admin language detection stays unchanged.
 - **Guest gallery header scrolls away on smartphones** (GitHub #4, `picture-stage-jmei`). The menu follows the page on screens below 640px, leaving more room for photos; wider screens retain sticky controls and the mobile sort panel remains anchored to the header.
 - **Make the gallery limit visible on the dashboard** (GitHub #2, `picture-stage-dyfv`). A persistent DE/EN notice beside the creation controls explains the reached limit and how to free a slot. Creation is disabled at the effective global or user-specific limit; the controls update after creation and deletion, and stale tabs refresh when the server rejects another gallery.

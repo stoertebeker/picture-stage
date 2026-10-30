@@ -201,19 +201,20 @@
                           class="mt-4 flex flex-col gap-3">
                         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                         <label for="expires_at" class="text-xs text-text-muted">{{ t('gallery.expiry_label') }}</label>
-                        <input type="datetime-local"
+                        <input type="date"
                                id="expires_at"
                                name="expires_at"
-                               value="{% if gallery.expires_at %}{{ gallery.expires_at.strftime('%Y-%m-%dT%H:%M') }}{% endif %}"
+                               max="9999-12-30"
+                               value="{% if expiry_date %}{{ expiry_date.isoformat() }}{% endif %}"
                                class="w-full rounded-md border border-border-subtle bg-surface-base px-3 py-2 text-sm text-text-secondary focus:outline-none focus-visible:ring focus-visible:ring-focus">
                         {% call button(variant='secondary', size='sm', type='submit', extra_class='w-full') %}{{ t('gallery.expiry_save') }}{% endcall %}
                         {% if gallery.expires_at %}
-                        {% call button(variant='ghost', size='sm', type='submit', extra_class='w-full', attrs={'name': 'clear_expiry', 'value': '1'}) %}{{ t('gallery.expiry_remove') }}{% endcall %}
+                        {% call button(variant='ghost', size='sm', type='submit', extra_class='w-full', attrs={'name': 'clear_expiry', 'value': '1', 'formnovalidate': ''}) %}{{ t('gallery.expiry_remove') }}{% endcall %}
                         {% endif %}
                     </form>
                     <p class="mt-3 text-xs text-text-muted">
                         {% if gallery.expires_at %}
-                        {{ t('gallery.expiry_current').replace('{date}', gallery.expires_at.strftime('%d.%m.%Y %H:%M')) }}
+                        {{ t('gallery.expiry_current').replace('{date}', expiry_date.strftime('%d.%m.%Y')) }}
                         {% else %}
                         {{ t('gallery.expiry_none') }}
                         {% endif %}

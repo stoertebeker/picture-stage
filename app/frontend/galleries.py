@@ -4,7 +4,7 @@ import json
 import logging
 import secrets
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, time
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
@@ -41,26 +41,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["frontend-galleries"])
 
+# asyncpg encodes the last microsecond of 9999-12-31 as PostgreSQL infinity.
+# Keep form dates finite and timezone-aware without changing the API's codec.
+_MAX_EXPIRY_DATE = date(9999, 12, 30)
+
 
 class _ExpiryInPastError(Exception):
     """Raised when a gallery expiry date is set to a past or current instant."""
 
 
 def _validate_future_expiry(raw: str) -> datetime:
-    """Parse an ISO expiry timestamp and reject non-future values.
+    """Accept a calendar date and expire at its last microsecond in UTC.
 
-    The HTML ``datetime-local`` input yields a naive ISO string; we treat a
-    naive value as UTC (matching how it is persisted into the ``timezone=True``
-    column) so the comparison against ``now`` never mixes aware and naive
-    datetimes. Raises ``ValueError`` on malformed input and ``_ExpiryInPastError``
-    when the instant is not strictly in the future.
+    HTML date values carry no browser timezone. Keep the established UTC
+    convention explicit and accept only canonical YYYY-MM-DD, not timestamps,
+    compact dates or ISO week dates. The JSON API keeps its datetime contract.
     """
-    parsed = datetime.fromisoformat(raw)
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=UTC)
-    if parsed <= datetime.now(UTC):
+    selected_date = date.fromisoformat(raw)
+    if selected_date.isoformat() != raw or selected_date > _MAX_EXPIRY_DATE:
+        raise ValueError("Expected YYYY-MM-DD")
+    expires_at = datetime.combine(selected_date, time.max, tzinfo=UTC)
+    if expires_at <= datetime.now(UTC):
         raise _ExpiryInPastError
-    return parsed
+    return expires_at
 
 
 async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
@@ -162,10 +165,20 @@ def _build_context(
         if img["processing_status"] == "ready"
     ]
 
+    expiry_date = None
+    if gallery.expires_at is not None:
+        # Persisted instants (including existing API-set times) are never changed
+        # by rendering. Normalize their date for the explicitly UTC form/status.
+        expiry = gallery.expires_at
+        if expiry.tzinfo is None:
+            expiry = expiry.replace(tzinfo=UTC)
+        expiry_date = expiry.astimezone(UTC).date()
+
     ctx = {
         "request": request,
         "user": user,
         "gallery": gallery,
+        "expiry_date": expiry_date,
         "images": images,
         "lightbox_images": lightbox_images,
         "image_count": len(images),
