@@ -1,4 +1,5 @@
 import secrets
+import uuid
 from datetime import UTC, datetime, timedelta
 from typing import NamedTuple
 
@@ -42,4 +43,16 @@ def decode_access_token(token: str) -> TokenData | None:
 
 
 def generate_verification_token() -> str:
-    return secrets.token_urlsafe(32)
+    return f"v1.{uuid.uuid4().hex}.{secrets.token_urlsafe(32)}"
+
+
+def verification_lookup_id(token: str) -> uuid.UUID | None:
+    """Extract the locator of a new token; old opaque tokens have no locator."""
+    parts = token.split(".")
+    if len(parts) != 3 or parts[0] != "v1" or len(parts[1]) != 32 or not parts[2]:
+        return None
+    try:
+        locator = uuid.UUID(hex=parts[1])
+    except ValueError:
+        return None
+    return locator if locator.hex == parts[1] else None

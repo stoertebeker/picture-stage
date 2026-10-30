@@ -209,6 +209,11 @@ async def test_real_public_html_routes_are_limited_before_database_work(monkeypa
     fake_db = MagicMock()
     fake_db.execute = AsyncMock(return_value=MagicMock())
     fake_db.execute.return_value.scalars.return_value.all.return_value = []
+    fake_db.scalar = AsyncMock(return_value=None)
+    stream = MagicMock()
+    stream.scalars.return_value.__aiter__.return_value = []
+    stream.close = AsyncMock()
+    fake_db.stream = AsyncMock(return_value=stream)
 
     async def override_db():
         yield fake_db
@@ -219,8 +224,8 @@ async def test_real_public_html_routes_are_limited_before_database_work(monkeypa
         for index in range(200):
             attempted_path = f"{path}-{index}" if rotate_token else path
             assert (await client.get(attempted_path)).status_code == 404
-        before = fake_db.execute.await_count
+        before = (fake_db.execute.await_count, fake_db.scalar.await_count, fake_db.stream.await_count)
         response = await client.get(path + "-new" if rotate_token else path)
     assert response.status_code == 429
     assert "Rate limit exceeded" in response.json()["error"]
-    assert fake_db.execute.await_count == before
+    assert (fake_db.execute.await_count, fake_db.scalar.await_count, fake_db.stream.await_count) == before

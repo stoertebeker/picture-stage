@@ -6,9 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_current_user
-from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy, verify_token
+from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy
 from app.auth.schemas import LocaleUpdate, LoginRequest, LoginResponse, SignupRequest, SignupResponse, UserResponse
-from app.auth.tokens import create_access_token, generate_verification_token
+from app.auth.token_lookup import resolve_pending_signup
+from app.auth.tokens import create_access_token, generate_verification_token, verification_lookup_id
 from app.auth.utils import get_client_ip
 from app.config import settings
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
@@ -50,6 +51,7 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
         password_hash=hash_password(body.password),
         verification_token_hash=token_hash,
         verification_token_salt=token_salt,
+        verification_lookup_id=verification_lookup_id(verification_token),
         ip_address=get_client_ip(request),
     )
     db.add(pending)
@@ -70,14 +72,7 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
 
 @router.post("/verify-email/{token}")
 async def verify_email(token: str, db: AsyncSession = Depends(get_db)) -> dict[str, str]:
-    result = await db.execute(select(PendingSignup))
-    pending_signups = result.scalars().all()
-
-    matched_signup: PendingSignup | None = None
-    for signup in pending_signups:
-        if verify_token(token, signup.verification_token_hash, signup.verification_token_salt):
-            matched_signup = signup
-            break
+    matched_signup = await resolve_pending_signup(token, db)
 
     if matched_signup is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invalid or expired verification token")
@@ -85,6 +80,7 @@ async def verify_email(token: str, db: AsyncSession = Depends(get_db)) -> dict[s
     # Token is valid — clear verification token so it can't be reused
     matched_signup.verification_token_hash = b""
     matched_signup.verification_token_salt = b""
+    matched_signup.verification_lookup_id = None
     await db.commit()
 
     return {"message": "Email verified. Waiting for admin approval."}

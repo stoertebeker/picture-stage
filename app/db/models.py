@@ -128,6 +128,7 @@ class Gallery(TimestampMixin, Base):
     share_token_hash: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     share_token_salt: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
     share_token: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    share_token_lookup: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -303,5 +304,8 @@ class PendingSignup(Base):
     password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
     verification_token_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     verification_token_salt: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    verification_lookup_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), nullable=True, unique=True, index=True
+    )
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)

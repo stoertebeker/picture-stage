@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.passwords import verify_token
+from app.auth.token_lookup import legacy_token_scan, token_locator
 from app.db.models import (
     LOGIN_ALLOWED_STATUSES,
     Gallery,
@@ -34,14 +35,14 @@ from app.selections.service import get_current_selections
 
 
 async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
-    """Resolve a share token to a Gallery, checking the hash against all shared galleries.
+    """Resolve an indexed token, retaining a bounded scan for legacy links.
 
     Joins the owner and requires a login-allowed status so a disabled/pending
     photographer's share links stop resolving (cxs). The check lives in the
     query, so every guest endpoint inherits it via this single resolver, and an
     unlock restores access without touching share sessions.
     """
-    result = await db.execute(
+    query = (
         select(Gallery)
         .join(User, User.id == Gallery.owner_id)
         .where(
@@ -50,12 +51,25 @@ async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | No
             User.status.in_(LOGIN_ALLOWED_STATUSES),
         )
     )
-    galleries = result.scalars().all()
-
-    for gallery in galleries:
+    result = await db.execute(query.where(Gallery.share_token_lookup == token_locator(token)))
+    for gallery in result.scalars():
         if gallery.share_token_hash and gallery.share_token_salt:
             if verify_token(token, gallery.share_token_hash, gallery.share_token_salt):
                 return gallery
+
+    # Older galleries can lack replayable plaintext, or have a stale locator
+    # after an old app instance changes a link during a rolling upgrade. Their
+    # salted verifier remains authoritative. Limit concurrent fallback scans and
+    # fetch bounded batches; per-scan verifier work is still linear.
+    async with legacy_token_scan("gallery"):
+        legacy = await db.stream(query.execution_options(yield_per=100))
+        try:
+            async for gallery in legacy.scalars():
+                if gallery.share_token_hash and gallery.share_token_salt:
+                    if verify_token(token, gallery.share_token_hash, gallery.share_token_salt):
+                        return gallery
+        finally:
+            await legacy.close()
     return None
 
 

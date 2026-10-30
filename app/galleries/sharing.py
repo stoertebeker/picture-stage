@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
 from app.auth.passwords import hash_token
+from app.auth.token_lookup import token_locator
 from app.config import settings
 from app.db.models import Gallery, GalleryStatus, User
 from app.db.session import get_db
@@ -60,6 +61,7 @@ async def create_share_link(
     gallery.share_token_hash = token_hash
     gallery.share_token_salt = token_salt
     gallery.share_token = token
+    gallery.share_token_lookup = token_locator(token)
 
     gallery.password_hash = password_hash
 
@@ -88,6 +90,7 @@ async def revoke_share_link(
     gallery.share_token_hash = None
     gallery.share_token_salt = None
     gallery.share_token = None
+    gallery.share_token_lookup = None
     gallery.password_hash = None
 
     if gallery.status == GalleryStatus.shared:

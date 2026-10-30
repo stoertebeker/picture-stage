@@ -10,8 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_user_from_cookie
 from app.auth.email import normalize_mailbox
-from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy, verify_token
-from app.auth.tokens import create_access_token, generate_verification_token
+from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy
+from app.auth.token_lookup import resolve_pending_signup
+from app.auth.tokens import create_access_token, generate_verification_token, verification_lookup_id
 from app.auth.utils import get_client_ip
 from app.config import settings
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
@@ -159,6 +160,7 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
         password_hash=hash_password(password),
         verification_token_hash=token_hash,
         verification_token_salt=token_salt,
+        verification_lookup_id=verification_lookup_id(verification_token),
         ip_address=get_client_ip(request),
     )
     db.add(pending)
@@ -189,14 +191,7 @@ async def logout_page(request: Request) -> RedirectResponse:
 
 @router.get("/verify-email/{token}", response_class=HTMLResponse)
 async def verify_email_page(request: Request, token: str, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
-    result = await db.execute(select(PendingSignup))
-    pending_signups = result.scalars().all()
-
-    matched_signup: PendingSignup | None = None
-    for signup in pending_signups:
-        if verify_token(token, signup.verification_token_hash, signup.verification_token_salt):
-            matched_signup = signup
-            break
+    matched_signup = await resolve_pending_signup(token, db)
 
     if matched_signup is None:
         return templates.TemplateResponse(
@@ -209,6 +204,7 @@ async def verify_email_page(request: Request, token: str, db: AsyncSession = Dep
     # Clear token so it can't be reused
     matched_signup.verification_token_hash = b""
     matched_signup.verification_token_salt = b""
+    matched_signup.verification_lookup_id = None
     await db.commit()
 
     return templates.TemplateResponse(
