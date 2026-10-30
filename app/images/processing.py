@@ -255,3 +255,11 @@ def get_image_dimensions(image_data: BinaryIO) -> tuple[int, int]:
     img = Image.open(image_data)
     image_data.seek(0)
     return img.width, img.height
+
+
+def extract_image_metadata(image_bytes: bytes) -> tuple[str, int, int, dict[str, str]]:
+    """Extract upload metadata inside the isolated image-processing pool."""
+    buf = io.BytesIO(image_bytes)
+    digest = compute_sha256(buf)
+    width, height = get_image_dimensions(buf)
+    return digest, width, height, extract_exif(buf)

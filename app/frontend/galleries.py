@@ -315,11 +315,8 @@ async def upload_images(
     import io
 
     from app.images.preview_worker import process_image_previews
-    from app.images.processing import (
-        compute_sha256,
-        extract_exif,
-        get_image_dimensions,
-    )
+    from app.images.process_pool import run_in_pool
+    from app.images.processing import extract_image_metadata
     from app.images.upload_limits import enforce_file_count, read_within_limit
 
     await lock_gallery(db, gallery_id, shared=True)
@@ -368,9 +365,7 @@ async def upload_images(
             file_data = await read_within_limit(file)
             file_buf = io.BytesIO(file_data)
 
-            sha256 = compute_sha256(file_buf)
-            width, height = get_image_dimensions(file_buf)
-            exif = extract_exif(file_buf)
+            sha256, width, height, exif = await run_in_pool(extract_image_metadata, file_data)
 
             ext = plan.extension
             image_uuid = plan.image_id

@@ -6,6 +6,7 @@ and that the decompression-bomb pixel cap is re-applied inside spawn workers. Th
 pool starts real worker processes, so a module-scoped fixture tears it down.
 """
 
+import hashlib
 import io
 
 import pytest
@@ -13,7 +14,7 @@ from PIL import Image
 
 from app.config import settings
 from app.images.process_pool import run_in_pool, shutdown_pool
-from app.images.processing import render_preview_bytes, render_thumbnail_bytes
+from app.images.processing import extract_image_metadata, render_preview_bytes, render_thumbnail_bytes
 from tests.unit.pool_helpers import add, get_max_image_pixels, sleep_seconds
 
 
@@ -63,6 +64,14 @@ async def test_run_in_pool_renders_image_in_worker() -> None:
     out, w, h = await run_in_pool(render_thumbnail_bytes, _png_bytes(800, 600), 320)
     assert (w, h) == (320, 240)
     assert Image.open(io.BytesIO(out)).format == "WEBP"
+
+
+async def test_upload_metadata_in_worker_and_invalid_image() -> None:
+    data = _png_bytes(80, 60)
+    digest, width, height, exif = await run_in_pool(extract_image_metadata, data)
+    assert (digest, width, height, exif) == (hashlib.sha256(data).hexdigest(), 80, 60, {})
+    with pytest.raises(OSError):
+        await run_in_pool(extract_image_metadata, b"not an image")
 
 
 # --- Hard timeout -------------------------------------------------------------

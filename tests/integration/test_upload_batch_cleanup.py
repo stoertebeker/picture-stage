@@ -69,6 +69,35 @@ def _two_pngs():
 
 
 @pytest.mark.parametrize("entrypoint", ["api", "frontend"])
+async def test_upload_processing_uses_pool_and_timeout_cleans_batch(
+    client, db, owner, auth_headers, verify_db, local_storage, monkeypatch, background_calls, entrypoint
+):
+    from app.images import process_pool
+
+    gallery = await _create_gallery(db, owner, "Pool timeout")
+    calls = []
+    real_run = process_pool.run_in_pool
+
+    async def run(func, *args):
+        calls.append(func.__name__)
+        if func.__name__ == "extract_image_metadata" and calls.count(func.__name__) == 2:
+            raise TimeoutError("test timeout")
+        return await real_run(func, *args)
+
+    monkeypatch.setattr(process_pool, "run_in_pool", run)
+    monkeypatch.setattr(image_router, "run_in_pool", run)
+    response = await _post(client, owner, gallery, auth_headers, entrypoint, _two_pngs())
+    assert response.status_code == 500
+    assert calls.count("extract_image_metadata") == 2
+    if entrypoint == "api":
+        assert calls.count("render_thumbnail_bytes") == 2
+        assert calls.count("render_preview_bytes") == 1
+    assert _files(local_storage, gallery) == {}
+    assert await _counts(verify_db, gallery) == (0, 0)
+    assert background_calls == []
+
+
+@pytest.mark.parametrize("entrypoint", ["api", "frontend"])
 @pytest.mark.parametrize("failure", ["type", "count", "decode", "size", "database"])
 async def test_later_invalid_file_cleans_earlier_files_and_preserves_control(
     client, db, owner, auth_headers, verify_db, local_storage, monkeypatch, background_calls, entrypoint, failure

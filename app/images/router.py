@@ -11,13 +11,12 @@ from app.auth.dependencies import require_active_user
 from app.db.models import Gallery, Image, ImagePreview, PreviewVariant, User
 from app.db.session import get_db
 from app.galleries.lifecycle import lock_gallery, lock_images
+from app.images.process_pool import run_in_pool
 from app.images.processing import (
     PREVIEW_SIZES,
-    compute_sha256,
-    extract_exif,
-    generate_preview_with_watermark,
-    generate_thumbnail,
-    get_image_dimensions,
+    extract_image_metadata,
+    render_preview_bytes,
+    render_thumbnail_bytes,
 )
 from app.images.schemas import BulkDeleteRequest, BulkDeleteResponse, ImageResponse, ImageUploadResponse
 from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
@@ -97,9 +96,7 @@ async def upload_images(
             file_data = await read_within_limit(file)
             file_buf = io.BytesIO(file_data)
 
-            sha256 = compute_sha256(file_buf)
-            width, height = get_image_dimensions(file_buf)
-            exif = extract_exif(file_buf)
+            sha256, width, height, exif = await run_in_pool(extract_image_metadata, file_data)
 
             ext = plan.extension
             image_uuid = plan.image_id
@@ -124,20 +121,19 @@ async def upload_images(
             db.add(image)
 
             for variant_name, max_width in PREVIEW_SIZES.items():
-                file_buf.seek(0)
-
                 if variant_name == "preview":
-                    preview_buf, pw, ph = generate_preview_with_watermark(
-                        file_buf,
+                    preview_bytes, pw, ph = await run_in_pool(
+                        render_preview_bytes,
+                        file_data,
                         max_width,
-                        "",
-                        watermark_config=watermark_config,
-                        gallery_id=str(gallery.id),
+                        watermark_config,
+                        str(gallery.id),
                     )
                 else:
-                    preview_buf, pw, ph = generate_thumbnail(file_buf, max_width)
+                    preview_bytes, pw, ph = await run_in_pool(render_thumbnail_bytes, file_data, max_width)
 
                 preview_key = storage_key(str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp")
+                preview_buf = io.BytesIO(preview_bytes)
                 await batch.upload(preview_key, preview_buf, "image/webp")
 
                 preview = ImagePreview(
