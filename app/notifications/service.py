@@ -10,6 +10,7 @@ from jinja2 import Environment, FileSystemLoader
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.email import normalize_delivery_mailbox
 from app.config import settings
 from app.db.models import NotificationConfig, NotificationDelivery, User, UserStatus
 
@@ -86,6 +87,7 @@ async def notify_admins_signup(pending_email: str, db: AsyncSession) -> None:
 
     for admin_email in admin_emails:
         try:
+            admin_email = normalize_delivery_mailbox(admin_email)
             msg = MIMEMultipart("alternative")
             msg["From"] = settings.smtp_from
             msg["To"] = admin_email
@@ -95,6 +97,7 @@ async def notify_admins_signup(pending_email: str, db: AsyncSession) -> None:
 
             await aiosmtplib.send(
                 msg,
+                recipients=[admin_email],
                 hostname=settings.smtp_host,
                 port=settings.smtp_port,
                 username=settings.smtp_user or None,
@@ -134,6 +137,7 @@ async def send_verification_email(email: str, token: str, db: AsyncSession) -> N
         return
 
     try:
+        email = normalize_delivery_mailbox(email)
         msg = MIMEMultipart("alternative")
         msg["From"] = settings.smtp_from
         msg["To"] = email
@@ -143,6 +147,7 @@ async def send_verification_email(email: str, token: str, db: AsyncSession) -> N
 
         await aiosmtplib.send(
             msg,
+            recipients=[email],
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user or None,
@@ -179,6 +184,7 @@ async def notify_owner_gallery_completed(owner_email: str, payload: dict[str, An
         return
 
     try:
+        owner_email = normalize_delivery_mailbox(owner_email)
         msg = MIMEMultipart("alternative")
         msg["From"] = settings.smtp_from
         msg["To"] = owner_email
@@ -188,6 +194,7 @@ async def notify_owner_gallery_completed(owner_email: str, payload: dict[str, An
 
         await aiosmtplib.send(
             msg,
+            recipients=[owner_email],
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user or None,
@@ -227,15 +234,17 @@ async def _send_email(
             await db.commit()
             return
 
+        recipient = normalize_delivery_mailbox(user.email)
         msg = MIMEMultipart("alternative")
         msg["From"] = settings.smtp_from
-        msg["To"] = user.email
+        msg["To"] = recipient
         msg["Subject"] = subject
         msg.attach(MIMEText(text_body, "plain", "utf-8"))
         msg.attach(MIMEText(html_body, "html", "utf-8"))
 
         await aiosmtplib.send(
             msg,
+            recipients=[recipient],
             hostname=settings.smtp_host,
             port=settings.smtp_port,
             username=settings.smtp_user or None,

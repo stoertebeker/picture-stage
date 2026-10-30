@@ -4,10 +4,12 @@ import logging
 
 from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import HTMLResponse, RedirectResponse
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_user_from_cookie
+from app.auth.email import normalize_mailbox
 from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy, verify_token
 from app.auth.tokens import create_access_token, generate_verification_token
 from app.auth.utils import get_client_ip
@@ -121,6 +123,12 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
 
     if not email or not password:
         ctx["error"] = "auth.email_password_required"
+        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
+
+    try:
+        normalize_mailbox(email)
+    except ValidationError:
+        ctx["error"] = "auth.invalid_email"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
 
     if password != password_confirm:
