@@ -5,7 +5,7 @@ import logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -22,8 +22,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
-from app.galleries.quota import GalleryQuotaExceeded, assert_within_gallery_quota
-from app.i18n import t
+from app.galleries.quota import GalleryQuotaExceeded, assert_within_gallery_quota, get_gallery_limit
 from app.security.signing import sign_url
 
 logger = logging.getLogger(__name__)
@@ -63,6 +62,7 @@ async def dashboard(
             "request": request,
             "user": user,
             "galleries": galleries,
+            **_gallery_quota_context(user, len(galleries)),
             "csrf_token": csrf_token,
         },
     )
@@ -73,7 +73,7 @@ async def create_gallery(
     request: Request,
     user: User = Depends(require_authenticated_page),
     db: AsyncSession = Depends(get_db),
-) -> HTMLResponse:
+) -> Response:
     """Create a new gallery via HTMX, return gallery card partial."""
     form = await request.form()
     name = str(form.get("name", "")).strip()
@@ -83,18 +83,18 @@ async def create_gallery(
     locale = getattr(request.state, "locale", "de")
     try:
         await assert_within_gallery_quota(user.id, db, limit_override=user.gallery_limit_override)
-    except GalleryQuotaExceeded as exc:
-        # Show an error toast without swapping a card into the grid (HX-Reswap: none).
-        resp = HTMLResponse("")
-        message = t("gallery.limit_reached", locale, limit=exc.limit)
-        resp.headers["HX-Trigger"] = json.dumps({"showToast": {"kind": "error", "message": message}})
-        resp.headers["HX-Reswap"] = "none"
-        return resp
+    except GalleryQuotaExceeded:
+        # A second tab may have used the last slot. Refresh both the persistent
+        # notice and the gallery list instead of closing the dialog as success.
+        if request.headers.get("HX-Request") == "true":
+            return HTMLResponse("", headers={"HX-Refresh": "true"})
+        return RedirectResponse(url="/dashboard", status_code=303)
 
     gallery = Gallery(owner_id=user.id, name=name)
     db.add(gallery)
     await db.commit()
     await db.refresh(gallery)
+    gallery_count = await db.scalar(select(func.count()).select_from(Gallery).where(Gallery.owner_id == user.id))
 
     gallery_data = {
         "gallery": gallery,
@@ -109,10 +109,11 @@ async def create_gallery(
     csrf_token = request.cookies.get("csrf_token", "")
     response = templates.TemplateResponse(
         request,
-        "dashboard/_gallery_card.html",
+        "dashboard/_created_gallery.html",
         {
             "request": request,
             "g": gallery_data,
+            **_gallery_quota_context(user, gallery_count or 0),
             "csrf_token": csrf_token,
         },
     )
@@ -123,6 +124,15 @@ async def create_gallery(
         message = f"Gallery {name!r} created."
     response.headers["HX-Trigger"] = json.dumps({"showToast": {"kind": "success", "message": message}})
     return response
+
+
+def _gallery_quota_context(user: User, gallery_count: int) -> dict[str, Any]:
+    limit = get_gallery_limit(user.gallery_limit_override)
+    return {
+        "gallery_count": gallery_count,
+        "gallery_limit": limit,
+        "gallery_limit_reached": limit > 0 and gallery_count >= limit,
+    }
 
 
 async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict[str, Any]]:

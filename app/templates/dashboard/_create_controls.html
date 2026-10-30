@@ -1,0 +1,32 @@
+{% from "_macros/buttons.html" import button %}
+<div id="gallery-create-controls"{% if create_controls_oob | default(false) %} hx-swap-oob="outerHTML"{% endif %}
+     class="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+    <div class="flex items-center justify-between gap-4">
+        <div>
+            <div class="text-xs uppercase text-text-muted">{{ t('nav.brand') }}</div>
+            <h1 class="font-display text-2xl leading-tight text-text-primary sm:text-4xl">{{ t('dashboard.my_galleries') }}</h1>
+        </div>
+        {% set create_attrs = {'data-open-dialog': 'createModal'} %}
+        {% if gallery_limit_reached %}
+            {% set create_attrs = dict(create_attrs, disabled='', **{'aria-describedby': 'gallery-limit-notice'}) %}
+        {% endif %}
+        {% call button(variant='primary', attrs=create_attrs) %}
+            <svg class="h-4 w-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+            </svg>
+            {{ t('dashboard.new_gallery') }}
+        {% endcall %}
+    </div>
+    {% if gallery_limit_reached %}
+    <div id="gallery-limit-notice" role="status"
+         class="mt-4 flex items-start gap-3 rounded-md border-2 border-status-warn bg-surface-raised p-4 text-text-primary">
+        <svg class="mt-0.5 h-5 w-5 shrink-0 text-status-warn" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9 2 18.2A1.2 1.2 0 0 0 3 20h18a1.2 1.2 0 0 0 1-1.8L13.7 3.9a2 2 0 0 0-3.4 0Z"/>
+        </svg>
+        <div>
+            <h2 class="font-semibold">{{ t('dashboard.gallery_limit_title') }}</h2>
+            <p class="mt-1 text-sm">{{ t('gallery.limit_reached', limit=gallery_limit) }}</p>
+        </div>
+    </div>
+    {% endif %}
+</div>

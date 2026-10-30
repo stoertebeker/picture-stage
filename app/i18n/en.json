@@ -108,6 +108,7 @@
     "gallery_limit_toast": "Gallery limit updated for {email}."
   },
   "dashboard": {
+    "gallery_limit_title": "Gallery limit reached",
     "title": "Dashboard – Picture-Stage",
     "my_galleries": "My Galleries",
     "new_gallery": "New Gallery",

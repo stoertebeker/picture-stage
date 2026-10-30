@@ -28,6 +28,11 @@ class GalleryQuotaExceeded(Exception):
         super().__init__(f"Gallery limit reached ({limit})")
 
 
+def get_gallery_limit(limit_override: int | None = None) -> int:
+    """Return the effective limit; zero or below means unlimited."""
+    return limit_override if limit_override is not None else settings.max_galleries_per_user
+
+
 async def assert_within_gallery_quota(
     owner_id: uuid.UUID,
     db: AsyncSession,
@@ -39,7 +44,7 @@ async def assert_within_gallery_quota(
     limit_override (from User.gallery_limit_override) takes precedence over the
     global settings.max_galleries_per_user when set. 0 or below means unlimited.
     """
-    limit = limit_override if limit_override is not None else settings.max_galleries_per_user
+    limit = get_gallery_limit(limit_override)
     if limit <= 0:
         return
 

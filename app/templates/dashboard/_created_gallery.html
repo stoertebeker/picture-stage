@@ -1,0 +1,4 @@
+{% include "dashboard/_gallery_card.html" %}
+{% set create_controls_oob = true %}
+{% include "dashboard/_create_controls.html" %}
+<span id="dashboard-gallery-count" hx-swap-oob="outerHTML">{{ gallery_count }}</span>
