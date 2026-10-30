@@ -18,8 +18,8 @@ Kuratierte Erkenntnisse aus der Entwicklung, die nicht im Code oder in Commit-Me
 
 ### Guest-Router vor API-Router registrieren
 **Kontext:** Neuer Frontend-Guest-Router (`/g/{token}` fuer HTML) kollidiert mit bestehendem API-Guest-Router (`/g/{token}` fuer JSON).
-**Loesung:** Frontend-Router in `main.py` VOR dem API-Router registrieren. Der Frontend-Router prueft via `_wants_html()` ob ein Browser-Request vorliegt (kein Authorization-Header, kein explizites `Accept: application/json`). Wenn nein, wirft er 406 und der API-Router uebernimmt.
-**Regel:** Bei Route-Konflikten zwischen HTML- und JSON-Endpoints: Reihenfolge in main.py + Content-Negotiation.
+**Loesung:** Der Frontend-Router steht in `main.py` vor dem API-Router und prüft mit `_wants_html()` die erwartete Darstellung. Wichtig: Eine 406-Antwort beendet den Request; Starlette übergibt danach nicht automatisch an den nächsten gleichlautenden Handler.
+**Regel:** Bei Route-Konflikten zählt der erste vollständige Treffer. Auch vorgelagerte Middleware muss genau diesen Handler prüfen; Content-Negotiation allein erzeugt kein Router-Fallthrough.
 
 ## Architektur
 
@@ -346,8 +346,10 @@ Legacy-Keys und löscht DB-Referenzen erst nach erfolgreicher Storage-Bereinigun
 Bei Fehlern erscheint HTTP 503 mit einer verständlichen DE/EN-Meldung; ein erneuter
 Löschversuch kann auch bereits entfernte Dateien gefahrlos wiederholen. Das gilt
 auch für die Admin-Löschung mehrerer Galerien und die einzelnen/bulk Bildpfade.
-Unbekannte Altdateien ohne Bilddatensatz und Upload-Transaktionen, die nie einen
-Bilddatensatz committed haben (`2jb0`), benötigen weiterhin eine separate Lösung.
+Historische Altdateien ohne Referenz bleiben außerhalb dieser Bereinigung.
+Die damals separate Multi-Upload-Lücke `2jb0` ist seit `4b37afe` geschlossen:
+Migration `0008` persistiert Cleanup-Intents vor Writes und ermöglicht Retry über
+Galerie-/Benutzerlöschung. Das ist kein historischer Orphan-Sweep.
 
 ### CI-Regressionsdaten müssen Formulargrenzen einhalten (2026-10-24)
 
@@ -363,3 +365,33 @@ existierenden ID und CSRF testen, also genau 1000 Felder. Die JSON-API behält
 echte Datei-/DB-Löschung; bei unerwartetem Status wird der Response-Body gezeigt.
 Die Formulargrenze bleibt unverändert. Bei CI-Abweichungen die betroffene Probe
 zusätzlich im Python-3.12-Runtime-Image mit frischen Test-Abhängigkeiten ausführen.
+## Middleware-Zulassung: tatsächliche Route, Parser und Streaming prüfen (2026-10-30)
+
+Bei `picture-stage-bbq1`/`picture-stage-z0ha` genügte das Registrieren einer
+Standard-Middleware nicht. SlowAPIs Routensuche wählte den letzten vollständigen
+Treffer, Starlette den ersten. Die gleichlautenden HTML-/JSON-Gastrouten mussten
+deshalb in tatsächlicher Dispatch-Reihenfolge geprüft werden. Die installierte
+ASGI-Variante versandte außerdem einen Response-Start pro Body-Chunk; Media und
+Exporte brauchen eine Streaming-kompatible Einbindung.
+
+Die frische Runtime mit FastAPI 0.162 stellte eingebundene Router zusätzlich als
+lazy Branches statt flacher Routen dar. Native effektive Routenkontexte enthalten
+die Include-Präfixe und müssen ebenfalls berücksichtigt werden. Tests mit echten
+eingebundenen und verschachtelten Routern unter Host- und Runtime-Version prüfen;
+ein lokaler grüner Lauf mit älteren Abhängigkeiten genügt dafür nicht.
+
+Default-Zähler müssen dynamische Tokenwerte im selben Routenbudget erfassen.
+Eine getrennte Request-Sicht nur zur Schlüsselbildung erhält Originalpfad,
+Parameter und die bisherigen expliziten Decorator-Scopes. Ein Test mit immer
+demselben ungültigen Token hätte den Wechsel zwischen Tokenwerten übersehen.
+
+Body-Grenzen gehören vor CSRF und Framework-Parsing. Neben Content-Length auch
+fehlende, falsche und ungültige Längen durch die echte Middleware-Kette testen:
+Ein nach Überlauf signalisierter Disconnect kann innen eine zweite Fehlerantwort
+auslösen. Außen darf nur die bereits gesendete 413-Antwort erscheinen. Uploads,
+Slash-/UUID-Aliase und große gültige Bulk-Formulare benötigen eigene Kontrollen.
+
+Tests isolieren Rate-Limit-Backend und Zähler, statt das Enforcement generell
+abzuschalten. Für lokale DB-Tests auch `UPLOAD_DIR` explizit auf ein eigenes
+beschreibbares Testverzeichnis setzen; der Containerpfad `/app/uploads` ist am
+Host ungeeignet.
