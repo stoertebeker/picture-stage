@@ -172,6 +172,7 @@ and frontend preview dispatch is not automatically retried.
 - **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy
 - **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; rejected POSTs are never automatically replayed.
 - **Request bodies:** ordinary JSON/forms are capped at 1 MiB before CSRF and parsing. The two image-upload POST routes retain the global upload budget. Declared lengths and received bytes are checked; the smaller enabled ceiling applies.
+- **Image processing admission:** each app process admits at most `IMAGE_PROCESSING_WORKERS` uploads or preview jobs at once, with at most twice that number waiting for up to five seconds. Busy uploads return HTTP 503 with `Retry-After`; accepted frontend uploads keep their slot through preview processing. This limit is per process and does not bound multipart parsing before admission.
 - **Tenant isolation:** all queries filtered by owner_id, verified by structural tests
 - **Non-root container:** app runs as unprivileged user
 

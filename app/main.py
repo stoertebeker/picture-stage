@@ -26,6 +26,7 @@ from app.galleries.router import router as galleries_router
 from app.galleries.sharing import router as sharing_router
 from app.guest.router import router as guest_router
 from app.i18n import detect_locale, t
+from app.images.process_pool import ImageAdmissionMiddleware
 from app.images.router import router as images_router
 from app.images.storage_cleanup import StorageCleanupError
 from app.logging_config import configure_logging
@@ -84,6 +85,7 @@ class LocaleMiddleware(BaseHTTPMiddleware):
         return response
 
 
+app.add_middleware(ImageAdmissionMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(LocaleMiddleware)

@@ -76,8 +76,17 @@ async def test_gallery_get_replaces_missing_csrf_cookie_before_real_upload(clien
 
     storage = _RecordingUploadStorage()
 
+    from app.config import settings
+    from app.images import process_pool
+
+    monkeypatch.setattr(settings, "image_processing_workers", 1)
+    background_ran = False
+
     async def skip_preview_worker(*_args) -> None:
-        pass
+        nonlocal background_ran
+        async with process_pool.image_processing_slot():
+            assert process_pool._active == 1
+            background_ran = True
 
     monkeypatch.setattr("app.images.preview_worker.process_image_previews", skip_preview_worker)
     app.dependency_overrides[get_storage] = lambda: storage
@@ -107,3 +116,4 @@ async def test_gallery_get_replaces_missing_csrf_cookie_before_real_upload(clien
     assert uploaded.status_code == 200
     assert storage.uploaded and storage.uploaded[0][1] == "image/png"
     assert 'data-processing-status="pending"' in uploaded.text
+    assert background_ran

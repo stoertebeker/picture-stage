@@ -20,7 +20,7 @@ from sqlalchemy import select
 from app.db.base import async_session
 from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
 from app.galleries.lifecycle import lock_gallery, lock_images
-from app.images.process_pool import run_in_pool
+from app.images.process_pool import ImageProcessingBusy, image_processing_slot, run_in_pool
 from app.images.processing import (
     PREVIEW_SIZES,
     render_preview_bytes,
@@ -72,6 +72,25 @@ async def _mark_failed(image_id: uuid.UUID, gallery_id: uuid.UUID, attempted_key
 
 
 async def process_image_previews(
+    image_id: uuid.UUID,
+    gallery_id: uuid.UUID,
+    watermark_config: dict[str, Any] | None = None,
+) -> None:
+    admitted = False
+    try:
+        async with image_processing_slot():
+            admitted = True
+            await _process_image_previews(image_id, gallery_id, watermark_config)
+    except ImageProcessingBusy:
+        logger.warning("Preview worker capacity exhausted for image %s", image_id)
+        await _mark_failed(image_id, gallery_id)
+    except asyncio.CancelledError:
+        if not admitted:
+            await asyncio.shield(_mark_failed(image_id, gallery_id))
+        raise
+
+
+async def _process_image_previews(
     image_id: uuid.UUID,
     gallery_id: uuid.UUID,
     watermark_config: dict[str, Any] | None = None,

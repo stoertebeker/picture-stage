@@ -69,6 +69,40 @@ def _two_pngs():
 
 
 @pytest.mark.parametrize("entrypoint", ["api", "frontend"])
+async def test_saturated_upload_is_rejected_without_storage_writes(
+    client, db, owner, auth_headers, verify_db, local_storage, monkeypatch, background_calls, entrypoint
+):
+    from app.config import settings
+    from app.images import process_pool
+
+    gallery = await _create_gallery(db, owner, "Busy upload")
+    monkeypatch.setattr(settings, "image_processing_workers", 1)
+    async with process_pool.image_processing_slot():
+
+        async def wait():
+            async with process_pool.image_processing_slot():
+                pass
+
+        waiters = [asyncio.create_task(wait()) for _ in range(2)]
+        try:
+            for _ in range(100):
+                if process_pool._waiting == 2:
+                    break
+                await asyncio.sleep(0.01)
+            assert process_pool._waiting == 2
+            response = await asyncio.create_task(_post(client, owner, gallery, auth_headers, entrypoint, _two_pngs()))
+            assert response.status_code == 503
+            assert response.headers["retry-after"] == "5"
+            assert _files(local_storage, gallery) == {}
+            assert await _counts(verify_db, gallery) == (0, 0)
+            assert background_calls == []
+        finally:
+            for waiter in waiters:
+                waiter.cancel()
+            await asyncio.gather(*waiters, return_exceptions=True)
+
+
+@pytest.mark.parametrize("entrypoint", ["api", "frontend"])
 async def test_upload_processing_uses_pool_and_timeout_cleans_batch(
     client, db, owner, auth_headers, verify_db, local_storage, monkeypatch, background_calls, entrypoint
 ):
