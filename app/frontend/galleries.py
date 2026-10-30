@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import require_authenticated_page
-from app.auth.passwords import hash_password, hash_token
+from app.auth.passwords import hash_token
 from app.db.models import (
     ALLOWED_TRANSITIONS,
     AuditLog,
@@ -28,6 +28,7 @@ from app.db.session import get_db
 from app.frontend.deps import templates
 from app.galleries.deletion import purge_gallery
 from app.galleries.lifecycle import lock_gallery
+from app.galleries.password_hashing import GalleryPasswordBusy, hash_gallery_password
 from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.i18n import t
@@ -41,6 +42,17 @@ from app.storage.dependencies import get_storage
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["frontend-galleries"])
+
+
+def _password_busy_response(request: Request, exc: GalleryPasswordBusy) -> HTMLResponse:
+    """Show an HTMX error without replacing the share form."""
+    locale = getattr(request.state, "locale", "de")
+    message = t("gallery.password_processing_busy", locale)
+    response = HTMLResponse("", status_code=exc.status_code, headers=exc.headers)
+    response.headers["HX-Trigger"] = json.dumps({"showToast": {"kind": "error", "message": message}})
+    response.headers["HX-Reswap"] = "none"
+    return response
+
 
 # asyncpg encodes the last microsecond of 9999-12-31 as PostgreSQL infinity.
 # Keep form dates finite and timezone-aware without changing the API's codec.
@@ -416,6 +428,12 @@ async def create_share_link(
 
     form = await request.form()
     password = str(form.get("password", "")).strip() or None
+    try:
+        password_hash = await hash_gallery_password(password) if password else None
+    except GalleryPasswordBusy as exc:
+        if request.headers.get("HX-Request") == "true":
+            return _password_busy_response(request, exc)
+        raise
 
     token = secrets.token_urlsafe(32)
     token_hash, token_salt = hash_token(token)
@@ -424,10 +442,7 @@ async def create_share_link(
     gallery.share_token_salt = token_salt
     gallery.share_token = token
 
-    if password:
-        gallery.password_hash = hash_password(password)
-    else:
-        gallery.password_hash = None
+    gallery.password_hash = password_hash
 
     if gallery.status == GalleryStatus.draft:
         gallery.status = GalleryStatus.shared
@@ -485,7 +500,12 @@ async def set_gallery_password(
 
     form = await request.form()
     password = str(form.get("password", "")).strip() or None
-    gallery.password_hash = hash_password(password) if password else None
+    try:
+        gallery.password_hash = await hash_gallery_password(password) if password else None
+    except GalleryPasswordBusy as exc:
+        if request.headers.get("HX-Request") == "true":
+            return _password_busy_response(request, exc)
+        raise
 
     await db.commit()
     await db.refresh(gallery)

@@ -302,7 +302,7 @@ def test_share_modal_can_update_password_without_rotating_token() -> None:
     endpoint_block = galleries_py[endpoint_start:endpoint_end]
     assert "_get_owned_gallery" in endpoint_block
     assert "share_token" not in endpoint_block
-    assert "hash_password(password) if password else None" in endpoint_block
+    assert "await hash_gallery_password(password) if password else None" in endpoint_block
 
 
 def test_share_modal_password_i18n_keys_exist() -> None:

@@ -6,10 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
-from app.auth.passwords import hash_password, hash_token
+from app.auth.passwords import hash_token
 from app.config import settings
 from app.db.models import Gallery, GalleryStatus, User
 from app.db.session import get_db
+from app.galleries.password_hashing import hash_gallery_password
 
 router = APIRouter(prefix="/api/v1/galleries", tags=["sharing"])
 
@@ -52,6 +53,7 @@ async def create_share_link(
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
+    password_hash = await hash_gallery_password(body.password) if body.password else None
     token = secrets.token_urlsafe(32)
     token_hash, token_salt = hash_token(token)
 
@@ -59,10 +61,7 @@ async def create_share_link(
     gallery.share_token_salt = token_salt
     gallery.share_token = token
 
-    if body.password:
-        gallery.password_hash = hash_password(body.password)
-    else:
-        gallery.password_hash = None
+    gallery.password_hash = password_hash
 
     if gallery.status == GalleryStatus.draft:
         gallery.status = GalleryStatus.shared
