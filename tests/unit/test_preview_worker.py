@@ -5,6 +5,7 @@ DB-free tests verify the worker's status transitions and tenant scoping using
 mocked DB session and storage — no Postgres required.
 """
 
+import asyncio
 import io
 import uuid
 from contextlib import nullcontext
@@ -14,8 +15,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from PIL import Image as PILImage
 
+from app.config import settings
 from app.db.models import ImageProcessingStatus
-from app.images import preview_worker
+from app.images import preview_worker, process_pool
 
 
 def _make_jpeg(width: int = 1600, height: int = 1200) -> bytes:
@@ -68,6 +70,46 @@ def _storage_with_original(raw: bytes, *, upload: AsyncMock | None = None) -> Ma
     storage.upload = upload or AsyncMock()
     storage.delete = AsyncMock()
     return storage
+
+
+async def test_preview_admission_limits_reads_before_original_is_loaded(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "image_processing_workers", 2)
+    release = asyncio.Event()
+    two_reading = asyncio.Event()
+    reads = 0
+    peak = 0
+
+    async def read_original(_key):
+        nonlocal reads, peak
+        reads += 1
+        peak = max(peak, reads)
+        if reads == 2:
+            two_reading.set()
+        await release.wait()
+        reads -= 1
+        raise ValueError("stop after bounded read probe")
+
+    with (
+        patch.object(preview_worker, "async_session", side_effect=lambda: _FakeSession(_fake_image())),
+        patch.object(preview_worker, "get_storage"),
+        patch.object(preview_worker, "lock_gallery", new_callable=AsyncMock),
+        patch.object(preview_worker, "lock_images", new_callable=AsyncMock),
+        patch.object(preview_worker, "_read_original", side_effect=read_original),
+        patch.object(preview_worker, "_mark_failed", new_callable=AsyncMock),
+        patch.object(preview_worker.logger, "exception"),
+    ):
+        tasks = [
+            asyncio.create_task(preview_worker.process_image_previews(uuid.uuid4(), uuid.uuid4())) for _ in range(3)
+        ]
+        try:
+            await asyncio.wait_for(two_reading.wait(), timeout=3)
+            await asyncio.sleep(0.1)
+            assert reads == peak == 2
+            assert process_pool._waiting == 1
+        finally:
+            release.set()
+            await asyncio.gather(*tasks)
+    assert process_pool._active == process_pool._waiting == 0
 
 
 async def test_success_sets_ready_and_uploads_all_variants() -> None:
