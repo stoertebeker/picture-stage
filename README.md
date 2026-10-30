@@ -168,7 +168,7 @@ and frontend preview dispatch is not automatically retried.
 
 - **Share links:** long random capability URLs are hashed for lookup and stored replayable for the owner UI; optional gallery passwords protect sensitive galleries
 - **Signed URLs:** HMAC-SHA256 with configurable TTL (thumbnails 1h, previews 15min)
-- **Rate limiting:** signup 5/min, login 10/min, token resolution 20/10min
+- **Rate limiting:** undecorated application routes use 200/min per matched route template and client address, before endpoint parsing. Dynamic token values share that default budget. Explicit limits retain their existing scopes (signup 5/min, login 10/min, password verification 5/min). Counters use process-local memory by default; `RATELIMIT_ENABLED=false` disables enforcement. Forwarding headers are not used directly as client identity. Static mounts and unmatched/redirect requests retain their normal handling.
 - **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy
 - **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; rejected POSTs are never automatically replayed.
 - **Request bodies:** ordinary JSON/forms are capped at 1 MiB before CSRF and parsing. The two image-upload POST routes retain the global upload budget. Declared lengths and received bytes are checked; the smaller enabled ceiling applies.

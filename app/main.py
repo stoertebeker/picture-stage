@@ -31,7 +31,7 @@ from app.images.storage_cleanup import StorageCleanupError
 from app.logging_config import configure_logging
 from app.notifications.router import router as notifications_router
 from app.security.middleware import CSRFMiddleware, RequestBodySizeLimitMiddleware, SecurityHeadersMiddleware
-from app.security.rate_limit import limiter
+from app.security.rate_limit import DefaultRateLimitMiddleware, limiter
 
 # Configure logging before the app starts so app-level INFO logs are visible
 # in the container log, not swallowed by the lastResort handler (picture-stage-vblf).
@@ -87,6 +87,7 @@ class LocaleMiddleware(BaseHTTPMiddleware):
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(LocaleMiddleware)
+app.add_middleware(DefaultRateLimitMiddleware)
 # Outermost middleware (last added runs first): cap the request body before any
 # other layer reads it — in particular before CSRF calls request.body() (m4ct).
 app.add_middleware(RequestBodySizeLimitMiddleware)
