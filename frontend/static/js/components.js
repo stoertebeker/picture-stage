@@ -385,12 +385,23 @@ function guestViewerComponent() {
         completed: false,
         showSwipeHint: false,
         showShortcutHelp: false,
+        selectionError: '',
+        selectionSaveFailed: '',
+        selectionLimitReached: '',
+        selectionCommentTooLong: '',
+        selectionCommentLimit: 2000,
+        selectionQueues: {},
+        selectionCompleting: false,
         _swipeHintTimer: null,
 
         init() {
             const root = this.$root;
             this.token = root.dataset.token || '';
             this.sessionId = root.dataset.sessionId || '';
+            this.selectionSaveFailed = root.dataset.selectionSaveFailed || '';
+            this.selectionLimitReached = root.dataset.selectionLimitReached || '';
+            this.selectionCommentTooLong = root.dataset.selectionCommentTooLong || '';
+            this.selectionCommentLimit = parseInt(root.dataset.selectionCommentLimit || '2000', 10);
             this.images = JSON.parse(root.dataset.images || '[]');
             // id -> image map for O(1) lookups from the (progressively loaded,
             // id-keyed) grid items (am9). The grid no longer uses array indices.
@@ -529,28 +540,58 @@ function guestViewerComponent() {
         },
 
         async toggleSelect(imageId) {
-            if (this.completed) return;
-            const img = this.images.find((i) => i.id === imageId);
-            if (!img) return;
-            const action = img.selected ? 'deselect' : 'select';
-            img.selected = !img.selected;
-            this.selectedCount += img.selected ? 1 : -1;
-            await this._postSelection(imageId, action);
+            if (this.completed || this.selectionCompleting) return;
+            this.selectionError = '';
+            await this._queueSelection(imageId, async () => {
+                const img = this.imageById[imageId];
+                if (!img || this.completed) return;
+                const action = img.selected ? 'deselect' : 'select';
+                if (await this._postSelection(imageId, action)) {
+                    img.selected = !img.selected;
+                    this.selectedCount += img.selected ? 1 : -1;
+                }
+            });
         },
 
         async toggleFavorite(imageId) {
-            if (this.completed) return;
-            const img = this.images.find((i) => i.id === imageId);
-            if (!img) return;
-            const action = img.favorited ? 'unfavorite' : 'favorite';
-            img.favorited = !img.favorited;
-            this.favoritedCount += img.favorited ? 1 : -1;
-            await this._postSelection(imageId, action);
+            if (this.completed || this.selectionCompleting) return;
+            this.selectionError = '';
+            await this._queueSelection(imageId, async () => {
+                const img = this.imageById[imageId];
+                if (!img || this.completed) return;
+                const action = img.favorited ? 'unfavorite' : 'favorite';
+                if (await this._postSelection(imageId, action)) {
+                    img.favorited = !img.favorited;
+                    this.favoritedCount += img.favorited ? 1 : -1;
+                }
+            });
         },
 
         async submitComment(imageId, comment) {
-            if (this.completed) return;
-            await this._postSelection(imageId, 'comment', comment);
+            if (this.completed || this.selectionCompleting) return;
+            if (Array.from(comment).length > this.selectionCommentLimit) {
+                this.selectionError = this.selectionCommentTooLong;
+                return;
+            }
+            this.selectionError = '';
+            await this._queueSelection(imageId, async () => {
+                if (this.completed) return;
+                if (await this._postSelection(imageId, 'comment', comment)) {
+                    const img = this.imageById[imageId];
+                    if (img) img.comment = comment;
+                }
+            });
+        },
+
+        async _queueSelection(imageId, work) {
+            const previous = this.selectionQueues[imageId] || Promise.resolve();
+            const pending = previous.then(work, work);
+            this.selectionQueues[imageId] = pending;
+            try {
+                await pending;
+            } finally {
+                if (this.selectionQueues[imageId] === pending) delete this.selectionQueues[imageId];
+            }
         },
 
         async _postSelection(imageId, action, comment) {
@@ -560,21 +601,45 @@ function guestViewerComponent() {
                 session_id: this.sessionId,
             };
             if (comment !== undefined) body.comment = comment;
-            await fetch(`/g/${this.token}/selections`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body),
-            });
+            try {
+                const response = await fetch(`/g/${this.token}/selections`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (!response.ok) {
+                    this.selectionError = response.status === 409 ? this.selectionLimitReached : this.selectionSaveFailed;
+                    return false;
+                }
+                return true;
+            } catch (_error) {
+                this.selectionError = this.selectionSaveFailed;
+                return false;
+            }
         },
 
         async completeReview() {
-            await fetch(`/g/${this.token}/complete`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ session_id: this.sessionId }),
-            });
-            this.showCompleteModal = false;
-            window.location.reload();
+            if (this.selectionCompleting) return;
+            this.selectionCompleting = true;
+            try {
+                await Promise.all(Object.values(this.selectionQueues));
+                if (this.selectionError) return;
+                const response = await fetch(`/g/${this.token}/complete`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: this.sessionId }),
+                });
+                if (!response.ok) {
+                    this.selectionError = this.selectionSaveFailed;
+                    return;
+                }
+                this.showCompleteModal = false;
+                window.location.reload();
+            } catch (_error) {
+                this.selectionError = this.selectionSaveFailed;
+            } finally {
+                this.selectionCompleting = false;
+            }
         },
 
         // Desktop keyboard shortcuts (9q3.6). Active only while the lightbox is

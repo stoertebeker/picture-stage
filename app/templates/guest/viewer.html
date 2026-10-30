@@ -15,7 +15,15 @@
      data-selected-count="{{ selected_count }}"
      data-favorited-count="{{ favorited_count }}"
      data-session-completed="{{ 'true' if session_completed else 'false' }}"
+     data-selection-save-failed="{{ t('guest.selection_save_failed') }}"
+     data-selection-limit-reached="{{ t('guest.selection_limit_reached') }}"
+     data-selection-comment-too-long="{{ t('guest.selection_comment_too_long', count=max_selection_comment_chars|default(2000)) }}"
+     data-selection-comment-limit="{{ max_selection_comment_chars|default(2000) }}"
      class="min-h-screen bg-surface-base text-text-primary">
+
+    <p x-show="selectionError" x-text="selectionError" role="alert"
+       class="fixed top-4 right-4 z-toast max-w-sm rounded-md border border-red-700 bg-red-900 px-4 py-3 text-white shadow-lg"
+       style="display: none;"></p>
 
     {% if requires_password %}
     <div class="flex items-center justify-center py-12 px-4">

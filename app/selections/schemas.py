@@ -1,7 +1,8 @@
 import uuid
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator, model_validator
 
+from app.config import settings
 from app.db.models import SelectionAction
 
 
@@ -10,6 +11,19 @@ class SelectionEventCreate(BaseModel):
     session_id: uuid.UUID
     action: SelectionAction
     comment: str | None = None
+
+    @field_validator("comment")
+    @classmethod
+    def bounded_comment(cls, value: str | None) -> str | None:
+        if value is not None and len(value) > settings.max_selection_comment_chars:
+            raise ValueError("Comment exceeds the allowed length")
+        return value
+
+    @model_validator(mode="after")
+    def comment_only_on_comment_action(self) -> "SelectionEventCreate":
+        if self.action != SelectionAction.comment and self.comment is not None:
+            raise ValueError("Comment is only allowed with the comment action")
+        return self
 
 
 class SelectionState(BaseModel):

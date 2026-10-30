@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.passwords import verify_password
+from app.config import settings
 from app.db.models import (
     Gallery,
     GalleryStatus,
@@ -186,6 +187,7 @@ async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str,
             "selected_count": selected_count,
             "favorited_count": favorited_count,
             "session_completed": gallery.status == GalleryStatus.completed,
+            "max_selection_comment_chars": settings.max_selection_comment_chars,
             "sort_by": "sort_order",
             "sort_dir": "asc",
             "filter": "all",

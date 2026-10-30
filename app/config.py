@@ -90,6 +90,11 @@ class Settings(BaseSettings):
     # 0 disables this additional ceiling; the global ceiling still applies.
     max_non_upload_request_body_kb: int = Field(default=1024, ge=0)
 
+    # Per-gallery event log cap and per-comment character limit. Existing
+    # history is retained even when a limit is lowered.
+    max_selection_events_per_gallery: int = Field(default=20000, ge=1)
+    max_selection_comment_chars: int = Field(default=2000, ge=1)
+
     # Decompression-bomb guard (picture-stage-ccx). Caps the decoded pixel count
     # Pillow will process before raising DecompressionBombError instead of
     # allocating hundreds of MB of RAM. Applied module-wide in

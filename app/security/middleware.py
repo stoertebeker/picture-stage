@@ -222,6 +222,17 @@ class RequestBodySizeLimitMiddleware:
             return False
         return True
 
+    @staticmethod
+    def _is_selection_write(scope: Scope) -> bool:
+        if scope["method"] != "POST":
+            return False
+        path = scope["path"]
+        root = scope.get("root_path", "").rstrip("/")
+        if root and path.startswith(root + "/"):
+            path = path[len(root) :]
+        parts = path.rstrip("/").split("/")
+        return len(parts) == 4 and parts[1] == "g" and bool(parts[2]) and parts[3] == "selections"
+
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
@@ -232,6 +243,10 @@ class RequestBodySizeLimitMiddleware:
             limits.append(settings.max_request_body_mb * 1024 * 1024)
         if settings.max_non_upload_request_body_kb and not self._is_image_upload(scope):
             limits.append(settings.max_non_upload_request_body_kb * 1024)
+        if self._is_selection_write(scope):
+            # JSON can represent each non-BMP codepoint as two six-byte
+            # escapes. Leave ample room for metadata, field names and spacing.
+            limits.append(max(65536, settings.max_selection_comment_chars * 12 + 4096))
         if not limits:
             await self.app(scope, receive, send)
             return

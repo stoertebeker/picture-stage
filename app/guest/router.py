@@ -7,9 +7,11 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.passwords import verify_password
+from app.auth.passwords import verify_password, verify_token
 from app.config import settings
 from app.db.models import (
+    LOGIN_ALLOWED_STATUSES,
+    Gallery,
     GalleryStatus,
     Image,
     SelectionAction,
@@ -18,6 +20,7 @@ from app.db.models import (
     User,
 )
 from app.db.session import get_db
+from app.galleries.lifecycle import lock_gallery, lock_images
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
@@ -29,7 +32,12 @@ from app.guest.service import (
 from app.notifications.service import notify_owner_gallery_completed, send_notification
 from app.security.rate_limit import limiter
 from app.selections.schemas import SelectionEventCreate, SelectionSummary
-from app.selections.service import get_current_selections
+from app.selections.service import (
+    SelectionHistoryFull,
+    assert_selection_budget,
+    get_current_selections,
+    lock_selection_budget,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -192,6 +200,13 @@ async def create_selection_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     check_gallery_accessible(gallery)
 
+    await lock_gallery(db, gallery.id, shared=True)
+    await lock_images(db, gallery.id, [body.image_id])
+    gallery = await db.scalar(select(Gallery).where(Gallery.id == gallery.id).execution_options(populate_existing=True))
+    if gallery is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    check_gallery_accessible(gallery)
+
     image_result = await db.execute(select(Image).where(Image.id == body.image_id, Image.gallery_id == gallery.id))
     if image_result.scalar_one_or_none() is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found in this gallery")
@@ -210,6 +225,39 @@ async def create_selection_event(
     session = session_result.scalar_one_or_none()
     if session is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
+
+    await lock_selection_budget(gallery.id, db)
+    # Both lifecycle and budget fences can wait. Recheck share access after
+    # waiting so a revoked link or disabled owner cannot use stale ORM state.
+    gallery = await db.scalar(
+        select(Gallery)
+        .join(User, User.id == Gallery.owner_id)
+        .where(
+            Gallery.id == gallery.id,
+            Gallery.status.in_([GalleryStatus.shared, GalleryStatus.completed]),
+            User.status.in_(LOGIN_ALLOWED_STATUSES),
+        )
+        .execution_options(populate_existing=True)
+    )
+    if (
+        gallery is None
+        or gallery.share_token_hash is None
+        or gallery.share_token_salt is None
+        or not verify_token(token, gallery.share_token_hash, gallery.share_token_salt)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    check_gallery_accessible(gallery)
+    if gallery.status == GalleryStatus.completed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review already completed")
+    session_exists = await db.scalar(
+        select(ShareSession.id).where(ShareSession.id == body.session_id, ShareSession.gallery_id == gallery.id)
+    )
+    if session_exists is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
+    try:
+        await assert_selection_budget(gallery.id, db)
+    except SelectionHistoryFull as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Selection history limit reached") from exc
 
     event = SelectionEvent(
         image_id=body.image_id,

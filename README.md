@@ -204,6 +204,11 @@ Key variables:
 | `STORAGE_BACKEND` | `local` or `s3` |
 | `MAX_REQUEST_BODY_MB` | Global body ceiling in MiB, default `1024`; `0` disables this ceiling |
 | `MAX_NON_UPLOAD_REQUEST_BODY_KB` | Additional ceiling for non-upload requests in KiB, default `1024`; `0` disables this additional ceiling |
+| `MAX_SELECTION_COMMENT_CHARS` | Maximum Unicode characters in a new guest comment; default `2000` |
+| `MAX_SELECTION_EVENTS_PER_GALLERY` | Maximum retained selection events per gallery; default `20000` |
+
+Selection limits must be positive. Existing comments and events remain readable
+if a limit is lowered; new writes are rejected once the applicable limit is reached.
 
 ## Development
 
