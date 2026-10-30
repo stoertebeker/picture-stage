@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import require_active_user
 from app.db.models import Gallery, Image, SelectionAction, SelectionEvent, User
 from app.db.session import get_db
+from app.galleries.csv_security import spreadsheet_text
 
 router = APIRouter(prefix="/api/v1/galleries", tags=["export"])
 
@@ -94,15 +95,15 @@ async def export_selections(
 
     if format == "csv":
         buf = io.StringIO()
-        writer = csv.DictWriter(buf, fieldnames=["filename", "selected", "favorited", "comment"])
+        writer = csv.DictWriter(buf, fieldnames=["filename", "selected", "favorited", "comment"], quoting=csv.QUOTE_ALL)
         writer.writeheader()
         for s in selections:
             writer.writerow(
                 {
-                    "filename": s["filename"],
+                    "filename": spreadsheet_text(s["filename"]),
                     "selected": s["selected"],
                     "favorited": s["favorited"],
-                    "comment": s["comment"] or "",
+                    "comment": spreadsheet_text(s["comment"] or ""),
                 }
             )
         buf.seek(0)

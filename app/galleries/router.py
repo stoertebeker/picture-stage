@@ -29,6 +29,7 @@ from app.db.models import (
     UserStatus,
 )
 from app.db.session import get_db
+from app.galleries.csv_security import spreadsheet_text
 from app.galleries.deletion import purge_gallery
 from app.galleries.lifecycle import lock_gallery
 from app.galleries.quota import GalleryQuotaExceeded, reserve_gallery_slot
@@ -462,7 +463,7 @@ async def export_audit_log(
 
     def generate_csv() -> Iterator[str]:
         output = io.StringIO()
-        writer = csv.writer(output)
+        writer = csv.writer(output, quoting=csv.QUOTE_ALL)
         writer.writerow(
             [
                 "id",
@@ -483,12 +484,12 @@ async def export_audit_log(
             writer.writerow(
                 [
                     entry.id,
-                    entry.event_type,
+                    spreadsheet_text(entry.event_type),
                     str(entry.actor_user_id) if entry.actor_user_id else "",
                     str(entry.actor_session_id) if entry.actor_session_id else "",
-                    entry.ip_address or "",
-                    entry.user_agent or "",
-                    str(entry.details) if entry.details else "",
+                    spreadsheet_text(entry.ip_address or ""),
+                    spreadsheet_text(entry.user_agent or ""),
+                    spreadsheet_text(str(entry.details) if entry.details else ""),
                     entry.created_at.isoformat(),
                 ]
             )
