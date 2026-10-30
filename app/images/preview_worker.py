@@ -29,6 +29,7 @@ from app.images.processing import (
 from app.images.storage_cleanup import StorageCleanupError, delete_storage_keys
 from app.storage.base import storage_key
 from app.storage.dependencies import get_storage
+from app.storage.uploads import complete_upload
 
 logger = logging.getLogger(__name__)
 
@@ -122,7 +123,7 @@ async def process_image_previews(
 
                 preview_key = storage_key(str(gallery_id), "previews", f"{image_id}_{variant_name}.webp")
                 attempted_keys.add(preview_key)
-                await storage.upload(preview_key, io.BytesIO(preview_bytes), "image/webp")
+                await complete_upload(storage, preview_key, io.BytesIO(preview_bytes), "image/webp")
 
                 db.add(
                     ImagePreview(

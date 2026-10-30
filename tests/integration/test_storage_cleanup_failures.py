@@ -237,6 +237,34 @@ async def test_cancellation_cleans_written_previews_and_propagates(db, owner, lo
     assert list(_files(local_storage, gallery)) == [image.storage_key]
 
 
+async def test_worker_finishes_inflight_upload_before_cancel_cleanup(db, owner, local_storage, monkeypatch, worker):
+    gallery, image = await _pending_image(db, owner, local_storage)
+    entered, release, completed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    actual_upload = local_storage.upload
+
+    async def finish_upload(key, data, content_type):
+        entered.set()
+        await release.wait()
+        result = await actual_upload(key, data, content_type)
+        completed.set()
+        return result
+
+    monkeypatch.setattr(local_storage, "upload", finish_upload)
+    task = asyncio.create_task(worker(image.id, gallery.id))
+    try:
+        await asyncio.wait_for(entered.wait(), 5)
+        task.cancel()
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(asyncio.shield(task), 0.1)
+    finally:
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, 10)
+    assert completed.is_set()
+    assert await _image_status(image.id) == ImageProcessingStatus.failed
+    assert list(_files(local_storage, gallery)) == [image.storage_key]
+
+
 @pytest.mark.parametrize("entrypoint", ["frontend", "api"])
 async def test_gallery_delete_waits_for_running_worker(
     client, db, owner, auth_headers, local_storage, monkeypatch, worker, entrypoint
