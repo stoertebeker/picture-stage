@@ -2,7 +2,7 @@
 
 {% block title %}{{ gallery_name }}{% endblock %}
 {# Suppress the legacy guest_base header — the viewer has its own Editorial-Dark
-   sticky header below (incl. language switcher). Avoids a duplicate header/<h1>. #}
+   header below (incl. language switcher). Avoids a duplicate header/<h1>. #}
 {% block guest_header %}{% endblock %}
 
 {% block content %}
@@ -23,8 +23,9 @@
     </div>
     {% else %}
 
-    <!-- Editorial Dark sticky header -->
-    <header class="sticky top-0 z-sticky bg-surface-base/85 backdrop-blur-md border-b border-border-subtle relative">
+    <!-- Scroll with the gallery on phones; retain sticky controls on wider screens.
+         Relative positioning keeps the mobile sort panel anchored to this header. -->
+    <header class="relative sm:sticky sm:top-0 z-sticky bg-surface-base/85 backdrop-blur-md border-b border-border-subtle">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex items-center justify-between gap-4">
             <div class="flex flex-col gap-0.5 min-w-0">
                 <span class="text-xs uppercase tracking-widest text-text-muted">{{ t('guest.gallery_eyebrow') }}</span>
