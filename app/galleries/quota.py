@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
-from app.db.models import Gallery
+from app.db.models import Gallery, User
 
 
 class GalleryQuotaExceeded(Exception):
@@ -51,3 +51,15 @@ async def assert_within_gallery_quota(
     count = await db.scalar(select(func.count()).select_from(Gallery).where(Gallery.owner_id == owner_id))
     if (count or 0) >= limit:
         raise GalleryQuotaExceeded(limit)
+
+
+async def reserve_gallery_slot(owner_id: uuid.UUID, db: AsyncSession) -> None:
+    """Serialize allocations for an owner until the caller commits or rolls back.
+
+    Read the override under the lock, including when the limit is unlimited, so
+    concurrent allocations and administrative limit changes share one boundary.
+    """
+    override = await db.scalar(
+        select(User.gallery_limit_override).where(User.id == owner_id).with_for_update(key_share=True)
+    )
+    await assert_within_gallery_quota(owner_id, db, limit_override=override)

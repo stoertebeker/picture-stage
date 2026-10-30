@@ -22,7 +22,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
-from app.galleries.quota import GalleryQuotaExceeded, assert_within_gallery_quota, get_gallery_limit
+from app.galleries.quota import GalleryQuotaExceeded, get_gallery_limit, reserve_gallery_slot
 from app.security.signing import sign_url
 
 logger = logging.getLogger(__name__)
@@ -82,7 +82,7 @@ async def create_gallery(
 
     locale = getattr(request.state, "locale", "de")
     try:
-        await assert_within_gallery_quota(user.id, db, limit_override=user.gallery_limit_override)
+        await reserve_gallery_slot(user.id, db)
     except GalleryQuotaExceeded:
         # A second tab may have used the last slot. Refresh both the persistent
         # notice and the gallery list instead of closing the dialog as success.
@@ -94,6 +94,7 @@ async def create_gallery(
     db.add(gallery)
     await db.commit()
     await db.refresh(gallery)
+    await db.refresh(user, attribute_names=["gallery_limit_override"])
     gallery_count = await db.scalar(select(func.count()).select_from(Gallery).where(Gallery.owner_id == user.id))
 
     gallery_data = {

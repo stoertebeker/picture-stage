@@ -31,7 +31,7 @@ from app.db.models import (
 from app.db.session import get_db
 from app.galleries.deletion import purge_gallery
 from app.galleries.lifecycle import lock_gallery
-from app.galleries.quota import GalleryQuotaExceeded, assert_within_gallery_quota
+from app.galleries.quota import GalleryQuotaExceeded, reserve_gallery_slot
 from app.galleries.schemas import (
     AuditLogEntry,
     AuditLogResponse,
@@ -163,7 +163,7 @@ async def create_gallery(
     db: AsyncSession = Depends(get_db),
 ) -> GalleryResponse:
     try:
-        await assert_within_gallery_quota(user.id, db, limit_override=user.gallery_limit_override)
+        await reserve_gallery_slot(user.id, db)
     except GalleryQuotaExceeded as exc:
         raise HTTPException(
             status_code=http_status.HTTP_409_CONFLICT,
@@ -314,6 +314,14 @@ async def duplicate_gallery(
     storage: StorageBackend = Depends(get_storage),
 ) -> GalleryResponse:
     source = await _get_owned_gallery(gallery_id, user, db)
+
+    try:
+        await reserve_gallery_slot(user.id, db)
+    except GalleryQuotaExceeded as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail=f"Gallery limit reached ({exc.limit})",
+        ) from exc
 
     new_gallery = Gallery(
         owner_id=user.id,

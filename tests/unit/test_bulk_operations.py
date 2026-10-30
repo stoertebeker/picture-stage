@@ -106,7 +106,7 @@ class TestGalleryDuplicateEndpoint:
         with open("app/galleries/router.py") as f:
             source = f.read()
         idx = source.index("duplicate_gallery")
-        block = source[idx : idx + 2000]
+        block = source[idx : idx + 3000]
         assert "new_original_key" in block
         assert "new_preview_key" in block
 
