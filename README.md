@@ -124,6 +124,16 @@ database infinity values retain their access semantics without crashing guest li
 
 ### Images (`/api/v1/galleries/{id}/images/`)
 
+Multi-file uploads commit their image records as one batch. Migration `0008`
+adds internal cleanup intents before storage writes, so failed uploads retain
+their object keys even if immediate cleanup fails. Gallery/user deletion retries
+those keys and retains the references while storage is unavailable. Original
+storage keys use server-generated UUIDs and MIME-based extensions; uploaded
+filenames remain metadata. There is no periodic janitor or automatic discovery
+of historical objects without an image record or cleanup intent. If a commit
+acknowledgement is lost, committed files are preserved; the request still fails
+and frontend preview dispatch is not automatically retried.
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/galleries/{id}/images` | Upload images (multi-file) |

@@ -139,6 +139,23 @@ class Gallery(TimestampMixin, Base):
     audit_entries: Mapped[list["AuditLog"]] = relationship(back_populates="gallery", cascade="save-update, merge")
 
 
+class UploadCleanupIntent(Base):
+    """Durable storage ownership for a batch before any Image rows can commit.
+
+    Kept after failed compensation so gallery/user deletion can retry the keys.
+    The restrictive FK prevents losing recovery data through an unchecked delete.
+    """
+
+    __tablename__ = "upload_cleanup_intents"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
+    gallery_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("galleries.id"), nullable=False, index=True
+    )
+    image_keys: Mapped[dict[str, list[str]]] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class Image(TimestampMixin, Base):
     __tablename__ = "images"
 

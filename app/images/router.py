@@ -21,6 +21,7 @@ from app.images.processing import (
 )
 from app.images.schemas import BulkDeleteRequest, BulkDeleteResponse, ImageResponse, ImageUploadResponse
 from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
+from app.images.upload_batch import UploadBatch, UploadPlan
 from app.images.upload_limits import enforce_file_count, read_within_limit
 from app.security.signing import verify_signed_url
 from app.storage.base import StorageBackend, storage_key
@@ -68,87 +69,96 @@ async def upload_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     enforce_file_count(len(files))
-
-    existing_count_result = await db.execute(
-        select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
-    )
-    sort_offset = existing_count_result.scalar() or 0
-
-    uploaded_images: list[ImageResponse] = []
-    # Resolve text / opacity / position / enabled from the gallery's own config
-    # (empty -> global default); honour an explicit watermark-disabled setting.
-    watermark_config = gallery.watermark_config
-
-    for idx, file in enumerate(files):
+    for file in files:
         if file.content_type not in ALLOWED_CONTENT_TYPES:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail=f"Unsupported file type: {file.content_type}",
             )
 
-        file_data = await read_within_limit(file)
-        file_buf = io.BytesIO(file_data)
+    plans = [UploadPlan.for_file(gallery_id, file.content_type, previews=True) for file in files]
+    async with UploadBatch(db, storage, gallery_id, plans) as batch:
+        gal_result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
+        gallery = gal_result.scalar_one_or_none()
+        if gallery is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
-        sha256 = compute_sha256(file_buf)
-        width, height = get_image_dimensions(file_buf)
-        exif = extract_exif(file_buf)
-
-        ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
-        image_uuid = uuid.uuid4()
-        original_key = storage_key(str(gallery_id), "originals", f"{image_uuid}.{ext}")
-
-        file_buf.seek(0)
-        await storage.upload(original_key, file_buf, file.content_type or "image/jpeg")
-
-        image = Image(
-            id=image_uuid,
-            gallery_id=gallery_id,
-            storage_key=original_key,
-            filename=file.filename or f"image_{idx}.{ext}",
-            content_type=file.content_type or "image/jpeg",
-            width=width,
-            height=height,
-            file_size=len(file_data),
-            sha256=sha256,
-            exif=exif,
-            sort_order=sort_offset + idx,
+        existing_count_result = await db.execute(
+            select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
         )
-        db.add(image)
+        sort_offset = existing_count_result.scalar() or 0
 
-        for variant_name, max_width in PREVIEW_SIZES.items():
+        uploaded_images: list[ImageResponse] = []
+        # Resolve text / opacity / position / enabled from the gallery's own config
+        # (empty -> global default); honour an explicit watermark-disabled setting.
+        watermark_config = gallery.watermark_config
+
+        for idx, (file, plan) in enumerate(zip(files, plans, strict=True)):
+            file_data = await read_within_limit(file)
+            file_buf = io.BytesIO(file_data)
+
+            sha256 = compute_sha256(file_buf)
+            width, height = get_image_dimensions(file_buf)
+            exif = extract_exif(file_buf)
+
+            ext = plan.extension
+            image_uuid = plan.image_id
+            original_key = plan.original_key
+
             file_buf.seek(0)
+            await batch.upload(original_key, file_buf, file.content_type or "image/jpeg")
 
-            if variant_name == "preview":
-                preview_buf, pw, ph = generate_preview_with_watermark(
-                    file_buf,
-                    max_width,
-                    "",
-                    watermark_config=watermark_config,
-                    gallery_id=str(gallery.id),
-                )
-            else:
-                preview_buf, pw, ph = generate_thumbnail(file_buf, max_width)
-
-            preview_key = storage_key(str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp")
-            await storage.upload(preview_key, preview_buf, "image/webp")
-
-            preview = ImagePreview(
-                image_id=image_uuid,
-                variant=PreviewVariant(variant_name),
-                storage_key=preview_key,
-                width=pw,
-                height=ph,
-                file_size=preview_buf.getbuffer().nbytes,
+            image = Image(
+                id=image_uuid,
+                gallery_id=gallery_id,
+                storage_key=original_key,
+                filename=file.filename or f"image_{idx}.{ext}",
+                content_type=file.content_type or "image/jpeg",
+                width=width,
+                height=height,
+                file_size=len(file_data),
+                sha256=sha256,
+                exif=exif,
+                sort_order=sort_offset + idx,
             )
-            db.add(preview)
+            db.add(image)
 
-        await db.flush()
+            for variant_name, max_width in PREVIEW_SIZES.items():
+                file_buf.seek(0)
 
-        img_result = await db.execute(select(Image).where(Image.id == image_uuid).options(selectinload(Image.previews)))
-        loaded_image = img_result.scalar_one()
-        uploaded_images.append(_image_to_response(loaded_image, storage))
+                if variant_name == "preview":
+                    preview_buf, pw, ph = generate_preview_with_watermark(
+                        file_buf,
+                        max_width,
+                        "",
+                        watermark_config=watermark_config,
+                        gallery_id=str(gallery.id),
+                    )
+                else:
+                    preview_buf, pw, ph = generate_thumbnail(file_buf, max_width)
 
-    await db.commit()
+                preview_key = storage_key(str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp")
+                await batch.upload(preview_key, preview_buf, "image/webp")
+
+                preview = ImagePreview(
+                    image_id=image_uuid,
+                    variant=PreviewVariant(variant_name),
+                    storage_key=preview_key,
+                    width=pw,
+                    height=ph,
+                    file_size=preview_buf.getbuffer().nbytes,
+                )
+                db.add(preview)
+
+            await db.flush()
+
+            img_result = await db.execute(
+                select(Image).where(Image.id == image_uuid).options(selectinload(Image.previews))
+            )
+            loaded_image = img_result.scalar_one()
+            uploaded_images.append(_image_to_response(loaded_image, storage))
+
+        await batch.commit()
 
     return ImageUploadResponse(uploaded=len(uploaded_images), images=uploaded_images)
 

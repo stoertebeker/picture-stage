@@ -32,6 +32,7 @@ from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.i18n import t
 from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
+from app.images.upload_batch import UploadBatch, UploadPlan
 from app.security.signing import sign_url
 from app.selections.service import get_current_selections
 from app.storage.base import StorageBackend
@@ -320,7 +321,6 @@ async def upload_images(
         get_image_dimensions,
     )
     from app.images.upload_limits import enforce_file_count, read_within_limit
-    from app.storage.base import storage_key
 
     await lock_gallery(db, gallery_id, shared=True)
     gallery = await _get_owned_gallery(gallery_id, user, db)
@@ -342,57 +342,61 @@ async def upload_images(
     enforce_file_count(len(files))
 
     allowed_types = {"image/jpeg", "image/png", "image/webp"}
-
-    # Get current image count for sort_order offset
-    existing_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id))
-    sort_offset = existing_result.scalar() or 0
-
-    # Snapshot the gallery's watermark config now; the worker resolves text /
-    # opacity / position / enabled from it (empty -> global default).
-    watermark_config = gallery.watermark_config
-
-    # Persist originals + Image rows only. Preview generation is dispatched to a
-    # background worker (below) so the request returns immediately.
-    queued: list[uuid.UUID] = []
-    for idx, file in enumerate(files):
+    for file in files:
         if file.content_type not in allowed_types:
-            raise HTTPException(
-                status_code=422,
-                detail=f"Unsupported file type: {file.content_type}",
-            )
+            raise HTTPException(status_code=422, detail=f"Unsupported file type: {file.content_type}")
 
-        file_data = await read_within_limit(file)
-        file_buf = io.BytesIO(file_data)
+    plans = [UploadPlan.for_file(gallery_id, file.content_type, previews=False) for file in files]
+    async with UploadBatch(db, storage, gallery_id, plans) as batch:
+        # The intent commit released the first fence; deletion may have won.
+        gallery = await _get_owned_gallery(gallery_id, user, db)
 
-        sha256 = compute_sha256(file_buf)
-        width, height = get_image_dimensions(file_buf)
-        exif = extract_exif(file_buf)
-
-        ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
-        image_uuid = uuid.uuid4()
-        original_key = storage_key(str(gallery_id), "originals", f"{image_uuid}.{ext}")
-
-        file_buf.seek(0)
-        await storage.upload(original_key, file_buf, file.content_type or "image/jpeg")
-
-        image = Image(
-            id=image_uuid,
-            gallery_id=gallery_id,
-            storage_key=original_key,
-            filename=file.filename or f"image_{idx}.{ext}",
-            content_type=file.content_type or "image/jpeg",
-            width=width,
-            height=height,
-            file_size=len(file_data),
-            sha256=sha256,
-            exif=exif,
-            sort_order=sort_offset + idx,
-            processing_status=ImageProcessingStatus.pending,
+        # Get current image count for sort_order offset
+        existing_result = await db.execute(
+            select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id)
         )
-        db.add(image)
-        queued.append(image_uuid)
+        sort_offset = existing_result.scalar() or 0
 
-    await db.commit()
+        # Snapshot the gallery's watermark config now; the worker resolves text /
+        # opacity / position / enabled from it (empty -> global default).
+        watermark_config = gallery.watermark_config
+
+        # Persist originals + Image rows only. Preview generation is dispatched to a
+        # background worker (below) so the request returns immediately.
+        queued: list[uuid.UUID] = []
+        for idx, (file, plan) in enumerate(zip(files, plans, strict=True)):
+            file_data = await read_within_limit(file)
+            file_buf = io.BytesIO(file_data)
+
+            sha256 = compute_sha256(file_buf)
+            width, height = get_image_dimensions(file_buf)
+            exif = extract_exif(file_buf)
+
+            ext = plan.extension
+            image_uuid = plan.image_id
+            original_key = plan.original_key
+
+            file_buf.seek(0)
+            await batch.upload(original_key, file_buf, file.content_type or "image/jpeg")
+
+            image = Image(
+                id=image_uuid,
+                gallery_id=gallery_id,
+                storage_key=original_key,
+                filename=file.filename or f"image_{idx}.{ext}",
+                content_type=file.content_type or "image/jpeg",
+                width=width,
+                height=height,
+                file_size=len(file_data),
+                sha256=sha256,
+                exif=exif,
+                sort_order=sort_offset + idx,
+                processing_status=ImageProcessingStatus.pending,
+            )
+            db.add(image)
+            queued.append(image_uuid)
+
+        await batch.commit()
 
     # Dispatch preview generation after commit so the worker's own session sees
     # the committed rows. Each image is processed independently.
