@@ -57,7 +57,7 @@ async def resolve_webhook_ips(url: httpx.URL) -> list[str]:
         records = await asyncio.get_running_loop().getaddrinfo(
             host, url.port or 443, family=socket.AF_UNSPEC, type=socket.SOCK_STREAM
         )
-        addresses = [_public_address(record[4][0]) for record in records]
+        addresses = [_public_address(str(record[4][0])) for record in records]
     else:
         addresses = [_public_address(str(literal))]
     if not addresses:
