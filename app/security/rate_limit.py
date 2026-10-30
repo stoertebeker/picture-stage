@@ -1,3 +1,6 @@
+from collections.abc import Iterable, Iterator
+from typing import Any
+
 from slowapi import Limiter
 from slowapi.middleware import _should_exempt, async_check_limits
 from slowapi.util import get_remote_address
@@ -7,6 +10,18 @@ from starlette.responses import Response
 from starlette.routing import Match
 
 limiter = Limiter(key_func=get_remote_address, default_limits=["200/minute"])
+
+
+def _admission_routes(routes: Iterable[Any]) -> Iterator[Any]:
+    for route in routes:
+        # Recent FastAPI versions retain included routers as lazy branches.
+        # Their effective contexts expose native matching with include prefixes
+        # already applied. Older versions expose the flattened routes directly.
+        effective_routes = getattr(route, "effective_route_contexts", None)
+        if callable(effective_routes):
+            yield from effective_routes()
+        else:
+            yield route
 
 
 class DefaultRateLimitMiddleware(BaseHTTPMiddleware):
@@ -25,7 +40,7 @@ class DefaultRateLimitMiddleware(BaseHTTPMiddleware):
         if not active_limiter.enabled:
             return await call_next(request)
 
-        for route in request.app.routes:
+        for route in _admission_routes(request.app.routes):
             match, _ = route.matches(request.scope)
             if match == Match.FULL:
                 handler = getattr(route, "endpoint", None)

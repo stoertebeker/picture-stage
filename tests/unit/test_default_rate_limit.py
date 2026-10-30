@@ -3,6 +3,7 @@
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from fastapi import APIRouter, FastAPI
 from httpx import ASGITransport, AsyncClient
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -131,6 +132,30 @@ async def test_explicit_dynamic_route_keeps_its_concrete_path_scope(small_limite
         assert (await client.get("/explicit/first")).status_code == 200
         assert (await client.get("/explicit/second")).status_code == 200
         assert (await client.get("/explicit/first")).status_code == 429
+
+
+@pytest.mark.parametrize("explicit", [False, True])
+async def test_nested_fastapi_includes_use_effective_prefix_and_handler(small_limiter, explicit):
+    router = APIRouter()
+
+    async def endpoint(request: Request):
+        return PlainTextResponse(request.path_params["token"])
+
+    handler = small_limiter.limit("1/minute")(endpoint) if explicit else endpoint
+    router.add_api_route("/item/{token}", handler, methods=["GET"])
+    parent = APIRouter()
+    parent.include_router(router, prefix="/inner")
+    instance = FastAPI()
+    instance.include_router(parent, prefix="/outer")
+    instance.state.limiter = small_limiter
+    instance.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    instance.add_middleware(DefaultRateLimitMiddleware)
+    async with AsyncClient(transport=ASGITransport(app=instance), base_url="http://test") as client:
+        assert (await client.get("/outer/inner/item/first")).text == "first"
+        assert (await client.get("/outer/inner/item/second")).text == "second"
+        # Default budget is shared across tokens; explicit budget remains scoped
+        # to each concrete path. Both reject this repeated first token now.
+        assert (await client.get("/outer/inner/item/first")).status_code == 429
 
 
 async def test_disabled_limiter_and_existing_404_405_redirect_mounts(small_limiter):
