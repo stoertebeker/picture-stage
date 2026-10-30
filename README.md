@@ -106,6 +106,10 @@ timestamps with its existing future-time validation.
 The form's latest supported date is `9999-12-30`: asyncpg reserves the following
 day's final microsecond for its PostgreSQL infinity sentinel. Date-only frontend
 values are bounded consistently in HTML and on the server; API codecs are unchanged.
+The JSON API rejects the UTC maximum instant reserved by asyncpg for infinity,
+and timestamps whose offsets overflow the representable UTC range, with HTTP 422.
+Other future timestamps retain their exact precision and instant. Existing
+database infinity values retain their access semantics without crashing guest links.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

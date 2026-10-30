@@ -61,7 +61,14 @@ async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | No
 
 def is_gallery_expired(gallery: Gallery) -> bool:
     """Return True if the gallery's share link has passed its expiry instant."""
-    return bool(gallery.expires_at and gallery.expires_at < datetime.now(UTC))
+    expiry = gallery.expires_at
+    if expiry is None:
+        return False
+    # asyncpg decodes existing PostgreSQL +/-infinity as naive datetime.max/min.
+    # Treat these (and legacy naive values) as UTC without mutating the record.
+    if expiry.tzinfo is None:
+        expiry = expiry.replace(tzinfo=UTC)
+    return expiry < datetime.now(UTC)
 
 
 def check_gallery_accessible(gallery: Gallery) -> None:

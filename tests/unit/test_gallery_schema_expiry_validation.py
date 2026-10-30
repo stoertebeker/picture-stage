@@ -72,3 +72,39 @@ def test_update_past_naive_expiry_rejected() -> None:
     past_naive = (datetime.now(UTC) - timedelta(minutes=5)).replace(tzinfo=None)
     with pytest.raises(ValidationError):
         GalleryUpdate(expires_at=past_naive)
+
+
+@pytest.mark.parametrize("schema", [GalleryCreate, GalleryUpdate])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "9999-12-31T23:59:59.999999Z",
+        "9999-12-31T23:59:59.999999",
+        "9999-12-31T22:59:59.999999-01:00",
+        "9999-12-31T23:59:59.999999-01:00",
+        "0001-01-01T00:00:00+01:00",
+    ],
+)
+def test_api_rejects_infinity_sentinel_and_utc_overflow(schema, raw) -> None:
+    with pytest.raises(ValidationError, match="finite, representable UTC timestamp"):
+        schema(name="Boundary proof", expires_at=raw)
+
+
+@pytest.mark.parametrize("schema", [GalleryCreate, GalleryUpdate])
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "9999-12-31T23:59:59.999998Z",
+        "9999-12-31T23:59:59.999998",
+        "9999-12-31T23:59:59.999999+02:00",
+        "9999-12-31T22:59:59.999998-01:00",
+    ],
+)
+def test_api_preserves_finite_boundary_precision_and_offsets(schema, raw) -> None:
+    expected = datetime.fromisoformat(raw)
+    if expected.tzinfo is None:
+        expected = expected.replace(tzinfo=UTC)
+    actual = schema(name="Boundary proof", expires_at=raw).expires_at
+    assert actual == expected
+    assert actual.microsecond == expected.microsecond
+    assert actual.utcoffset() == expected.utcoffset()

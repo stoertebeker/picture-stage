@@ -21,19 +21,27 @@ def _normalise_guest_message(v: Any) -> str | None:
 
 
 def _reject_past_expiry(v: datetime | None) -> datetime | None:
-    """Reject a non-future expiry timestamp; mirror of the frontend ``ath`` fix.
+    """Require a future expiry whose UTC instant survives the database codec.
 
     A naive value is treated as UTC (matching how it is persisted into the
     ``timezone=True`` column) so the comparison against ``now`` never mixes
-    aware and naive datetimes. ``None`` (no expiry) is allowed. Raises
-    ``ValueError`` when the instant is not strictly in the future, which Pydantic
-    surfaces as a 422.
+    aware and naive datetimes. ``None`` (no expiry) is allowed.
+    asyncpg maps the final representable UTC microsecond to PostgreSQL infinity,
+    and offsets can place otherwise valid local datetimes outside Python's UTC
+    range. Reject both before persistence, while preserving finite precision and
+    the input offset. Pydantic surfaces ``ValueError`` as HTTP 422.
     """
     if v is None:
         return None
     if v.tzinfo is None:
         v = v.replace(tzinfo=UTC)
-    if v <= datetime.now(UTC):
+    try:
+        utc_expiry = v.astimezone(UTC)
+    except (OverflowError, ValueError) as err:
+        raise ValueError("expires_at must be a finite, representable UTC timestamp") from err
+    if utc_expiry == datetime.max.replace(tzinfo=UTC):
+        raise ValueError("expires_at must be a finite, representable UTC timestamp")
+    if utc_expiry <= datetime.now(UTC):
         msg = "expires_at must be in the future"
         raise ValueError(msg)
     return v
