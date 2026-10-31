@@ -65,6 +65,7 @@ function uploadZone(fileCount = 1) {
             processingResumedLabel: 'Creating previews...',
             completeLabel: 'Complete',
             uploadFailedLabel: 'Upload failed',
+            uploadInvalidImageLabel: 'Unsupported image',
             processingFailedLabel: 'Processing failed',
         },
     };
@@ -302,6 +303,21 @@ assert.equal(uploadFailure.component._awaitingUploadGrid, false);
 assert.equal(uploadFailure.component.statusText(), 'Upload failed');
 assert.equal(uploadFailure.component.statusRole(), 'alert');
 assert.notEqual(uploadFailure.component.progressValue(), 100);
+
+// Only a server-marked image decode error receives the more specific message.
+for (const [status, marker, expected] of [
+    [422, 'invalid-image', 'Unsupported image'],
+    [422, null, 'Upload failed'],
+    [500, 'invalid-image', 'Upload failed'],
+]) {
+    const invalidUpload = uploadZone();
+    invalidUpload.component.startUpload();
+    const event = uploadEvent(invalidUpload.uploadForm, false);
+    event.detail.xhr = { status, getResponseHeader: () => marker };
+    invalidUpload.component.onUploadComplete(event);
+    assert.equal(invalidUpload.component.statusText(), expected);
+    assert.equal(invalidUpload.component.statusRole(), 'alert');
+}
 
 // Reloading loses the identity of the active batch. Show generic processing
 // while any gallery image is pending, without inventing exact counts or

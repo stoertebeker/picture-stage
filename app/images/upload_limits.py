@@ -15,6 +15,15 @@ from fastapi import HTTPException, UploadFile, status
 from app.config import settings
 
 
+def invalid_image_error() -> HTTPException:
+    """Report unsupported or malformed image bytes to clients without decoding details."""
+    return HTTPException(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        detail="Unsupported or invalid image. Use JPEG, PNG, or WebP.",
+        headers={"X-Picture-Stage-Error": "invalid-image"},
+    )
+
+
 def enforce_file_count(count: int) -> None:
     """Reject a request that carries more files than ``max_files_per_upload``."""
     max_files = settings.max_files_per_upload

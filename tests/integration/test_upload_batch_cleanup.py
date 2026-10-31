@@ -167,7 +167,7 @@ async def test_later_invalid_file_cleans_earlier_files_and_preserves_control(
         expected = 413
     else:
         files[1] = ("files", ("invalid.png", b"not an image", "image/png"))
-        expected = 500
+        expected = 422
     response = await _post(client, owner, gallery, auth_headers, entrypoint, files)
     assert response.status_code == expected, response.text
     assert _files(local_storage, gallery) == {}
@@ -453,7 +453,7 @@ async def test_unreadable_recovery_database_keeps_intent_instead_of_guessing(
     files = _two_pngs()
     files[1] = ("files", ("invalid.png", b"not an image", "image/png"))
     response = await _post(client, owner, gallery, auth_headers, entrypoint, files)
-    assert response.status_code == 500
+    assert response.status_code == 422
     assert await _counts(verify_db, gallery) == (0, 1)
     assert len(_files(local_storage, gallery)) == (4 if entrypoint == "api" else 1)
     deleted = await _delete_gallery(client, gallery, owner, auth_headers, entrypoint)

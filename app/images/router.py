@@ -14,6 +14,7 @@ from app.galleries.lifecycle import lock_gallery, lock_images
 from app.images.process_pool import run_in_pool
 from app.images.processing import (
     PREVIEW_SIZES,
+    InvalidImageContentError,
     extract_image_metadata,
     render_preview_bytes,
     render_thumbnail_bytes,
@@ -21,7 +22,7 @@ from app.images.processing import (
 from app.images.schemas import BulkDeleteRequest, BulkDeleteResponse, ImageResponse, ImageUploadResponse
 from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
 from app.images.upload_batch import UploadBatch, UploadPlan
-from app.images.upload_limits import enforce_file_count, read_within_limit
+from app.images.upload_limits import enforce_file_count, invalid_image_error, read_within_limit
 from app.security.signing import verify_signed_url
 from app.storage.base import StorageBackend, storage_key
 from app.storage.dependencies import get_storage
@@ -96,7 +97,10 @@ async def upload_images(
             file_data = await read_within_limit(file)
             file_buf = io.BytesIO(file_data)
 
-            sha256, width, height, exif = await run_in_pool(extract_image_metadata, file_data)
+            try:
+                sha256, width, height, exif = await run_in_pool(extract_image_metadata, file_data)
+            except InvalidImageContentError as exc:
+                raise invalid_image_error() from exc
 
             ext = plan.extension
             image_uuid = plan.image_id
@@ -121,16 +125,19 @@ async def upload_images(
             db.add(image)
 
             for variant_name, max_width in PREVIEW_SIZES.items():
-                if variant_name == "preview":
-                    preview_bytes, pw, ph = await run_in_pool(
-                        render_preview_bytes,
-                        file_data,
-                        max_width,
-                        watermark_config,
-                        str(gallery.id),
-                    )
-                else:
-                    preview_bytes, pw, ph = await run_in_pool(render_thumbnail_bytes, file_data, max_width)
+                try:
+                    if variant_name == "preview":
+                        preview_bytes, pw, ph = await run_in_pool(
+                            render_preview_bytes,
+                            file_data,
+                            max_width,
+                            watermark_config,
+                            str(gallery.id),
+                        )
+                    else:
+                        preview_bytes, pw, ph = await run_in_pool(render_thumbnail_bytes, file_data, max_width)
+                except InvalidImageContentError as exc:
+                    raise invalid_image_error() from exc
 
                 preview_key = storage_key(str(gallery_id), "previews", f"{image_uuid}_{variant_name}.webp")
                 preview_buf = io.BytesIO(preview_bytes)

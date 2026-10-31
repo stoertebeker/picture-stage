@@ -3,7 +3,7 @@ import io
 import warnings
 from typing import Any, BinaryIO
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, UnidentifiedImageError
 from PIL.ImageFont import FreeTypeFont
 
 from app.config import settings
@@ -22,6 +22,24 @@ PREVIEW_SIZES = {
     "thumb_md": 640,
     "preview": 1280,
 }
+
+# Restrict Pillow before plugin identification, rather than trusting the
+# client-supplied Content-Type or identifying with every installed decoder.
+SUPPORTED_IMAGE_FORMATS = ("JPEG", "PNG", "WEBP")
+
+
+class InvalidImageContentError(UnidentifiedImageError):
+    """The supplied image bytes could not be decoded as a supported image."""
+
+
+def _open_supported_image(image_data: BinaryIO, mode: str | None = None) -> Image.Image:
+    """Restrict plugin selection and distinguish invalid bytes from worker failures."""
+    try:
+        image = Image.open(image_data, formats=SUPPORTED_IMAGE_FORMATS)
+        return image.convert(mode) if mode else image
+    except OSError as exc:
+        raise InvalidImageContentError("Unsupported or invalid image content") from exc
+
 
 VALID_POSITIONS = {"top-left", "top-right", "bottom-left", "bottom-right", "center"}
 
@@ -90,7 +108,7 @@ def _calculate_text_position(
 
 
 def generate_thumbnail(image_data: BinaryIO, max_width: int) -> tuple[io.BytesIO, int, int]:
-    img = Image.open(image_data).convert("RGB")
+    img = _open_supported_image(image_data, "RGB")
 
     ratio = max_width / img.width
     if ratio < 1:
@@ -110,7 +128,7 @@ def apply_watermark(
     watermark_config: dict[str, Any] | None = None,
     gallery_id: str | None = None,
 ) -> io.BytesIO:
-    img = Image.open(image_data).convert("RGBA")
+    img = _open_supported_image(image_data, "RGBA")
 
     wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(watermark_config, gallery_id, img.width)
     # Legacy: explicit text parameter overrides config
@@ -148,7 +166,7 @@ def generate_preview_with_watermark(
     watermark_config: dict[str, Any] | None = None,
     gallery_id: str | None = None,
 ) -> tuple[io.BytesIO, int, int]:
-    img = Image.open(image_data).convert("RGBA")
+    img = _open_supported_image(image_data, "RGBA")
 
     ratio = max_width / img.width
     if ratio < 1:
@@ -226,7 +244,7 @@ def render_preview_bytes(
 
 def extract_exif(image_data: BinaryIO) -> dict[str, str]:
     try:
-        img = Image.open(image_data)
+        img = _open_supported_image(image_data)
         exif_data = img.getexif()
         if not exif_data:
             return {}
@@ -252,7 +270,13 @@ def compute_sha256(data: BinaryIO) -> str:
 
 
 def get_image_dimensions(image_data: BinaryIO) -> tuple[int, int]:
-    img = Image.open(image_data)
+    img = _open_supported_image(image_data)
+    # A readable header does not imply the full image is decodable. Validate
+    # before the upload is committed; this runs inside the isolated worker.
+    try:
+        img.load()
+    except OSError as exc:
+        raise InvalidImageContentError("Unsupported or invalid image content") from exc
     image_data.seek(0)
     return img.width, img.height
 

@@ -329,8 +329,8 @@ async def upload_images(
 
     from app.images.preview_worker import process_image_previews
     from app.images.process_pool import run_in_pool
-    from app.images.processing import extract_image_metadata
-    from app.images.upload_limits import enforce_file_count, read_within_limit
+    from app.images.processing import InvalidImageContentError, extract_image_metadata
+    from app.images.upload_limits import enforce_file_count, invalid_image_error, read_within_limit
 
     await lock_gallery(db, gallery_id, shared=True)
     gallery = await _get_owned_gallery(gallery_id, user, db)
@@ -378,7 +378,10 @@ async def upload_images(
             file_data = await read_within_limit(file)
             file_buf = io.BytesIO(file_data)
 
-            sha256, width, height, exif = await run_in_pool(extract_image_metadata, file_data)
+            try:
+                sha256, width, height, exif = await run_in_pool(extract_image_metadata, file_data)
+            except InvalidImageContentError as exc:
+                raise invalid_image_error() from exc
 
             ext = plan.extension
             image_uuid = plan.image_id
