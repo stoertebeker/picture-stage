@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -87,6 +88,16 @@ class SelectionAction(enum.StrEnum):
 
 
 # --- Models ---
+
+
+class SetupState(Base):
+    """One durable first-run claim, consumed atomically with the first admin."""
+
+    __tablename__ = "setup_state"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_setup_state_singleton"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
 class User(TimestampMixin, Base):

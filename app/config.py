@@ -1,4 +1,4 @@
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Sentinel default for crypto secrets. A production instance MUST override these
@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     # A forgotten override fails loud in dev/CI rather than silently shipping insecure prod.
     environment: str = "production"
     secret_key: str = _INSECURE_SECRET_DEFAULT
+    # Operator-held capability used only for the first administrator setup.
+    bootstrap_token: SecretStr = SecretStr("")
     debug: bool = False
 
     database_url: str = "postgresql+asyncpg://picstage:picstage@db:5432/picstage"
