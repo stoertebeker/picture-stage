@@ -4,7 +4,7 @@
 
 Picture-Stage lets photographers share image galleries with models for review. Models can select images for editing, mark favorites, and leave comments — all without creating an account. Self-hosted, open-source, and fully under your control.
 
-> **Status (2026-10-30):** Backend and Editorial Dark frontend implemented, including DE/EN, light/dark themes, gallery review and selection export. Multi-file uploads track transfer and asynchronous preview generation. Recent fixes cover stale-browser CSRF recovery, failed-upload cleanup, early non-upload body limits and default rate limiting. Public GitHub issues #1–#6 are complete; remaining security and maintenance work is tracked in the local Beads queue (`bd ready`).
+> **Status (2026-10-31):** Backend and Editorial Dark frontend are implemented, including DE/EN, light/dark themes, gallery review and selection export. Uploads track transfer and asynchronous preview generation. Recent security work covers protected initial setup, bounded image processing, webhook destinations and selection history. Public GitHub issues #1–#6 are complete; remaining work is tracked in Beads (`bd ready`).
 
 ## Features
 

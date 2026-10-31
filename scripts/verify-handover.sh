@@ -30,12 +30,7 @@ else
     bad "no origin/main reference — run 'git fetch origin'"
 fi
 
-if git tag -l "handover-*" | head -1 | grep -q .; then
-    LATEST_TAG=$(git tag -l "handover-*" | sort | tail -1)
-    ok "handover tag present: $LATEST_TAG"
-else
-    bad "no handover tag found — handover may be incomplete"
-fi
+echo "  ℹ️  handover tags are historical; current state is described in CLAUDE.md"
 
 echo
 echo "=== Toolchain ==="
@@ -57,9 +52,9 @@ echo "=== Project files ==="
 echo
 echo "=== bd state ==="
 if command -v bd >/dev/null; then
-    READY=$(bd ready 2>/dev/null | grep -c "^○" || echo 0)
+    READY=$(bd ready 2>/dev/null | grep -c "^○" || :)
     echo "  ℹ️  bd ready: $READY issue(s) available"
-    echo "  ℹ️  next:    run 'bd ready' to see queue, '/set-course' to plan new epic"
+    echo "  ℹ️  next:    run 'bd ready' to inspect the current queue"
 fi
 
 echo
