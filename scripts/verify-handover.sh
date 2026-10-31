@@ -37,8 +37,16 @@ echo "=== Toolchain ==="
 command -v python3 >/dev/null && ok "python3: $(python3 --version 2>&1)" || bad "python3 missing"
 command -v bd      >/dev/null && ok "bd (beads): $(bd version 2>/dev/null | head -1 || echo present)" || bad "bd missing — issue tracking unavailable"
 command -v docker  >/dev/null && ok "docker present" || bad "docker missing (only needed for full-stack runs)"
-command -v ruff    >/dev/null && ok "ruff present" || echo "  ⚠️  ruff missing (lint won't run locally)"
-command -v mypy    >/dev/null && ok "mypy present" || echo "  ⚠️  mypy missing (type-check won't run locally)"
+if command -v ruff >/dev/null || [ -x .venv/bin/ruff ]; then
+    ok "ruff present"
+else
+    echo "  ⚠️  ruff missing (lint won't run locally)"
+fi
+if command -v mypy >/dev/null || [ -x .venv/bin/mypy ]; then
+    ok "mypy present"
+else
+    echo "  ⚠️  mypy missing (type-check won't run locally)"
+fi
 
 echo
 echo "=== Project files ==="
