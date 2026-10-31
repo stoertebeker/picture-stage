@@ -36,6 +36,7 @@ cp -f .env.example .env
 #    SECRET_KEY         (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(64))")
 #    HMAC_SECRET_KEY    (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 #    APP_URL            (öffentliche HTTPS-Domain, z.B. https://deine-domain.tld — sonst zeigen Share-Links auf den internen Host)
+#    BOOTSTRAP_TOKEN    (für die Ersteinrichtung generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 #
 #    Optional — E-Mail-Benachrichtigungen (z.B. Mailjet, leer = aus):
 #    SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM   (Mailjet: HOST=in-v3.mailjet.com, PORT=587,
@@ -50,9 +51,23 @@ docker compose up -d
 
 # 5. Öffnen — beim ersten Start erscheint der Setup-Assistent
 #    http://localhost:8000
-#    Erstelle dort den Admin-Account, danach ist die App einsatzbereit.
+#    Gib das BOOTSTRAP_TOKEN ein und erstelle den Admin-Account.
 #    API-Docs: http://localhost:8000/docs
 ```
+
+If all users have been removed, the public setup remains closed. An operator
+with local container access can recreate the administrator interactively:
+
+```bash
+docker compose exec app python -m app.cli.recover_admin
+```
+
+The command accepts the password through an interactive prompt and requires the
+user table to be empty. Database migration `0010` also guards direct admin
+inserts so an older app process cannot claim first-admin authority during an
+upgrade. Downgrading removes that guard and the setup marker. A full database
+dump and restore was tested; a data-only restore into an existing schema is
+not supported with this guard.
 
 ### Update auf eine neue Version
 
@@ -136,6 +151,10 @@ filenames remain metadata. There is no periodic janitor or automatic discovery
 of historical objects without an image record or cleanup intent. If a commit
 acknowledgement is lost, committed files are preserved; the request still fails
 and frontend preview dispatch is not automatically retried.
+
+Image bytes must decode as JPEG, PNG or WebP, regardless of the supplied MIME
+type. Invalid or unsupported images are rejected with HTTP 422. Previously
+stored images in other formats cannot be used to generate new previews.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|

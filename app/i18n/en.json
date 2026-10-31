@@ -39,6 +39,10 @@
   "setup": {
     "title": "Setup - Picture-Stage",
     "subtitle": "Create the first admin account to get started.",
+    "bootstrap_token_label": "Setup token",
+    "bootstrap_token_hint": "Enter the setup token configured during installation.",
+    "bootstrap_not_configured": "The setup token is missing or insecure. Check the server configuration.",
+    "invalid_bootstrap_token": "The setup token is invalid.",
     "create_admin": "Create Admin Account"
   },
   "admin": {
@@ -221,6 +225,7 @@
     "upload_processing_resumed": "Creating previews...",
     "upload_complete": "All previews have been created.",
     "upload_failed": "The upload failed. Please try again.",
+    "upload_invalid_image": "At least one file is not a valid JPEG, PNG, or WebP image. The upload was not saved.",
     "upload_processing_failed": "At least one preview could not be created.",
     "processing": "Processing...",
     "processing_failed": "Processing failed",

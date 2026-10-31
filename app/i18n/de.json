@@ -39,6 +39,10 @@
   "setup": {
     "title": "Einrichtung – Picture-Stage",
     "subtitle": "Erstelle das erste Admin-Konto, um loszulegen.",
+    "bootstrap_token_label": "Einrichtungstoken",
+    "bootstrap_token_hint": "Gib das bei der Installation konfigurierte Einrichtungstoken ein.",
+    "bootstrap_not_configured": "Das Einrichtungstoken ist nicht oder nicht sicher konfiguriert. Bitte prüfe die Serverkonfiguration.",
+    "invalid_bootstrap_token": "Das Einrichtungstoken ist ungültig.",
     "create_admin": "Admin-Konto erstellen"
   },
   "admin": {
@@ -221,6 +225,7 @@
     "upload_processing_resumed": "Vorschauen werden erstellt...",
     "upload_complete": "Alle Vorschauen wurden erstellt.",
     "upload_failed": "Der Upload ist fehlgeschlagen. Bitte versuche es erneut.",
+    "upload_invalid_image": "Mindestens eine Datei ist kein gültiges JPEG-, PNG- oder WebP-Bild. Der Upload wurde nicht gespeichert.",
     "upload_processing_failed": "Mindestens eine Vorschau konnte nicht erstellt werden.",
     "processing": "Wird verarbeitet...",
     "processing_failed": "Verarbeitung fehlgeschlagen",
