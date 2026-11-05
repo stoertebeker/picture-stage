@@ -1,6 +1,7 @@
 import logging
 import uuid
 from datetime import UTC, datetime
+from typing import cast
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel
@@ -78,7 +79,6 @@ class CompleteReviewResponse(BaseModel):
 
 
 @router.get("/{token}", response_model=GuestGalleryResponse)
-@limiter.limit("20/10minutes")
 async def get_shared_gallery(
     token: str,
     request: Request,
@@ -87,6 +87,13 @@ async def get_shared_gallery(
     gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    return cast(GuestGalleryResponse, await _get_resolved_gallery(token=token, request=request, gallery=gallery, db=db))
+
+
+@limiter.limit("20/10minutes")
+async def _get_resolved_gallery(
+    token: str, request: Request, gallery: Gallery, db: AsyncSession
+) -> GuestGalleryResponse:
 
     check_gallery_accessible(gallery)
     # Session producers must never hold FOR SHARE before admission/cleanup.
@@ -114,7 +121,6 @@ async def get_shared_gallery(
 
 
 @router.post("/{token}/verify-password", response_model=GuestGalleryResponse)
-@limiter.limit("5/minute")
 async def verify_gallery_password(
     token: str,
     body: PasswordVerifyRequest,
@@ -124,6 +130,16 @@ async def verify_gallery_password(
     gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    return cast(
+        GuestGalleryResponse,
+        await _verify_resolved_gallery_password(token=token, body=body, request=request, gallery=gallery, db=db),
+    )
+
+
+@limiter.limit("5/minute")
+async def _verify_resolved_gallery_password(
+    token: str, body: PasswordVerifyRequest, request: Request, gallery: Gallery, db: AsyncSession
+) -> GuestGalleryResponse:
 
     check_gallery_accessible(gallery)
 

@@ -357,9 +357,11 @@ def test_guest_verify_password_is_rate_limited():
     brute-forced through the web form."""
     guest_py = (PROJECT_ROOT / "app" / "frontend" / "guest.py").read_text()
 
-    handler_pos = guest_py.index("async def guest_verify_password")
-    decorator_block = guest_py[:handler_pos].rsplit("@router.post", 1)[1]
-    assert '@limiter.limit("5/minute")' in decorator_block
+    # Lookup-only windows do not verify a password. The post-lookup helper
+    # retains the real-attempt limit, verified through HTTP integration tests.
+    handler = guest_py[guest_py.index("async def guest_verify_password") :]
+    assert "await _verify_resolved_password(" in handler
+    assert '@limiter.limit("5/minute")\nasync def _verify_resolved_password' in handler
 
 
 def test_guest_password_i18n_keys_exist():

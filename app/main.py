@@ -5,13 +5,16 @@ from contextlib import asynccontextmanager
 from urllib.parse import urlsplit
 
 from fastapi import FastAPI, Request, Response
+from fastapi.exception_handlers import http_exception_handler
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 
 from app.admin.router import router as admin_router
+from app.auth.lookup_progress import RETRY_HEADER, RETRY_VALUE, LookupProgressMiddleware
 from app.auth.router import router as auth_router
 from app.config import settings
 from app.frontend.admin import router as frontend_admin_router
@@ -87,6 +90,7 @@ class LocaleMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(ImageAdmissionMiddleware)
+app.add_middleware(LookupProgressMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(CSRFMiddleware)
 app.add_middleware(LocaleMiddleware)
@@ -112,6 +116,27 @@ app.include_router(frontend_galleries_router)
 app.include_router(frontend_admin_router)
 app.include_router(frontend_setup_router)
 app.include_router(frontend_legal_router)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def lookup_http_error(request: Request, error: StarletteHTTPException) -> Response:
+    """A first legacy visit can span windows without exposing credentials in URLs."""
+    from starlette._utils import get_route_path
+
+    path = get_route_path(request.scope)
+    if (
+        error.status_code == 503
+        and (error.headers or {}).get(RETRY_HEADER) == RETRY_VALUE
+        and request.method == "GET"
+        and request.headers.get("HX-Request") != "true"
+        and "application/json" not in request.headers.get("accept", "")
+        and len(path.rstrip("/").split("/")) == 3
+        and path.startswith("/g/")
+    ):
+        from app.frontend.deps import templates
+
+        return templates.TemplateResponse(request, "guest/lookup_wait.html", {}, status_code=503, headers=error.headers)
+    return await http_exception_handler(request, error)
 
 
 @app.exception_handler(StorageQuotaExceeded)

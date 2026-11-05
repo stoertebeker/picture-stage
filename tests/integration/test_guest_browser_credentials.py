@@ -1,7 +1,8 @@
 """Real HTML unlock → HttpOnly cookie → grid / selection / completion boundary."""
 
 import uuid
-from unittest.mock import AsyncMock
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -163,6 +164,9 @@ async def test_cookie_is_expiring_gallery_bound_and_epoch_bound(client, db, owne
     for surface in ("gallery-images", "images", "selections"):
         denied = await client.get(f"/g/{token}/{surface}")
         assert denied.status_code == 403 and "private-proof.jpg" not in denied.text
+    gate = await client.get(f"/g/{token}")
+    assert gate.status_code == 200 and "data-lookup-password" in gate.text
+    assert "private-proof.jpg" not in gate.text
     selected = await client.post(
         f"/g/{token}/selections",
         json={"image_id": str(image.id), "action": "select"},
@@ -171,6 +175,36 @@ async def test_cookie_is_expiring_gallery_bound_and_epoch_bound(client, db, owne
     assert selected.status_code == 403
     completed = await client.post(f"/g/{token}/complete", json={}, headers={creds.CSRF_HEADER: guest_csrf(unlocked)})
     assert completed.status_code == 404
+
+
+async def test_password_success_canonical_get_reuses_fenced_grant_without_new_admission(client, db, owner):
+    gallery, _image, token = await _gallery(db, owner)
+    unlocked = await password_form(client, f"/g/{token}", "old-password")
+    cookie = client.cookies.get(creds.cookie_name(gallery.id))
+    csrf = guest_csrf(unlocked)
+    with patch("app.frontend.guest.create_share_session", side_effect=AssertionError("unexpected admission")):
+        viewer = await client.get(f"/g/{token}")
+    assert viewer.status_code == 200
+    assert "private-proof.jpg" in viewer.text
+    assert "data-lookup-password" not in viewer.text
+    assert client.cookies.get(creds.cookie_name(gallery.id)) == cookie
+    assert guest_csrf(viewer) == csrf
+    assert await db.scalar(select(func.count(ShareSession.id))) == 1
+
+
+async def test_completed_grant_renders_completed_view_and_reopened_gallery_requires_new_visit(client, db, owner):
+    gallery, _image, token = await _gallery(db, owner)
+    unlocked = await password_form(client, f"/g/{token}", "old-password")
+    session_id = uuid.UUID(response_session_id(unlocked))
+    await db.execute(update(ShareSession).where(ShareSession.id == session_id).values(completed_at=datetime.now(UTC)))
+    await db.execute(update(Gallery).where(Gallery.id == gallery.id).values(status=GalleryStatus.completed))
+    await db.commit()
+    assert "data-lookup-password" not in (await client.get(f"/g/{token}")).text
+    await db.execute(update(Gallery).where(Gallery.id == gallery.id).values(status=GalleryStatus.shared))
+    await db.commit()
+    gate = await client.get(f"/g/{token}")
+    assert gate.status_code == 200 and "data-lookup-password" in gate.text
+    assert await db.scalar(select(func.count(ShareSession.id))) == 1
 
 
 async def test_password_post_requires_gallery_bound_challenge_before_session_switch(client, db, owner):

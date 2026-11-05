@@ -13,9 +13,12 @@ Design notes:
 - Tables are dropped+created around every test for full isolation.
 """
 
+import runpy
+
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
@@ -105,3 +108,12 @@ async def owner(db) -> User:
 @pytest_asyncio.fixture
 async def other_user(db) -> User:
     return await make_user(db, "intruder@test.local")
+
+
+@pytest_asyncio.fixture
+async def gallery_lookup_classifier(db):
+    """create_all omits migration triggers; install the production classifier."""
+    migration = runpy.run_path("alembic/versions/0017_bound_gallery_token_lookup.py")
+    await db.execute(text(migration["CLASSIFY_FUNCTION"]))
+    await db.execute(text(migration["CLASSIFY_TRIGGER"]))
+    await db.commit()

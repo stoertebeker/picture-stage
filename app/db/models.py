@@ -137,6 +137,14 @@ class User(TimestampMixin, Base):
 
 class Gallery(TimestampMixin, Base):
     __tablename__ = "galleries"
+    __table_args__ = (
+        Index("ix_galleries_token_candidates", "share_token_lookup", "id"),
+        Index(
+            "ix_galleries_legacy_token_ids",
+            "id",
+            postgresql_where=text("share_token_lookup IS NULL AND share_token_hash IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=generate_uuid)
     owner_id: Mapped[uuid.UUID] = mapped_column(

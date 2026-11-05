@@ -48,6 +48,7 @@
         <span class="mx-2">|</span>
         <a href="/legal/datenschutz" class="hover:underline">{{ t('nav.datenschutz') }}</a>
     </footer>
+    <script src="{{ request.scope.get('root_path', '') }}{{ asset('js/lookup-retry.js') }}"></script>
     <script src="{{ asset('js/htmx.min.js') }}"></script>
     <script src="{{ asset('js/components.js') }}"></script>
     <script src="{{ asset('js/alpine.min.js') }}"></script>

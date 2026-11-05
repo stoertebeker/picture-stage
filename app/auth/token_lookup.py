@@ -11,6 +11,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.lookup_progress import RETRY_HEADER, RETRY_VALUE
 from app.auth.passwords import verify_token
 from app.auth.tokens import verification_lookup_id
 from app.db.models import PendingSignup
@@ -38,7 +39,7 @@ async def legacy_token_scan(kind: LegacyTokenKind) -> AsyncIterator[None]:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Token lookup is busy; please retry",
-                headers={"Retry-After": "1"},
+                headers={"Retry-After": "1", RETRY_HEADER: RETRY_VALUE, "Cache-Control": "private, no-store"},
             )
         _legacy_running[kind] += 1
     try:

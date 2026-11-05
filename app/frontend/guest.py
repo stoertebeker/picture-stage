@@ -1,7 +1,7 @@
 """Frontend guest router - serves HTML gallery viewer for share-link visitors."""
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse
@@ -11,11 +11,13 @@ from app.config import settings
 from app.db.models import (
     Gallery,
     GalleryStatus,
+    ShareSession,
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.guest.credentials import (
     PRIVATE_HEADERS,
+    browser_cookie_session_id,
     browser_session,
     password_challenge,
     private_guest_response,
@@ -28,6 +30,7 @@ from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
     create_share_session,
+    current_share_session,
     is_gallery_expired,
     load_sorted_filtered_images,
     require_gallery_read_access,
@@ -121,7 +124,23 @@ async def guest_viewer(
         )
 
     if gallery.password_hash is not None:
-        # Show password gate — no session until the password is verified
+        # A successful password POST already issued a grant. Reuse it for the
+        # canonical GET only after a fresh shared lifecycle/token/session fence;
+        # rendering this path must never upgrade to session-admission locks.
+        session_id = browser_cookie_session_id(request, gallery.id)
+        if session_id is not None:
+            try:
+                gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
+            except HTTPException as exc:
+                if exc.status_code != status.HTTP_403_FORBIDDEN:
+                    raise
+            else:
+                session = await current_share_session(gallery, session_id, db)
+                if session is not None and (session.completed_at is None or gallery.status == GalleryStatus.completed):
+                    return await _render_admitted_gallery(request, gallery, token, session, db)
+            # A revoked/expired grant or a completed visit after reopening must
+            # pass the password gate again before admission of a new visit.
+            await db.commit()
         return _render_password_gate(request, gallery, token)
 
     return await _render_gallery_viewer(request, gallery, token, db)
@@ -189,6 +208,13 @@ async def _render_gallery_viewer(
         await db.commit()
         return response
 
+    return await _render_admitted_gallery(request, gallery, token, session, db)
+
+
+async def _render_admitted_gallery(
+    request: Request, gallery: Gallery, token: str, session: ShareSession, db: AsyncSession
+) -> HTMLResponse:
+    """Render under an already-held access/admission fence without new writes."""
     cookie, csrf = browser_session(gallery.id, session.id, request=request)
     images = await _load_images(gallery, db)
     total = len(images)
@@ -296,7 +322,6 @@ async def guest_gallery_images(
 
 
 @router.post("/{token}/verify-password", response_class=HTMLResponse)
-@limiter.limit("5/minute")
 async def guest_verify_password(
     token: str,
     request: Request,
@@ -318,4 +343,14 @@ async def guest_verify_password(
     check_gallery_accessible(gallery)
 
     verify_password_csrf(request, gallery.id, guest_csrf_token)
+    return cast(
+        HTMLResponse,
+        await _verify_resolved_password(request=request, gallery=gallery, token=token, db=db, password=password),
+    )
+
+
+@limiter.limit("5/minute")
+async def _verify_resolved_password(
+    request: Request, gallery: Gallery, token: str, db: AsyncSession, password: str
+) -> HTMLResponse:
     return await _render_gallery_viewer(request, gallery, token, db, password=password)

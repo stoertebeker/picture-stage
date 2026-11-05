@@ -14,6 +14,8 @@ from app.db.models import Gallery, GalleryStatus, PendingSignup, UserStatus
 from app.guest import service as guest_service
 from app.security.middleware import _mint_csrf_token
 
+pytestmark = pytest.mark.usefixtures("gallery_lookup_classifier")
+
 
 def _pending(email: str, token: str, *, indexed: bool) -> PendingSignup:
     digest, salt = hash_token(token)
@@ -166,7 +168,8 @@ async def test_legacy_paths_have_separate_bounded_capacity_and_release(db, owner
         with pytest.raises(HTTPException) as exc:
             await guest_service.resolve_gallery_by_token(token, db)
         assert exc.value.status_code == 503
-        assert exc.value.headers == {"Retry-After": "1"}
+        assert exc.value.headers["Retry-After"] == "1"
+        assert exc.value.headers["X-Picture-Stage-Lookup"] == "before-effects"
         assert await resolve_pending_signup(token, db) is not None
     async with legacy_token_scan("verification"):
         with pytest.raises(HTTPException) as exc:

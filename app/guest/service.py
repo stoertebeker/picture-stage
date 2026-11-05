@@ -18,6 +18,7 @@ from sqlalchemy import delete, exists, func, or_, select, text, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.auth.lookup_progress import LOOKUP_WINDOW, LookupProgress
 from app.auth.passwords import verify_password, verify_token
 from app.auth.token_lookup import legacy_token_scan, token_locator
 from app.config import settings
@@ -42,13 +43,17 @@ from app.selections.service import get_current_selections
 
 
 async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
-    """Resolve an indexed token, retaining a bounded scan for legacy links.
+    """Resolve fixed indexed/legacy windows, continuing across HTTP requests.
 
-    Joins the owner and requires a login-allowed status so a disabled/pending
-    photographer's share links stop resolving (cxs). The check lives in the
-    query, so every guest endpoint inherits it via this single resolver, and an
-    unlock restores access without touching share sessions.
+    Select IDs before access filters: a large inactive population must not make
+    even an invalid token scan unbounded rows. Migration 0017 and its write
+    trigger keep unrecoverable/stale locators in the partial legacy ID index.
+    Hints never authorize access and no lookup writes or row locks are taken.
     """
+    from urllib.parse import quote
+
+    progress = LookupProgress("gallery", token, f"/g/{quote(token, safe='')}")
+    cursor = progress.read()
     query = (
         select(Gallery)
         .join(User, User.id == Gallery.owner_id)
@@ -57,26 +62,51 @@ async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | No
             Gallery.status.in_([GalleryStatus.shared, GalleryStatus.completed]),
             User.status.in_(LOGIN_ALLOWED_STATUSES),
         )
+        .execution_options(populate_existing=True)
     )
-    result = await db.execute(query.where(Gallery.share_token_lookup == token_locator(token)))
-    for gallery in result.scalars():
-        if gallery.share_token_hash and gallery.share_token_salt:
-            if verify_token(token, gallery.share_token_hash, gallery.share_token_salt):
-                return gallery
+    if cursor is not None and cursor[0] == "h":
+        hinted = await db.scalar(query.where(Gallery.id == uuid.UUID(hex=cursor[1])))
+        if hinted is not None and hinted.share_token_hash and hinted.share_token_salt:
+            if verify_token(token, hinted.share_token_hash, hinted.share_token_salt):
+                return hinted
+        cursor = None
 
-    # Older galleries can lack replayable plaintext, or have a stale locator
-    # after an old app instance changes a link during a rolling upgrade. Their
-    # salted verifier remains authoritative. Limit concurrent fallback scans and
-    # fetch bounded batches; per-scan verifier work is still linear.
+    async def check_window(ids: list[uuid.UUID]) -> Gallery | None:
+        if not ids:
+            return None
+        candidates = (await db.scalars(query.where(Gallery.id.in_(ids)))).all()
+        for gallery in candidates:
+            if gallery.share_token_hash and gallery.share_token_salt:
+                if verify_token(token, gallery.share_token_hash, gallery.share_token_salt):
+                    progress.save("h", gallery.id.hex)
+                    return gallery
+        return None
+
+    if cursor is None or cursor[0] == "i":
+        indexed = select(Gallery.id).where(Gallery.share_token_lookup == token_locator(token))
+        if cursor is not None:
+            indexed = indexed.where(Gallery.id > uuid.UUID(hex=cursor[1]))
+        ids = list((await db.scalars(indexed.order_by(Gallery.id).limit(LOOKUP_WINDOW + 1))).all())
+        found = await check_window(ids[:LOOKUP_WINDOW])
+        if found is not None:
+            return found
+        if len(ids) > LOOKUP_WINDOW:
+            progress.retry("i", ids[LOOKUP_WINDOW - 1].hex)
+        cursor = None
+
+    # The process admission cap is additional protection; each admitted request
+    # itself performs only a fixed window, with no open stream across retries.
     async with legacy_token_scan("gallery"):
-        legacy = await db.stream(query.execution_options(yield_per=100))
-        try:
-            async for gallery in legacy.scalars():
-                if gallery.share_token_hash and gallery.share_token_salt:
-                    if verify_token(token, gallery.share_token_hash, gallery.share_token_salt):
-                        return gallery
-        finally:
-            await legacy.close()
+        legacy = select(Gallery.id).where(Gallery.share_token_lookup.is_(None), Gallery.share_token_hash.isnot(None))
+        if cursor is not None:
+            legacy = legacy.where(Gallery.id > uuid.UUID(hex=cursor[1]))
+        ids = list((await db.scalars(legacy.order_by(Gallery.id).limit(LOOKUP_WINDOW + 1))).all())
+        found = await check_window(ids[:LOOKUP_WINDOW])
+        if found is not None:
+            return found
+        if len(ids) > LOOKUP_WINDOW:
+            progress.retry("l", ids[LOOKUP_WINDOW - 1].hex)
+    progress.clear()
     return None
 
 

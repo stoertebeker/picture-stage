@@ -9,6 +9,18 @@
  * Jinja template (CSP blocks it). See docs/design/build.md.
  */
 
+// Replay only a lookup response guaranteed to precede all application effects.
+// Keep the exact body/headers and await retries inside the caller's save queue.
+async function guestLookupFetch(url, options) {
+    for (;;) {
+        const response = await fetch(url, options);
+        if (response.status !== 503 || response.headers?.get('X-Picture-Stage-Lookup') !== 'before-effects') {
+            return response;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+}
+
 // Upload zone for gallery detail. The upload request only persists originals;
 // preview generation continues in background workers and is reflected by the
 // polling owner grid. Keep one state machine across both phases so "complete"
@@ -612,7 +624,7 @@ function guestViewerComponent() {
             };
             if (comment !== undefined) body.comment = comment;
             try {
-                const response = await fetch(`${this.galleryUrl}/selections`, {
+                const response = await guestLookupFetch(`${this.galleryUrl}/selections`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Guest-CSRF-Token': this.guestCsrfToken },
                     body: JSON.stringify(body),
@@ -634,7 +646,7 @@ function guestViewerComponent() {
             try {
                 await Promise.all(Object.values(this.selectionQueues));
                 if (this.selectionError) return;
-                const response = await fetch(`${this.galleryUrl}/complete`, {
+                const response = await guestLookupFetch(`${this.galleryUrl}/complete`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'X-Guest-CSRF-Token': this.guestCsrfToken },
                     body: JSON.stringify({}),
