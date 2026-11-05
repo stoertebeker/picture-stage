@@ -4,6 +4,7 @@ import json
 import pathlib
 from html.parser import HTMLParser
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 from starlette.requests import Request
 
@@ -268,8 +269,6 @@ def test_guest_selection_api_requires_explicit_session_id():
     components_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "components.js").read_text()
 
     assert "session_id: uuid.UUID" in schema_py
-    assert "ShareSession.id == body.session_id" in router_py
-    assert "ShareSession.gallery_id == gallery.id" in router_py
     # Read-only is now gallery-wide, not per-session.
     assert "gallery.status == GalleryStatus.completed" in router_py
     assert "session_id: this.sessionId" in components_js
@@ -481,9 +480,13 @@ async def test_guest_grid_route_returns_flat_second_page(monkeypatch):
     async def fake_load_images(gallery, db, sort_by, sort_dir, filter_mode):
         return images
 
+    async def fake_read_access(gallery, session_id, db, *, token):
+        return gallery
+
     monkeypatch.setattr(guest_frontend, "resolve_gallery_by_token", fake_resolve_gallery_by_token)
     monkeypatch.setattr(guest_frontend, "check_gallery_accessible", lambda gallery: None)
     monkeypatch.setattr(guest_frontend, "_load_images", fake_load_images)
+    monkeypatch.setattr(guest_frontend, "require_gallery_read_access", fake_read_access)
     request = Request(
         {
             "type": "http",
@@ -505,7 +508,7 @@ async def test_guest_grid_route_returns_flat_second_page(monkeypatch):
         filter=ImageFilter.all,
         offset=30,
         session_id=None,
-        db=object(),  # type: ignore[arg-type]
+        db=AsyncMock(),
     )
     html = response.body.decode()
 

@@ -27,6 +27,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.galleries.authorization import lock_owned_gallery_authorization
 from app.galleries.deletion import purge_gallery
 from app.galleries.lifecycle import lock_gallery
 from app.galleries.password_hashing import GalleryPasswordBusy, hash_gallery_password
@@ -442,6 +443,8 @@ async def create_share_link(
     token = secrets.token_urlsafe(32)
     token_hash, token_salt = hash_token(token)
 
+    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
+    gallery.authorization_epoch += 1
     gallery.share_token_hash = token_hash
     gallery.share_token_salt = token_salt
     gallery.share_token = token
@@ -472,6 +475,8 @@ async def revoke_share_link(
     """Revoke the share link and return updated share modal partial."""
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
+    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
+    gallery.authorization_epoch += 1
     gallery.share_token_hash = None
     gallery.share_token_salt = None
     gallery.share_token = None
@@ -499,20 +504,23 @@ async def set_gallery_password(
     """Set, change or remove the gallery password without touching the share token.
 
     Re-sharing would rotate the token and kill the magic link already sent to
-    the model; this endpoint only swaps the password hash. An empty password
-    removes the protection (used by the explicit remove form in the modal).
+    the model; this endpoint updates the password and authorization generation
+    while preserving that link. An empty password removes the protection.
     """
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
     form = await request.form()
     password = str(form.get("password", "")).strip() or None
     try:
-        gallery.password_hash = await hash_gallery_password(password) if password else None
+        password_hash = await hash_gallery_password(password) if password else None
     except GalleryPasswordBusy as exc:
         if request.headers.get("HX-Request") == "true":
             return _password_busy_response(request, exc)
         raise
 
+    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
+    gallery.password_hash = password_hash
+    gallery.authorization_epoch += 1
     await db.commit()
     await db.refresh(gallery)
 

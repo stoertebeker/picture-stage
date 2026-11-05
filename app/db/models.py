@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     CheckConstraint,
     DateTime,
@@ -142,6 +143,7 @@ class Gallery(TimestampMixin, Base):
     share_token_lookup: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    authorization_epoch: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
 
     watermark_config: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
 
@@ -244,6 +246,7 @@ class ShareSession(Base):
     gallery_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("galleries.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    authorization_epoch: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0, server_default="0")
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)

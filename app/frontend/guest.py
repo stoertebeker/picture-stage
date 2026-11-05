@@ -8,18 +8,17 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, sta
 from fastapi.responses import HTMLResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.passwords import verify_password
 from app.config import settings
 from app.db.models import (
     Gallery,
     GalleryStatus,
-    ShareSession,
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
+    create_share_session,
     is_gallery_expired,
     load_sorted_filtered_images,
     require_gallery_read_access,
@@ -146,23 +145,36 @@ def _render_password_gate(
     )
 
 
-async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str, db: AsyncSession) -> HTMLResponse:
+async def _render_gallery_viewer(
+    request: Request, gallery: Gallery, token: str, db: AsyncSession, *, password: str | None = None
+) -> HTMLResponse:
     """Create a share session and render the full gallery viewer page."""
-    session = ShareSession(
-        gallery_id=gallery.id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent", "")[:512],
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
+    try:
+        gallery, session = await create_share_session(token, gallery.id, request, db, password=password)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_401_UNAUTHORIZED:
+            response = _render_password_gate(
+                request,
+                gallery,
+                token,
+                error_key="guest.password_error" if password is not None else None,
+                status_code=status.HTTP_401_UNAUTHORIZED if password is not None else status.HTTP_200_OK,
+            )
+        elif exc.status_code == 410 and password is None:
+            response = templates.TemplateResponse(
+                request, "guest/expired.html", {"request": request, "gallery_name": gallery.name}, status_code=410
+            )
+        else:
+            raise
+        await db.commit()
+        return response
 
     images = await _load_images(gallery, db)
     total = len(images)
     selected_count = sum(1 for img in images if img["selected"])
     favorited_count = sum(1 for img in images if img["favorited"])
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "guest/viewer.html",
         {
@@ -193,6 +205,8 @@ async def _render_gallery_viewer(request: Request, gallery: Gallery, token: str,
             "filter": "all",
         },
     )
+    await db.commit()
+    return response
 
 
 @router.get("/{token}/gallery-images", response_class=HTMLResponse)
@@ -217,7 +231,7 @@ async def guest_gallery_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
-    await require_gallery_read_access(gallery, session_id, db)
+    gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
     images = await _load_images(gallery, db, sort_by, sort_dir, filter)
     total = len(images)
@@ -230,7 +244,7 @@ async def guest_gallery_images(
     # the order unchanged and the afterSwap handler ignores it.
     image_order = [img["id"] for img in images] if offset == 0 else None
 
-    return templates.TemplateResponse(
+    response = templates.TemplateResponse(
         request,
         "guest/_image_grid.html",
         {
@@ -255,6 +269,8 @@ async def guest_gallery_images(
             "has_more": total > offset + GALLERY_PAGE_SIZE,
         },
     )
+    await db.commit()
+    return response
 
 
 @router.post("/{token}/verify-password", response_class=HTMLResponse)
@@ -278,9 +294,4 @@ async def guest_verify_password(
 
     check_gallery_accessible(gallery)
 
-    if not gallery.password_hash or not verify_password(password, gallery.password_hash):
-        return _render_password_gate(
-            request, gallery, token, error_key="guest.password_error", status_code=status.HTTP_401_UNAUTHORIZED
-        )
-
-    return await _render_gallery_viewer(request, gallery, token, db)
+    return await _render_gallery_viewer(request, gallery, token, db, password=password)

@@ -12,12 +12,12 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.auth.passwords import verify_token
+from app.auth.passwords import verify_password, verify_token
 from app.auth.token_lookup import legacy_token_scan, token_locator
 from app.db.models import (
     LOGIN_ALLOWED_STATUSES,
@@ -28,6 +28,7 @@ from app.db.models import (
     ShareSession,
     User,
 )
+from app.galleries.lifecycle import lock_gallery
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.security.signing import sign_url
 from app.selections.schemas import SelectionState
@@ -73,17 +74,21 @@ async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | No
     return None
 
 
-async def lock_gallery_for_review(token: str, gallery_id: uuid.UUID, db: AsyncSession) -> Gallery:
-    """Serialize review writes on one gallery, then recheck current access.
+async def lock_gallery_for_review(
+    token: str, gallery_id: uuid.UUID, db: AsyncSession, *, shared: bool = False
+) -> Gallery:
+    """Lock one gallery, then recheck current access.
 
     Call after storage lifecycle fences and, for selections, the event-budget
     fence. Never lock the token resolver's legacy scan. A row lock also orders
     review writes against owner status UPDATEs, including completion/reopening.
     The separate post-lock query sees access changes committed while we waited.
+    Shared mode admits readers/session issuers together while excluding owner
+    credential updates. Review mutations keep the exclusive default.
     Commit/rollback releases the lock; callers must not mutate before acquiring it.
     """
     with db.no_autoflush:
-        locked_id = await db.scalar(select(Gallery.id).where(Gallery.id == gallery_id).with_for_update())
+        locked_id = await db.scalar(select(Gallery.id).where(Gallery.id == gallery_id).with_for_update(read=shared))
         if locked_id is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
         gallery = await db.scalar(
@@ -105,6 +110,60 @@ async def lock_gallery_for_review(token: str, gallery_id: uuid.UUID, db: AsyncSe
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     check_gallery_accessible(gallery)
     return gallery
+
+
+async def lock_gallery_for_guest_read(token: str, gallery_id: uuid.UUID, db: AsyncSession) -> Gallery:
+    """Keep credential changes outside session admission and data rendering.
+
+    Multiple readers/session issuers may proceed together. Callers materialize
+    their data then commit before returning; no upgrade to an exclusive lock.
+    """
+    await lock_gallery(db, gallery_id, shared=True)
+    return await lock_gallery_for_review(token, gallery_id, db, shared=True)
+
+
+async def create_share_session(
+    token: str,
+    gallery_id: uuid.UUID,
+    request: Request,
+    db: AsyncSession,
+    *,
+    password: str | None = None,
+) -> tuple[Gallery, ShareSession]:
+    """Validate current credentials and stamp their epoch in one transaction.
+
+    Flush only: the caller commits after preparing the response's protected
+    data, while the shared gallery lock still excludes credential changes.
+    """
+    gallery = await lock_gallery_for_guest_read(token, gallery_id, db)
+    if gallery.password_hash is not None:
+        if password is None or not verify_password(password, gallery.password_hash):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
+    elif password is not None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
+    session = ShareSession(
+        gallery_id=gallery.id,
+        authorization_epoch=gallery.authorization_epoch,
+        ip_address=request.client.host if request.client else None,
+        user_agent=request.headers.get("user-agent", "")[:512],
+    )
+    db.add(session)
+    await db.flush()
+    return gallery, session
+
+
+async def current_share_session(gallery: Gallery, session_id: uuid.UUID, db: AsyncSession) -> ShareSession | None:
+    """Preserve old sessions for attribution but reject their obsolete grants."""
+    session: ShareSession | None = await db.scalar(
+        select(ShareSession)
+        .where(
+            ShareSession.id == session_id,
+            ShareSession.gallery_id == gallery.id,
+            ShareSession.authorization_epoch == gallery.authorization_epoch,
+        )
+        .execution_options(populate_existing=True)
+    )
+    return session
 
 
 def is_gallery_expired(gallery: Gallery) -> bool:
@@ -129,7 +188,9 @@ async def require_gallery_read_access(
     gallery: Gallery,
     session_id: uuid.UUID | None,
     db: AsyncSession,
-) -> None:
+    *,
+    token: str,
+) -> Gallery:
     """Require an unlocked gallery session before returning password-protected data.
 
     The share token identifies the gallery, but a configured password is a second
@@ -137,20 +198,16 @@ async def require_gallery_read_access(
     with the token alone; protected galleries require a session created by the
     successful password-verification flow.
     """
+    gallery = await lock_gallery_for_guest_read(token, gallery.id, db)
     if gallery.password_hash is None:
-        return
+        return gallery
 
     if session_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
 
-    result = await db.execute(
-        select(ShareSession.id).where(
-            ShareSession.id == session_id,
-            ShareSession.gallery_id == gallery.id,
-        )
-    )
-    if result.scalar_one_or_none() is None:
+    if await current_share_session(gallery, session_id, db) is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
+    return gallery
 
 
 def parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:

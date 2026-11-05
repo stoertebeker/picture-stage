@@ -7,7 +7,6 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.passwords import verify_password
 from app.config import settings
 from app.db.models import (
     Gallery,
@@ -15,7 +14,6 @@ from app.db.models import (
     Image,
     SelectionAction,
     SelectionEvent,
-    ShareSession,
     User,
 )
 from app.db.session import get_db
@@ -23,7 +21,10 @@ from app.galleries.lifecycle import lock_gallery, lock_images
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
+    create_share_session,
+    current_share_session,
     load_sorted_filtered_images,
+    lock_gallery_for_guest_read,
     lock_gallery_for_review,
     require_gallery_read_access,
     resolve_gallery_by_token,
@@ -87,6 +88,7 @@ async def get_shared_gallery(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
+    gallery = await lock_gallery_for_guest_read(token, gallery.id, db)
 
     image_count_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
     image_count = image_count_result.scalar() or 0
@@ -95,23 +97,18 @@ async def get_shared_gallery(
 
     session_id = None
     if not requires_password:
-        session = ShareSession(
-            gallery_id=gallery.id,
-            ip_address=request.client.host if request.client else None,
-            user_agent=request.headers.get("user-agent", "")[:512],
-        )
-        db.add(session)
-        await db.commit()
-        await db.refresh(session)
+        gallery, session = await create_share_session(token, gallery.id, request, db)
         session_id = session.id
 
-    return GuestGalleryResponse(
+    response = GuestGalleryResponse(
         gallery_id=gallery.id,
         name=gallery.name,
         image_count=image_count,
         requires_password=requires_password,
         session_id=session_id,
     )
+    await db.commit()
+    return response
 
 
 @router.post("/{token}/verify-password", response_model=GuestGalleryResponse)
@@ -128,28 +125,20 @@ async def verify_gallery_password(
 
     check_gallery_accessible(gallery)
 
-    if not gallery.password_hash or not verify_password(body.password, gallery.password_hash):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
-
-    session = ShareSession(
-        gallery_id=gallery.id,
-        ip_address=request.client.host if request.client else None,
-        user_agent=request.headers.get("user-agent", "")[:512],
-    )
-    db.add(session)
-    await db.commit()
-    await db.refresh(session)
+    gallery, session = await create_share_session(token, gallery.id, request, db, password=body.password)
 
     image_count_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
     image_count = image_count_result.scalar() or 0
 
-    return GuestGalleryResponse(
+    response = GuestGalleryResponse(
         gallery_id=gallery.id,
         name=gallery.name,
         image_count=image_count,
         requires_password=True,
         session_id=session.id,
     )
+    await db.commit()
+    return response
 
 
 @router.get("/{token}/images", response_model=list[GuestImageResponse])
@@ -166,7 +155,7 @@ async def list_shared_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
-    await require_gallery_read_access(gallery, session_id, db)
+    gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
     # Selection map is unused here (the JSON API omits selection fields), but the
     # shared loader always materialises it from a single query (d7z).
@@ -186,6 +175,7 @@ async def list_shared_images(
             )
         )
 
+    await db.commit()
     return guest_images
 
 
@@ -216,13 +206,7 @@ async def create_selection_event(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review already completed")
 
     # Session is still resolved for event attribution / audit (one row per visit).
-    session_result = await db.execute(
-        select(ShareSession).where(
-            ShareSession.id == body.session_id,
-            ShareSession.gallery_id == gallery.id,
-        )
-    )
-    session = session_result.scalar_one_or_none()
+    session = await current_share_session(gallery, body.session_id, db)
     if session is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
 
@@ -230,10 +214,8 @@ async def create_selection_event(
     gallery = await lock_gallery_for_review(token, gallery.id, db)
     if gallery.status == GalleryStatus.completed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review already completed")
-    session_exists = await db.scalar(
-        select(ShareSession.id).where(ShareSession.id == body.session_id, ShareSession.gallery_id == gallery.id)
-    )
-    if session_exists is None:
+    session = await current_share_session(gallery, body.session_id, db)
+    if session is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
     try:
         await assert_selection_budget(gallery.id, db)
@@ -262,20 +244,22 @@ async def get_selections(
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     check_gallery_accessible(gallery)
-    await require_gallery_read_access(gallery, session_id, db)
+    gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
     selections = await get_current_selections(gallery.id, db)
 
     image_count_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
     total = image_count_result.scalar() or 0
 
-    return SelectionSummary(
+    response = SelectionSummary(
         total_images=total,
         selected_count=sum(1 for s in selections if s.selected),
         favorited_count=sum(1 for s in selections if s.favorited),
         commented_count=sum(1 for s in selections if s.comment is not None),
         selections=selections,
     )
+    await db.commit()
+    return response
 
 
 @router.post("/{token}/complete", response_model=CompleteReviewResponse)
@@ -292,12 +276,7 @@ async def complete_review(
 
     await lock_gallery(db, gallery.id, shared=True)
     gallery = await lock_gallery_for_review(token, gallery.id, db)
-    result = await db.execute(
-        select(ShareSession)
-        .where(ShareSession.id == session_id, ShareSession.gallery_id == gallery.id)
-        .execution_options(populate_existing=True)
-    )
-    session = result.scalar_one_or_none()
+    session = await current_share_session(gallery, session_id, db)
     if session is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Session not found")
 

@@ -11,6 +11,7 @@ from app.auth.token_lookup import token_locator
 from app.config import settings
 from app.db.models import Gallery, GalleryStatus, User
 from app.db.session import get_db
+from app.galleries.authorization import lock_owned_gallery_authorization
 from app.galleries.password_hashing import hash_gallery_password
 
 router = APIRouter(prefix="/api/v1/galleries", tags=["sharing"])
@@ -58,6 +59,8 @@ async def create_share_link(
     token = secrets.token_urlsafe(32)
     token_hash, token_salt = hash_token(token)
 
+    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
+    gallery.authorization_epoch += 1
     gallery.share_token_hash = token_hash
     gallery.share_token_salt = token_salt
     gallery.share_token = token
@@ -87,6 +90,8 @@ async def revoke_share_link(
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
+    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
+    gallery.authorization_epoch += 1
     gallery.share_token_hash = None
     gallery.share_token_salt = None
     gallery.share_token = None

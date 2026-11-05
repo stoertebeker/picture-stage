@@ -199,6 +199,22 @@ stored images in other formats cannot be used to generate new previews.
 | GET | `/g/{token}/selections` | Current selection state |
 | POST | `/g/{token}/complete` | Mark review as done |
 
+Guest sessions carry the gallery's current authorization generation. Setting,
+changing or removing a password, creating/rotating a share link and revoking a
+link advance that generation atomically. Previous sessions can no longer write
+selections or complete a review, and cannot read password-protected data. A
+fresh password verification or passwordless visit creates a current session.
+Removing password protection restores token-only reads. Historical sessions and
+their selection events remain stored; password changes preserve the gallery
+link. Migration `0011` initializes existing galleries and sessions at generation
+zero, so invalidation starts with subsequent authorization changes.
+
+Password verification, session issuance and guest data rendering are ordered
+against authorization changes with gallery row locks. Previously signed image
+URLs retain their existing validity: one hour for thumbnails and fifteen
+minutes for previews. Session invalidation prevents issuing new URLs through
+the protected guest routes; it does not revoke already issued media signatures.
+
 Selection writes and review completion lock the specific gallery row until
 commit, also ordering them against owner status changes. Once completed, new
 selections return 403. Repeated completion requests, including fresh sessions
