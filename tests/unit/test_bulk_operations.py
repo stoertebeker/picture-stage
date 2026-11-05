@@ -95,21 +95,6 @@ class TestGalleryDuplicateEndpoint:
         assert "Gallery(" in block
         assert "share_token" not in block.split("Gallery(")[1].split(")")[0]
 
-    def test_copies_storage_files(self) -> None:
-        with open("app/galleries/router.py") as f:
-            source = f.read()
-        idx = source.index("duplicate_gallery")
-        block = source[idx : idx + 2000]
-        assert "storage.copy" in block
-
-    def test_generates_new_storage_keys(self) -> None:
-        with open("app/galleries/router.py") as f:
-            source = f.read()
-        idx = source.index("duplicate_gallery")
-        block = source[idx : idx + 3000]
-        assert "new_original_key" in block
-        assert "new_preview_key" in block
-
     def test_default_name_has_kopie_suffix(self) -> None:
         with open("app/galleries/router.py") as f:
             source = f.read()

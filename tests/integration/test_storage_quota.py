@@ -13,7 +13,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config import settings
-from app.db.models import Image, ImageProcessingStatus, StorageAllocation, StorageUsage, UserStatus
+from app.db.models import Gallery, Image, ImageProcessingStatus, StorageAllocation, StorageUsage, UserStatus
 from app.images import preview_worker
 from app.images.upload_batch import UploadBatch
 from app.main import app
@@ -232,6 +232,13 @@ async def test_duplicates_use_same_owner_quota_and_compensate_partial_copy(
     response = await client.post(f"/api/v1/galleries/{source.id}/duplicate", headers=auth_headers(owner), json={})
     assert response.status_code == 201, response.text
     assert (await _usage(owner.id))[1] == 8
+    duplicate = await db.get(Gallery, uuid.UUID(response.json()["id"]))
+    assert duplicate is not None
+    copied = _files(local_storage, duplicate)
+    assert len(copied) == len(retained) == 4
+    assert copied.keys().isdisjoint(retained)
+    assert sorted(copied.values()) == sorted(retained.values())
+    assert _files(local_storage, source) == retained
 
 
 async def test_user_delete_cleans_claim_with_uncommitted_gallery_id(client, db, owner, auth_headers, local_storage):
