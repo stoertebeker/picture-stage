@@ -14,11 +14,20 @@ from app.auth.utils import get_client_ip
 from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatus
 from app.db.session import get_db
 from app.notifications.service import notify_admins_signup, send_verification_email
+from app.security.captcha import require_signup_captcha, signup_challenge
 from app.security.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
+
+
+@router.get("/captcha/challenge")
+@limiter.limit("30/minute")
+async def captcha_challenge(request: Request) -> Response:
+    from fastapi.responses import JSONResponse
+
+    return JSONResponse(signup_challenge(), headers={"Cache-Control": "no-store"})
 
 
 @router.post("/signup", response_model=SignupResponse, status_code=status.HTTP_201_CREATED)
@@ -29,6 +38,8 @@ async def signup(request: Request, body: SignupRequest, db: AsyncSession = Depen
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Password must be at least 8 characters",
         )
+
+    await require_signup_captcha(body.altcha, db)
 
     # Account-enumeration guard (picture-stage-42q): an already-registered email
     # (as User OR PendingSignup) must NOT be revealed. Return the same neutral

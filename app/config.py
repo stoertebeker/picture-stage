@@ -3,13 +3,17 @@ from urllib.parse import urlsplit
 from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.security.captcha_config import captcha_secret
+
 # Sentinel default for crypto secrets. A production instance MUST override these
 # via environment; the validator below refuses to start otherwise.
 _INSECURE_SECRET_DEFAULT = "CHANGE_ME"  # noqa: S105
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", hide_input_in_errors=True
+    )
 
     app_name: str = "Picture-Stage"
     app_url: str = "http://localhost:8000"
@@ -172,6 +176,12 @@ class Settings(BaseSettings):
         if normalized not in {"production", "development", "test"}:
             raise ValueError("ENVIRONMENT must be production, development, or test")
         return normalized
+
+    @model_validator(mode="after")
+    def _require_captcha_secret(self) -> "Settings":
+        if self.captcha_enabled:
+            captcha_secret(self.altcha_secret_key, self.secret_key)
+        return self
 
     @model_validator(mode="after")
     def _require_https_in_production(self) -> "Settings":

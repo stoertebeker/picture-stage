@@ -34,7 +34,12 @@
     "account_disabled": "Dieses Konto wurde gesperrt. Bitte wende dich an einen Administrator.",
     "passwords_mismatch": "Passwörter stimmen nicht überein.",
     "password_too_short": "Passwort muss mindestens 8 Zeichen lang sein.",
-    "invalid_verify_token": "Ungültiger oder abgelaufener Bestätigungslink."
+    "invalid_verify_token": "Ungültiger oder abgelaufener Bestätigungslink.",
+    "captcha_invalid": "Bitte bestätige die Sicherheitsprüfung erneut und sende die Registrierung noch einmal ab.",
+    "captcha_unavailable": "Die Sicherheitsprüfung ist vorübergehend nicht verfügbar. Bitte versuche es erneut.",
+    "captcha_required": "Bitte bestätige die Sicherheitsprüfung vor der Registrierung.",
+    "captcha_client_error": "Die Sicherheitsprüfung konnte nicht geladen werden. Aktiviere JavaScript und nutze einen aktuellen Browser über HTTPS. Lade die Seite anschließend erneut.",
+    "captcha_retry": "Sicherheitsprüfung neu laden"
   },
   "setup": {
     "title": "Einrichtung – Picture-Stage",
@@ -310,6 +315,7 @@
     "password_submit": "Galerie öffnen",
     "password_error": "Das Passwort stimmt leider nicht — bitte prüfe es und versuch es noch einmal.",
     "password_privacy_note": "Deine Auswahl bleibt privat und ist nur für dich und deinen Fotografen sichtbar.",
+    "lookup_wait": "Die Galerie wird geladen …",
     "expired_title": "Galerie abgelaufen",
     "expired_text": "Der Zugangslink für diese Galerie ist leider nicht mehr gültig.",
     "expired_contact": "Bitte wenden Sie sich an den Fotografen, um einen neuen Link zu erhalten.",

@@ -10,6 +10,7 @@ authors = [
 ]
 
 dependencies = [
+    "altcha==2.3.0",
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic[email]>=2.10",

@@ -5,6 +5,8 @@ __pycache__/
 *.so
 *.egg-info/
 dist/
+# Pinned browser CAPTCHA distribution is a source dependency.
+!frontend/static/vendor/altcha-3.5.0/dist/
 build/
 .eggs/
 

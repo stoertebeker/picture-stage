@@ -174,10 +174,27 @@ curl -s https://DEINE-DOMAIN/login | grep -o "/static/css/styles.css?v=[^\"]*"
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | POST | `/api/v1/auth/signup` | Register (pending admin approval) |
+| GET | `/api/v1/auth/captcha/challenge` | Obtain a signed signup challenge |
 | POST | `/api/v1/auth/verify-email/{token}` | Verify email address |
 | POST | `/api/v1/auth/login` | Login, receive JWT |
 | GET | `/api/v1/auth/me` | Current user profile |
 | POST | `/api/v1/auth/logout` | Compatible logout alias; requires browser CSRF proof |
+
+Signup requires a fresh ALTCHA proof when `CAPTCHA_ENABLED=true` (the default).
+Fetch a challenge from `/api/v1/auth/captcha/challenge`, solve it, then send the
+Base64 payload as `altcha` in the signup JSON. The HTML form solves the same
+challenge using self-hosted ALTCHA 3.5.0 assets, JavaScript, WebCrypto and a Web
+Worker; HTTPS or localhost is required. Login and initial setup do not require it.
+Challenges expire after five minutes and can be redeemed once across both
+signup routes. Missing, invalid, expired or reused proofs return 422; unavailable
+verification or a full replay ledger returns 503. A failed signup still consumes
+its proof. The ledger retains at most 10,000 entries and reclaims up to 256
+expired entries per redemption.
+
+Set `ALTCHA_SECRET_KEY` to a random secret containing at least 32 UTF-8 bytes,
+or leave it empty to derive a separate key from a sufficiently strong
+`SECRET_KEY`. An explicitly invalid key fails startup instead of falling back.
+`CAPTCHA_ENABLED=false` explicitly disables this signup gate.
 
 Browser logout uses `POST /logout`. The compatible API alias requires the same
 CSRF cookie and matching header/form proof, even without an incoming session

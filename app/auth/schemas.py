@@ -9,6 +9,7 @@ from app.db.models import UserStatus
 class SignupRequest(BaseModel):
     email: EmailStr
     password: str
+    altcha: str | None = Field(default=None, strict=True, max_length=8192)
 
 
 class SignupResponse(BaseModel):

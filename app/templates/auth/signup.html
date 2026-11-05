@@ -38,6 +38,18 @@
                               attrs={'minlength': '8'}) }}
         {% endcall %}
 
+        {% if captcha_enabled %}
+        <link rel="stylesheet" href="{{ request.url_for('static', path='vendor/altcha-3.5.0/dist/external/altcha.css') }}">
+        <div data-signup-captcha>
+            <altcha-widget name="altcha" language="{{ locale }}" workers="2"
+                           challenge="{{ request.url_for('captcha_challenge') }}"></altcha-widget>
+            <p role="status" data-captcha-status data-error="{{ t('auth.captcha_client_error') }}">{{ t('auth.captcha_required') }}</p>
+            <noscript><p>{{ t('auth.captcha_client_error') }}</p></noscript>
+            <a href="{{ request.url_for('signup_page') }}">{{ t('auth.captcha_retry') }}</a>
+        </div>
+        <script type="module" src="{{ request.url_for('static', path='js/signup-captcha.js') }}"></script>
+        {% endif %}
+
         {% call button(variant='primary', type='submit', extra_class='w-full') %}
             {{ t('auth.signup_button') }}
         {% endcall %}

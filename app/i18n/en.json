@@ -34,7 +34,12 @@
     "account_disabled": "This account has been disabled. Please contact an administrator.",
     "passwords_mismatch": "Passwords do not match.",
     "password_too_short": "Password must be at least 8 characters.",
-    "invalid_verify_token": "Invalid or expired verification token."
+    "invalid_verify_token": "Invalid or expired verification token.",
+    "captcha_invalid": "Please complete a fresh security verification and submit your signup again.",
+    "captcha_unavailable": "Security verification is temporarily unavailable. Please try again.",
+    "captcha_required": "Please complete the security verification before signing up.",
+    "captcha_client_error": "Security verification could not load. Enable JavaScript and use a current browser over HTTPS, then reload the page.",
+    "captcha_retry": "Reload security verification"
   },
   "setup": {
     "title": "Setup - Picture-Stage",
@@ -310,6 +315,7 @@
     "password_submit": "Open Gallery",
     "password_error": "That password didn't match — please check it and try again.",
     "password_privacy_note": "Your selection stays private and is only visible to you and your photographer.",
+    "lookup_wait": "Loading the gallery …",
     "expired_title": "Gallery Expired",
     "expired_text": "The access link for this gallery is no longer valid.",
     "expired_contact": "Please contact the photographer to get a new link.",

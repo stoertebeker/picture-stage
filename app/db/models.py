@@ -392,3 +392,12 @@ class PendingSignup(Base):
     )
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
+
+
+class CaptchaRedemption(Base):
+    """One durable use per signed signup challenge, shared by all workers."""
+
+    __tablename__ = "captcha_redemptions"
+
+    signature: Mapped[str] = mapped_column(String(64), primary_key=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)

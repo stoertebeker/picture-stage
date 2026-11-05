@@ -7,6 +7,8 @@ import pytest
 # so force development here before app.config is imported. Real env vars (e.g.
 # in CI) still win via setdefault.
 os.environ.setdefault("ENVIRONMENT", "development")
+# Normal tests exercise signup independently; enabled CAPTCHA tests opt in.
+os.environ["CAPTCHA_ENABLED"] = "false"
 # A test must never reset counters in an operator's configured Redis backend.
 os.environ["RATELIMIT_STORAGE_URL"] = "memory://"
 

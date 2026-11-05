@@ -20,6 +20,7 @@ from app.db.models import LOGIN_ALLOWED_STATUSES, PendingSignup, User, UserStatu
 from app.db.session import get_db
 from app.frontend.deps import templates
 from app.notifications.service import notify_admins_signup, send_verification_email
+from app.security.captcha import CaptchaError, require_signup_captcha
 from app.security.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
@@ -109,7 +110,13 @@ async def signup_page(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "auth/signup.html",
-        {"request": request, "csrf_token": _csrf_from_request(request), "error": None, "success": False},
+        {
+            "request": request,
+            "csrf_token": _csrf_from_request(request),
+            "error": None,
+            "success": False,
+            "captcha_enabled": settings.captcha_enabled,
+        },
     )
 
 
@@ -121,7 +128,13 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
     password = str(form.get("password", ""))
     password_confirm = str(form.get("password_confirm", ""))
 
-    ctx = {"request": request, "csrf_token": _csrf_from_request(request), "error": None, "success": False}
+    ctx = {
+        "request": request,
+        "csrf_token": _csrf_from_request(request),
+        "error": None,
+        "success": False,
+        "captcha_enabled": settings.captcha_enabled,
+    }
 
     if not email or not password:
         ctx["error"] = "auth.email_password_required"
@@ -140,6 +153,14 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
     if len(password) < 8:
         ctx["error"] = "auth.password_too_short"
         return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=422)
+
+    try:
+        proofs = form.getlist("altcha") if settings.captcha_enabled else []
+        proof = proofs[0] if len(proofs) == 1 and isinstance(proofs[0], str) else None
+        await require_signup_captcha(proof, db)
+    except CaptchaError as exc:
+        ctx["error"] = exc.message_key
+        return templates.TemplateResponse(request, "auth/signup.html", ctx, status_code=exc.status_code)
 
     # Account-enumeration guard (picture-stage-42q): an already-registered email
     # (as User OR PendingSignup) must NOT be revealed. Render the same neutral
