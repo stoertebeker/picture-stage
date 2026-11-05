@@ -420,7 +420,7 @@ def _render_image_grid(
     *,
     has_more: bool = False,
     append_mode: bool = False,
-    next_offset: int = 30,
+    next_cursor: str = "cursor-page-two",
     sort_by: str = "sort_order",
     sort_dir: str = "asc",
     filter: str = "all",
@@ -437,7 +437,8 @@ def _render_image_grid(
         session_id=session_id,
         has_more=has_more,
         append_mode=append_mode,
-        next_offset=next_offset,
+        next_cursor=next_cursor,
+        page_metadata={"images": images, "next_cursor": next_cursor, "append": append_mode},
         sort_by=sort_by,
         sort_dir=sort_dir,
         filter=filter,
@@ -449,9 +450,9 @@ def _render_image_grid(
 def test_guest_grid_sentinel_present_when_more_pages():
     """am9: with more pages, the grid ends in an infinite-scroll sentinel that
     loads the next offset and carries the active sort/filter."""
-    html = _render_image_grid([_make_image("a.jpg", 0)], has_more=True, next_offset=30, filter="favorited")
+    html = _render_image_grid([_make_image("a.jpg", 0)], has_more=True, next_cursor="page-two", filter="favorited")
     assert 'hx-trigger="revealed"' in html
-    assert "offset=30" in html
+    assert "cursor=page-two" in html
     assert "filter=favorited" in html
 
 
@@ -469,58 +470,44 @@ def test_guest_grid_infinite_scroll_response_returns_sibling_tiles():
     recursively contains the next page.
     """
     images = [_make_image("31.jpg", 30), _make_image("32.jpg", 31)]
-    html = _render_image_grid(images, append_mode=True, has_more=True, next_offset=60)
+    html = _render_image_grid(images, append_mode=True, has_more=True, next_cursor="page-three")
 
     assert 'class="grid grid-cols-' not in html
     assert html.count('class="group relative aspect-[4/5]') == len(images)
     assert html.count('hx-trigger="revealed"') == 1
-    assert "offset=60" in html
+    assert "cursor=page-three" in html
 
 
 async def test_guest_grid_route_returns_flat_second_page(monkeypatch):
-    """The real offset route must select append mode after the first page."""
-    images = [_make_image(f"{idx + 1}.jpg", idx) for idx in range(61)]
+    """A cursor continuation renders only its bounded page as sibling tiles."""
+    images = [_make_image(f"{idx + 1}.jpg", idx) for idx in range(30, 60)]
+    gallery = SimpleNamespace(id=uuid.uuid4(), status=GalleryStatus.shared, password_hash=None)
+    from app.guest.service import GuestImagePage
 
-    async def fake_resolve_gallery_by_token(token, db):
-        return SimpleNamespace(id=uuid.uuid4(), status=GalleryStatus.shared, password_hash=None)
-
-    async def fake_load_images(gallery, db, sort_by, sort_dir, filter_mode):
-        return images
-
-    async def fake_read_access(gallery, session_id, db, *, token):
-        return gallery
-
-    monkeypatch.setattr(guest_frontend, "resolve_gallery_by_token", fake_resolve_gallery_by_token)
+    page = GuestImagePage([], {}, "page-three", 61, 0, 0, 61)
+    load = AsyncMock(return_value=page)
+    monkeypatch.setattr(guest_frontend, "resolve_gallery_by_token", AsyncMock(return_value=gallery))
     monkeypatch.setattr(guest_frontend, "check_gallery_accessible", lambda gallery: None)
-    monkeypatch.setattr(guest_frontend, "_load_images", fake_load_images)
-    monkeypatch.setattr(guest_frontend, "require_gallery_read_access", fake_read_access)
-    request = Request(
-        {
-            "type": "http",
-            "method": "GET",
-            "path": "/g/tok123/gallery-images",
-            "headers": [],
-            "query_string": b"offset=30",
-            "scheme": "http",
-            "server": ("testserver", 80),
-            "client": ("127.0.0.1", 1234),
-        }
-    )
-
+    monkeypatch.setattr(guest_frontend, "load_guest_image_page", load)
+    monkeypatch.setattr(guest_frontend, "_serialize_images", lambda images_, selections: images)
+    monkeypatch.setattr(guest_frontend, "require_gallery_read_access", AsyncMock(return_value=gallery))
+    request = Request({"type": "http", "headers": [], "root_path": ""})
+    db = AsyncMock()
     response = await guest_frontend.guest_gallery_images(
         token="tok123",
         request=request,
         sort_by=ImageSortBy.sort_order,
         sort_dir=SortDirection.asc,
         filter=ImageFilter.all,
-        offset=30,
-        db=AsyncMock(),
+        cursor="page-two",
+        offset=0,
+        db=db,
     )
+    load.assert_awaited_once_with(gallery, db, ImageSortBy.sort_order, SortDirection.asc, ImageFilter.all, "page-two")
     html = response.body.decode()
-
     assert 'class="grid grid-cols-' not in html
     assert html.count('class="group relative aspect-[4/5]') == 30
-    assert "offset=60" in html
+    assert "cursor=page-three" in html
 
 
 def test_guest_grid_items_keyed_by_id():
@@ -661,24 +648,16 @@ def test_guest_viewer_ships_image_order_for_lightbox():
     assert order == [img["id"] for img in images]
 
 
-def test_guest_grid_emits_image_order_on_filter_sort_refresh():
-    """rfii: a filter/sort refresh (offset==0) ships the full ordered id list in a
-    hidden [data-image-order] element so the afterSwap handler can hand it to the
-    lightbox. The list reflects the (filtered) view passed in."""
+def test_guest_grid_emits_bounded_page_metadata_on_refresh_and_append():
     imgs = [_make_image("a.jpg", 0), _make_image("b.jpg", 1)]
-    html = _render_image_grid(imgs, image_order=[img["id"] for img in imgs])
-    assert "data-image-order=" in html
-    parser = _AttrExtractor("data-image-order")
-    parser.feed(html)
-    assert json.loads(parser.value) == [img["id"] for img in imgs]
-
-
-def test_guest_grid_omits_image_order_on_infinite_scroll():
-    """rfii: infinite-scroll loads (offset>0 -> image_order is None) must NOT emit
-    the order element; they target the sentinel, not #image-grid, and leave the
-    navigation order unchanged."""
-    html = _render_image_grid([_make_image("a.jpg", 0)], image_order=None)
-    assert "data-image-order" not in html
+    for append in (False, True):
+        html = _render_image_grid(imgs, append_mode=append)
+        parser = _AttrExtractor("data-guest-page")
+        parser.feed(html)
+        page = json.loads(parser.value)
+        assert page["images"] == imgs
+        assert page["append"] is append
+        assert page["next_cursor"] == "cursor-page-two"
 
 
 def test_guest_lightbox_navigation_uses_active_order():
@@ -698,11 +677,17 @@ def test_guest_lightbox_navigation_uses_active_order():
 
 
 def test_guest_afterswap_refreshes_lightbox_order():
-    """rfii: app.js wires an htmx:afterSwap handler that reads data-image-order
-    from a swapped #image-grid and pushes it into the guestViewer via
-    setActiveOrder — only for #image-grid (filter/sort), not infinite-scroll."""
-    app_js = (PROJECT_ROOT / "frontend" / "static" / "js" / "app.js").read_text()
-    assert "htmx:afterSwap" in app_js
-    assert "image-grid" in app_js
-    assert "data-image-order" in app_js or "imageOrder" in app_js
-    assert "setActiveOrder" in app_js
+    """Page merge behavior is exercised with Node and the browser fixture."""
+    component = (PROJECT_ROOT / "frontend/static/js/components.js").read_text()
+    assert "htmx:afterSwap" in component
+    assert "this.acceptPage(JSON.parse(metadata.dataset.guestPage), false)" in component
+
+
+def test_guest_filter_chip_classes_are_present_in_tailwind_template_scan():
+    html = _render_viewer([_make_image("a.jpg", 0)])
+    parser = _AttrExtractor("data-filter-active-class")
+    parser.feed(html)
+    assert set(parser.value.split()) == {"bg-accent-muted", "border-accent", "text-accent"}
+    parser = _AttrExtractor("data-filter-inactive-class")
+    parser.feed(html)
+    assert {"bg-transparent", "border-border-subtle", "text-text-secondary"} <= set(parser.value.split())

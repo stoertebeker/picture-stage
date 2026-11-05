@@ -19,8 +19,13 @@
         if (!config || config.verb.toLowerCase() !== 'get') return;
         const target = detail.target;
         const source = config.elt;
+        const pageGeneration = detail.xhr.__guestPageGeneration;
         setTimeout(() => {
             if (!target.isConnected || !source.isConnected) return;
+            const viewer = target.closest('[x-data="guestViewer"]');
+            // A newer filter/sort request supersedes this pending lookup retry.
+            if (pageGeneration !== undefined && viewer && window.Alpine &&
+                window.Alpine.$data(viewer).pageGeneration !== pageGeneration) return;
             htmx.ajax(config.verb, config.path, {
                 source, target, values: config.parameters, headers: config.headers,
                 swap: source.getAttribute('hx-swap') || 'innerHTML',

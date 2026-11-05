@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
-from app.db.models import Gallery, Image, SelectionAction, SelectionEvent, User
+from app.db.models import CurrentSelection, Gallery, Image, User
 from app.db.session import get_db
 from app.galleries.csv_security import spreadsheet_text
 
@@ -18,43 +18,26 @@ router = APIRouter(prefix="/api/v1/galleries", tags=["export"])
 
 
 async def _get_materialized_selections(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict[str, Any]]:
-    img_result = await db.execute(select(Image).where(Image.gallery_id == gallery_id).order_by(Image.sort_order))
-    images = img_result.scalars().all()
-
-    evt_result = await db.execute(
-        select(SelectionEvent)
-        .where(SelectionEvent.image_id.in_([img.id for img in images]))
-        .order_by(SelectionEvent.created_at)
+    # The owner export must agree with guest state even for timestamp ties or
+    # transactions that started before waiting for the selection write fence.
+    rows = await db.execute(
+        select(
+            Image.id, Image.filename, CurrentSelection.selected, CurrentSelection.favorited, CurrentSelection.comment
+        )
+        .outerjoin(CurrentSelection, CurrentSelection.image_id == Image.id)
+        .where(Image.gallery_id == gallery_id)
+        .order_by(Image.sort_order, Image.id)
     )
-    events = evt_result.scalars().all()
-
-    state: dict[uuid.UUID, dict[str, Any]] = {}
-    for img in images:
-        state[img.id] = {
-            "filename": img.filename,
-            "selected": False,
-            "favorited": False,
-            "comment": None,
+    return [
+        {
+            "image_id": str(row.id),
+            "filename": row.filename,
+            "selected": bool(row.selected),
+            "favorited": bool(row.favorited),
+            "comment": row.comment,
         }
-
-    for event in events:
-        s = state.get(event.image_id)
-        if s is None:
-            continue
-        match event.action:
-            case SelectionAction.select:
-                s["selected"] = True
-            case SelectionAction.deselect:
-                s["selected"] = False
-            case SelectionAction.favorite:
-                s["favorited"] = True
-            case SelectionAction.unfavorite:
-                s["favorited"] = False
-            case SelectionAction.comment:
-                if event.comment is not None:
-                    s["comment"] = event.comment
-
-    return [{"image_id": str(img_id), **s} for img_id, s in state.items()]
+        for row in rows
+    ]
 
 
 @router.get("/{gallery_id}/export")

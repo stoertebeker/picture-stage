@@ -133,7 +133,7 @@ class TestEndpointStructure:
         with open("app/guest/router.py") as f:
             source = f.read()
         idx = source.index("list_shared_images")
-        block = source[idx : source.index("# Selection map", idx)]
+        block = source[idx : source.index("page = await load_guest_image_page", idx)]
         assert "request: Request" in block
         assert "request_session_id(request, gallery.id)" in block
         assert "session_id: uuid.UUID | None = Query" not in block
@@ -150,12 +150,18 @@ class TestEndpointStructure:
             source = f.read()
         assert "get_current_selections" in source
 
-    def test_exif_sort_uses_python_sort(self) -> None:
-        # Sorting/filtering now lives in the shared loader (d7z).
-        with open("app/guest/service.py") as f:
-            source = f.read()
-        assert "parse_exif_date" in source
-        assert "images.sort" in source
+    def test_exif_assignment_normalizes_the_indexed_sort_key(self) -> None:
+        from app.db.models import Image
+        from app.images.capture_date import MISSING_CAPTURE_DATE
+
+        image = Image(exif={"DateTimeOriginal": "2024:06:15 14:30:00"})
+        assert image.capture_sort_key == datetime(2024, 6, 15, 14, 30)
+        image.exif = {"DateTimeOriginal": "bad", "DateTime": "2024:06:15 14:30:00"}
+        assert image.capture_sort_key == MISSING_CAPTURE_DATE
+        image.exif = {"DateTimeOriginal": "", "DateTime": "2024:06:15 14:30:00"}
+        assert image.capture_sort_key == datetime(2024, 6, 15, 14, 30)
+        image.exif = {"DateTimeOriginal": "2024:02:30 14:30:00"}
+        assert image.capture_sort_key == MISSING_CAPTURE_DATE
 
     def test_defaults_are_sort_order_asc_all(self) -> None:
         with open("app/guest/router.py") as f:

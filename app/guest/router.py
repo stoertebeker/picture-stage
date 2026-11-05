@@ -3,7 +3,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import cast
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,10 +22,11 @@ from app.galleries.lifecycle import lock_gallery, lock_images
 from app.guest.credentials import private_guest_response, request_session_id
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
+    MAX_CURSOR_LENGTH,
     check_gallery_accessible,
     create_share_session,
     current_share_session,
-    load_sorted_filtered_images,
+    load_guest_image_page,
     lock_gallery_for_review,
     lock_gallery_for_session_admission,
     require_gallery_read_access,
@@ -70,6 +71,9 @@ class GuestImageResponse(BaseModel):
     thumb_sm_url: str
     thumb_md_url: str
     preview_url: str
+    selected: bool = False
+    favorited: bool = False
+    comment: str | None = None
 
 
 class CompleteReviewResponse(BaseModel):
@@ -163,9 +167,12 @@ async def _verify_resolved_gallery_password(
 async def list_shared_images(
     token: str,
     request: Request,
+    response: Response,
     sort_by: ImageSortBy = Query(ImageSortBy.sort_order),
     sort_dir: SortDirection = Query(SortDirection.asc),
     filter: ImageFilter = Query(ImageFilter.all),
+    cursor: str | None = Query(None, max_length=MAX_CURSOR_LENGTH),
+    offset: int = Query(0, ge=0, le=0),
     db: AsyncSession = Depends(get_db),
 ) -> list[GuestImageResponse]:
     gallery = await resolve_gallery_by_token(token, db)
@@ -176,13 +183,16 @@ async def list_shared_images(
     session_id = request_session_id(request, gallery.id)
     gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
-    # Selection map is unused here (the JSON API omits selection fields), but the
-    # shared loader always materialises it from a single query (d7z).
-    images, _sel_map = await load_sorted_filtered_images(gallery, db, sort_by, sort_dir, filter)
+    page = await load_guest_image_page(gallery, db, sort_by, sort_dir, filter, cursor)
+    response.headers["X-Next-Cursor"] = page.next_cursor or ""
+    response.headers["X-Has-More"] = "true" if page.next_cursor else "false"
+    response.headers["X-Total-Images"] = str(page.total_images)
+    response.headers["X-Filtered-Images"] = str(page.filtered_count)
 
     guest_images = []
-    for img in images:
+    for img in page.images:
         preview_urls = sign_preview_urls(img)
+        selection = page.selections.get(img.id)
         guest_images.append(
             GuestImageResponse(
                 id=img.id,
@@ -191,6 +201,9 @@ async def list_shared_images(
                 thumb_sm_url=preview_urls.get("thumb_sm", ""),
                 thumb_md_url=preview_urls.get("thumb_md", ""),
                 preview_url=preview_urls.get("preview", ""),
+                selected=selection.selected if selection else False,
+                favorited=selection.favorited if selection else False,
+                comment=selection.comment if selection else None,
             )
         )
 

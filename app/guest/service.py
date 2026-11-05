@@ -8,8 +8,12 @@ owner-status (cxs) and expiry security checks in exactly one place, so a future
 fix can no longer miss a copy.
 """
 
+import base64
 import hashlib
+import hmac
+import json
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -25,6 +29,7 @@ from app.config import settings
 from app.db.models import (
     LOGIN_ALLOWED_STATUSES,
     AuditLog,
+    CurrentSelection,
     Gallery,
     GalleryStatus,
     Image,
@@ -37,9 +42,9 @@ from app.db.models import (
 from app.galleries.lifecycle import lock_gallery
 from app.guest.credentials import browser_cookie_session_id
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
+from app.images.capture_date import parse_exif_date  # noqa: F401 -- shared parser compatibility
 from app.security.signing import sign_url
 from app.selections.schemas import SelectionState
-from app.selections.service import get_current_selections
 
 
 async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | None:
@@ -362,19 +367,178 @@ async def require_gallery_read_access(
     return gallery
 
 
-def parse_exif_date(exif: dict[str, Any] | None) -> datetime | None:
-    """Parse the EXIF capture date from image metadata, or None if absent/malformed."""
-    if not exif:
-        return None
-    raw = exif.get("DateTimeOriginal") or exif.get("DateTime")
-    if not raw or not isinstance(raw, str):
-        return None
+GALLERY_PAGE_SIZE = 30
+# A 512-character filename can require six JSON bytes per control character.
+# With fixed metadata, base64 and HMAC the largest emitted cursor is 4320
+# characters. Keep a finite shared request/parser cap above that boundary.
+MAX_CURSOR_LENGTH = 8192
+
+
+@dataclass
+class GuestImagePage:
+    images: list[Image]
+    selections: dict[uuid.UUID, SelectionState]
+    next_cursor: str | None
+    total_images: int
+    selected_count: int
+    favorited_count: int
+    filtered_count: int
+
+
+def _cursor_signature(payload: str) -> str:
+    return hmac.new(settings.hmac_secret_key.encode(), b"guest-page:v1:" + payload.encode(), hashlib.sha256).hexdigest()
+
+
+def _encode_page_cursor(
+    gallery: Gallery, sort_by: ImageSortBy, sort_dir: SortDirection, filter_mode: ImageFilter, keys: list[Any]
+) -> str:
+    payload = (
+        base64.urlsafe_b64encode(
+            json.dumps(
+                [1, str(gallery.id), sort_by.value, sort_dir.value, filter_mode.value, GALLERY_PAGE_SIZE, keys],
+                separators=(",", ":"),
+                ensure_ascii=False,
+            ).encode()
+        )
+        .decode()
+        .rstrip("=")
+    )
+    return payload + "." + _cursor_signature(payload)
+
+
+def _decode_page_cursor(
+    cursor: str, gallery: Gallery, sort_by: ImageSortBy, sort_dir: SortDirection, filter_mode: ImageFilter
+) -> list[Any]:
     try:
-        return datetime.strptime(raw, "%Y:%m:%d %H:%M:%S")
-    except ValueError:
-        return None
+        if len(cursor) > MAX_CURSOR_LENGTH:
+            raise ValueError
+        payload, signature = cursor.split(".")
+        if not hmac.compare_digest(signature, _cursor_signature(payload)):
+            raise ValueError
+        data = json.loads(base64.b64decode(payload + "=" * (-len(payload) % 4), altchars=b"-_", validate=True))
+        if (
+            not isinstance(data, list)
+            or len(data) != 7
+            or type(data[0]) is not int
+            or type(data[5]) is not int
+            or data[:6] != [1, str(gallery.id), sort_by.value, sort_dir.value, filter_mode.value, GALLERY_PAGE_SIZE]
+        ):
+            raise ValueError
+        keys = data[6]
+        expected = 3 if sort_by == ImageSortBy.exif_date else 2
+        if not isinstance(keys, list) or len(keys) != expected or not isinstance(keys[-1], str):
+            raise ValueError
+        keys[-1] = uuid.UUID(keys[-1])
+        if sort_by == ImageSortBy.exif_date:
+            if not isinstance(keys[0], str) or type(keys[1]) is not int:
+                raise ValueError
+            keys[0] = datetime.strptime(keys[0], "%Y-%m-%dT%H:%M:%S")
+        elif sort_by == ImageSortBy.filename:
+            if not isinstance(keys[0], str) or len(keys[0]) > 512:
+                raise ValueError
+        elif type(keys[0]) is not int:
+            raise ValueError
+        if sort_by != ImageSortBy.filename and not -(2**31) <= keys[-2] < 2**31:
+            raise ValueError
+        return keys
+    except (ValueError, TypeError, KeyError, OverflowError) as exc:
+        raise HTTPException(status_code=422, detail="Invalid image page cursor") from exc
 
 
+def _selection_filter(filter_mode: ImageFilter) -> Any:
+    selected = func.coalesce(CurrentSelection.selected, False)
+    favorited = func.coalesce(CurrentSelection.favorited, False)
+    if filter_mode == ImageFilter.selected:
+        return selected.is_(True)
+    if filter_mode == ImageFilter.favorited:
+        return favorited.is_(True)
+    if filter_mode == ImageFilter.unrated:
+        return selected.is_(False) & favorited.is_(False)
+    return True
+
+
+async def load_guest_image_page(
+    gallery: Gallery,
+    db: AsyncSession,
+    sort_by: ImageSortBy = ImageSortBy.sort_order,
+    sort_dir: SortDirection = SortDirection.asc,
+    filter_mode: ImageFilter = ImageFilter.all,
+    cursor: str | None = None,
+) -> GuestImagePage:
+    """Bound keys in SQL before hydrating images, previews or review state.
+
+    All guest image surfaces share this boundary. Counts aggregate in SQL and
+    no request reads event history. Keyset cursors cannot request large offsets.
+    The caller holds the existing guest credential read fence through rendering.
+    """
+    columns = [Image.sort_order, Image.id]
+    if sort_by == ImageSortBy.filename:
+        columns = [Image.filename, Image.id]
+    elif sort_by == ImageSortBy.exif_date:
+        columns = [Image.capture_sort_key, Image.sort_order, Image.id]
+    predicate = _selection_filter(filter_mode)
+    keys_query = (
+        select(*columns)
+        .outerjoin(CurrentSelection, CurrentSelection.image_id == Image.id)
+        .where(Image.gallery_id == gallery.id, predicate)
+    )
+    if cursor is not None:
+        keys = _decode_page_cursor(cursor, gallery, sort_by, sort_dir, filter_mode)
+        comparison = (
+            tuple_(*columns) < tuple_(*keys) if sort_dir == SortDirection.desc else tuple_(*columns) > tuple_(*keys)
+        )
+        keys_query = keys_query.where(comparison)
+    order = [col.desc() if sort_dir == SortDirection.desc else col.asc() for col in columns]
+    rows = list((await db.execute(keys_query.order_by(*order).limit(GALLERY_PAGE_SIZE + 1))).all())
+    has_more = len(rows) > GALLERY_PAGE_SIZE
+    rows = rows[:GALLERY_PAGE_SIZE]
+    ids = [row[-1] for row in rows]
+    images = (
+        list(
+            (
+                await db.scalars(
+                    select(Image)
+                    .where(Image.gallery_id == gallery.id, Image.id.in_(ids))
+                    .options(selectinload(Image.previews))
+                    .order_by(*order)
+                )
+            ).all()
+        )
+        if ids
+        else []
+    )
+    states = (await db.scalars(select(CurrentSelection).where(CurrentSelection.image_id.in_(ids)))).all() if ids else []
+    selections = {
+        state.image_id: SelectionState(
+            image_id=state.image_id, selected=state.selected, favorited=state.favorited, comment=state.comment
+        )
+        for state in states
+    }
+    counts = (
+        await db.execute(
+            select(
+                func.count(Image.id),
+                func.count().filter(CurrentSelection.selected.is_(True)),
+                func.count().filter(CurrentSelection.favorited.is_(True)),
+                func.count().filter(predicate),
+            )
+            .select_from(Image)
+            .outerjoin(CurrentSelection, CurrentSelection.image_id == Image.id)
+            .where(Image.gallery_id == gallery.id)
+        )
+    ).one()
+    next_cursor = None
+    if has_more:
+        last_keys = [
+            value.isoformat() if isinstance(value, datetime) else str(value) if isinstance(value, uuid.UUID) else value
+            for value in rows[-1]
+        ]
+        next_cursor = _encode_page_cursor(gallery, sort_by, sort_dir, filter_mode, last_keys)
+    return GuestImagePage(images, selections, next_cursor, *counts)
+
+
+# Preserve the internal adapter name for callers without reintroducing an
+# unbounded list. New routes consume GuestImagePage continuation metadata.
 async def load_sorted_filtered_images(
     gallery: Gallery,
     db: AsyncSession,
@@ -382,42 +546,8 @@ async def load_sorted_filtered_images(
     sort_dir: SortDirection = SortDirection.asc,
     filter_mode: ImageFilter = ImageFilter.all,
 ) -> tuple[list[Image], dict[uuid.UUID, SelectionState]]:
-    """Load a gallery's images, sorted and filtered, plus the selection map.
-
-    Returns the (sorted, filtered) Image rows and a gallery-wide selection map
-    (image_id -> SelectionState) so each caller can serialise to its own shape
-    (the JSON API drops the selection fields; the HTML viewer keeps them). The
-    selections are always loaded — even for filter=all — so the map is available
-    to both callers from a single query.
-    """
-    order_col: Any = Image.sort_order
-    if sort_by == ImageSortBy.filename:
-        order_col = Image.filename
-    order_clause = order_col.desc() if sort_dir == SortDirection.desc else order_col.asc()
-
-    result = await db.execute(
-        select(Image).where(Image.gallery_id == gallery.id).options(selectinload(Image.previews)).order_by(order_clause)
-    )
-    images = list(result.scalars().all())
-
-    if sort_by == ImageSortBy.exif_date:
-        far_future = datetime(9999, 1, 1)
-        images.sort(
-            key=lambda img: parse_exif_date(img.exif) or far_future,
-            reverse=(sort_dir == SortDirection.desc),
-        )
-
-    selections = await get_current_selections(gallery.id, db)
-    sel_map: dict[uuid.UUID, SelectionState] = {s.image_id: s for s in selections}
-
-    if filter_mode == ImageFilter.selected:
-        images = [img for img in images if (s := sel_map.get(img.id)) and s.selected]
-    elif filter_mode == ImageFilter.favorited:
-        images = [img for img in images if (s := sel_map.get(img.id)) and s.favorited]
-    elif filter_mode == ImageFilter.unrated:
-        images = [img for img in images if not (s := sel_map.get(img.id)) or (not s.selected and not s.favorited)]
-
-    return images, sel_map
+    page = await load_guest_image_page(gallery, db, sort_by, sort_dir, filter_mode)
+    return page.images, page.selections
 
 
 def sign_preview_urls(img: Image) -> dict[str, str]:

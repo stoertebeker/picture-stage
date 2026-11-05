@@ -12,6 +12,10 @@
      data-gallery-url="{{ request.scope.get('root_path', '') }}/g/{{ token }}"
      data-images='{{ all_images | tojson }}'
      data-image-order='{{ image_order | tojson }}'
+     data-next-cursor="{{ next_cursor|default('') or '' }}"
+     data-filter-active-class="bg-accent-muted border-accent text-accent"
+     data-filter-inactive-class="bg-transparent border-border-subtle text-text-secondary hover:border-border-strong"
+     data-filtered-count="{{ filtered_count|default(total_images) }}"
      data-total-images="{{ total_images }}"
      data-selected-count="{{ selected_count }}"
      data-favorited-count="{{ favorited_count }}"
@@ -125,14 +129,13 @@
             ] %}
             {% for value, label in _chips %}
             <button type="button"
-                    hx-get="{{ request.scope.get('root_path', '') }}/g/{{ token }}/gallery-images?filter={{ value }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}"
+                    hx-get="{{ request.scope.get('root_path', '') }}/g/{{ token }}/gallery-images?filter={{ value }}"
+                    hx-include="[name='sort_by'],[name='sort_dir']"
+                    @click="setFilterChoice('{{ value }}')"
+                    :class="filterChipClass('{{ value }}')"
                     hx-target="#image-grid"
                     hx-swap="innerHTML"
-                    {% if filter == value %}
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-accent/15 border border-accent/40 text-accent"
-                    {% else %}
-                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-transparent border border-border-subtle text-text-secondary hover:border-border-strong"
-                    {% endif %}>
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border">
                 {{ label }}
             </button>
             {% endfor %}

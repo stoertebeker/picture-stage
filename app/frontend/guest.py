@@ -28,10 +28,13 @@ from app.guest.credentials import (
 )
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
+    MAX_CURSOR_LENGTH,
+    GuestImagePage,
     check_gallery_accessible,
     create_share_session,
     current_share_session,
     is_gallery_expired,
+    load_guest_image_page,
     load_sorted_filtered_images,
     require_gallery_read_access,
     resolve_gallery_by_token,
@@ -44,9 +47,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/g", tags=["frontend-guest"], dependencies=[Depends(private_guest_response)])
 
 
-# Number of grid items rendered per page. The full image list is still sent to
-# the client (data-images) for the lightbox/selection state, but the heavy grid
-# DOM is loaded progressively to keep the initial HTML small (picture-stage-am9).
+# Guest images and lightbox data are both loaded one bounded page at a time.
 GALLERY_PAGE_SIZE = 30
 
 
@@ -64,6 +65,10 @@ async def _load_images(
     """
     images, sel_map = await load_sorted_filtered_images(gallery, db, sort_by, sort_dir, filter_mode)
 
+    return _serialize_images(images, sel_map)
+
+
+def _serialize_images(images: list[Any], sel_map: dict[Any, Any]) -> list[dict[str, Any]]:
     image_list = []
     for img in images:
         preview_urls = sign_preview_urls(img)
@@ -83,6 +88,43 @@ async def _load_images(
         )
 
     return image_list
+
+
+def _page_context(
+    page: GuestImagePage,
+    sort_by: ImageSortBy,
+    sort_dir: SortDirection,
+    filter_mode: ImageFilter,
+    *,
+    append_mode: bool = False,
+) -> dict[str, Any]:
+    images = _serialize_images(page.images, page.selections)
+    metadata = {
+        "images": images,
+        "next_cursor": page.next_cursor,
+        "query": {"sort_by": sort_by.value, "sort_dir": sort_dir.value, "filter": filter_mode.value},
+        "total_images": page.total_images,
+        "selected_count": page.selected_count,
+        "favorited_count": page.favorited_count,
+        "filtered_count": page.filtered_count,
+        "append": append_mode,
+    }
+    return {
+        "images": images,
+        "all_images": images,
+        "image_order": [img["id"] for img in images],
+        "page_metadata": metadata,
+        "append_mode": append_mode,
+        "next_cursor": page.next_cursor,
+        "has_more": page.next_cursor is not None,
+        "total_images": page.total_images,
+        "selected_count": page.selected_count,
+        "favorited_count": page.favorited_count,
+        "filtered_count": page.filtered_count,
+        "sort_by": sort_by.value,
+        "sort_dir": sort_dir.value,
+        "filter": filter_mode.value,
+    }
 
 
 def _wants_html(request: Request) -> bool:
@@ -216,10 +258,8 @@ async def _render_admitted_gallery(
 ) -> HTMLResponse:
     """Render under an already-held access/admission fence without new writes."""
     cookie, csrf = browser_session(gallery.id, session.id, request=request)
-    images = await _load_images(gallery, db)
-    total = len(images)
-    selected_count = sum(1 for img in images if img["selected"])
-    favorited_count = sum(1 for img in images if img["favorited"])
+    page = await load_guest_image_page(gallery, db)
+    page_context = _page_context(page, ImageSortBy.sort_order, SortDirection.asc, ImageFilter.all)
 
     response = templates.TemplateResponse(
         request,
@@ -230,21 +270,8 @@ async def _render_admitted_gallery(
             "gallery_message": gallery.guest_message,
             "token": token,
             "requires_password": False,
-            # Full list for the Alpine state (data-images): lightbox + selection
-            # need every image. The grid renders only the first page (am9).
-            "all_images": images,
-            # Ordered id list the lightbox navigates (rfii). Initially unfiltered
-            # in sort_order; replaced on each filter/sort grid refresh so the
-            # lightbox walks exactly the visible subset in the grid's order.
-            "image_order": [img["id"] for img in images],
-            "images": images[:GALLERY_PAGE_SIZE],
-            "append_mode": False,
-            "next_offset": GALLERY_PAGE_SIZE,
-            "has_more": total > GALLERY_PAGE_SIZE,
+            **page_context,
             "guest_csrf_token": csrf,
-            "total_images": total,
-            "selected_count": selected_count,
-            "favorited_count": favorited_count,
             "session_completed": gallery.status == GalleryStatus.completed,
             "max_selection_comment_chars": settings.max_selection_comment_chars,
             "sort_by": "sort_order",
@@ -264,15 +291,11 @@ async def guest_gallery_images(
     sort_by: ImageSortBy = Query(ImageSortBy.sort_order),
     sort_dir: SortDirection = Query(SortDirection.asc),
     filter: ImageFilter = Query(ImageFilter.all),
-    offset: int = Query(0, ge=0),
+    cursor: str | None = Query(None, max_length=MAX_CURSOR_LENGTH),
+    offset: int = Query(0, ge=0, le=0),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
-    """HTMX partial: image grid page.
-
-    Serves two cases with the same fragment (grid items + optional infinite-scroll
-    sentinel): a sort/filter refresh (offset=0, swaps #image-grid) and progressive
-    loading (offset>0, the sentinel replaces itself with the next page) — am9.
-    """
+    """A bounded grid/lightbox page; cursor continuations append sibling tiles."""
     gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
@@ -281,39 +304,17 @@ async def guest_gallery_images(
     session_id = request_session_id(request, gallery.id)
     gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
-    images = await _load_images(gallery, db, sort_by, sort_dir, filter)
-    total = len(images)
-    selected_count = sum(1 for img in images if img["selected"])
-    favorited_count = sum(1 for img in images if img["favorited"])
-    page = images[offset : offset + GALLERY_PAGE_SIZE]
-    # Full ordered id list of the current (filtered+sorted) view so the lightbox
-    # navigates the visible subset (rfii). Only consumed on a filter/sort refresh
-    # (offset==0, swaps #image-grid); the infinite-scroll path (offset>0) leaves
-    # the order unchanged and the afterSwap handler ignores it.
-    image_order = [img["id"] for img in images] if offset == 0 else None
+    page = await load_guest_image_page(gallery, db, sort_by, sort_dir, filter, cursor)
+    page_context = _page_context(page, sort_by, sort_dir, filter, append_mode=cursor is not None)
 
     response = templates.TemplateResponse(
         request,
         "guest/_image_grid.html",
         {
             "request": request,
-            "images": page,
-            # A progressive load replaces the sentinel itself (outerHTML), so
-            # its response must be bare sibling tiles rather than another grid
-            # wrapper. Filter/sort refreshes still replace #image-grid and need
-            # the wrapper (picture-stage-4k2g).
-            "append_mode": offset > 0,
-            "image_order": image_order,
+            **page_context,
             "token": token,
-            "total_images": total,
-            "selected_count": selected_count,
-            "favorited_count": favorited_count,
             "session_completed": gallery.status == GalleryStatus.completed,
-            "sort_by": sort_by.value,
-            "sort_dir": sort_dir.value,
-            "filter": filter.value,
-            "next_offset": offset + GALLERY_PAGE_SIZE,
-            "has_more": total > offset + GALLERY_PAGE_SIZE,
         },
         headers=PRIVATE_HEADERS,
     )

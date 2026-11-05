@@ -16,12 +16,15 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    or_,
     text,
+    tuple_,
 )
 from sqlalchemy.dialects.postgresql import JSON, UUID
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.db.base import Base, TimestampMixin, generate_uuid
+from app.images.capture_date import MISSING_CAPTURE_DATE, parse_exif_date
 
 # --- Enums ---
 
@@ -237,6 +240,7 @@ class Image(TimestampMixin, Base):
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     exif: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    capture_sort_key: Mapped[datetime] = mapped_column(DateTime(), nullable=False, default=lambda: MISSING_CAPTURE_DATE)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     processing_status: Mapped[ImageProcessingStatus] = mapped_column(
         Enum(ImageProcessingStatus),
@@ -248,6 +252,18 @@ class Image(TimestampMixin, Base):
     previews: Mapped[list["ImagePreview"]] = relationship(back_populates="image", cascade="all, delete-orphan")
     selection_events: Mapped[list["SelectionEvent"]] = relationship(
         back_populates="image", cascade="all, delete-orphan"
+    )
+
+    @validates("exif")
+    def normalize_capture_date(self, key: str, value: dict[str, Any] | None) -> dict[str, Any] | None:
+        # Shared by API/HTML uploads, duplication and worker metadata updates.
+        self.capture_sort_key = parse_exif_date(value) or MISSING_CAPTURE_DATE
+        return value
+
+    __table_args__ = (
+        Index("ix_images_gallery_order", "gallery_id", "sort_order", "id"),
+        Index("ix_images_gallery_filename", "gallery_id", "filename", "id"),
+        Index("ix_images_gallery_capture", "gallery_id", "capture_sort_key", "sort_order", "id"),
     )
 
 
@@ -289,6 +305,25 @@ class SelectionEvent(Base):
 
     image: Mapped["Image"] = relationship(back_populates="selection_events")
     share_session: Mapped["ShareSession"] = relationship(back_populates="selection_events")
+
+
+class CurrentSelection(Base):
+    """One current state per image; independently version each event dimension."""
+
+    __tablename__ = "current_selections"
+
+    image_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("images.id", ondelete="CASCADE"), primary_key=True
+    )
+    selected: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    favorited: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    selected_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    selected_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    favorited_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    favorited_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    comment_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    comment_event_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class ShareSession(Base):
@@ -409,3 +444,45 @@ class CaptchaRedemption(Base):
 
     signature: Mapped[str] = mapped_column(String(64), primary_key=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
+# Keep the append-only event and its projection atomic for every ORM producer.
+from sqlalchemy import event as _sa_event  # noqa: E402
+
+
+@_sa_event.listens_for(SelectionEvent, "after_insert")
+def _project_selection_event(mapper: Any, connection: Any, event: SelectionEvent) -> None:
+    from sqlalchemy.dialects.postgresql import insert
+
+    dimension = {
+        SelectionAction.select: "selected",
+        SelectionAction.deselect: "selected",
+        SelectionAction.favorite: "favorited",
+        SelectionAction.unfavorite: "favorited",
+        SelectionAction.comment: "comment",
+    }[event.action]
+    if dimension == "comment" and event.comment is None:
+        return
+    value = (
+        event.comment if dimension == "comment" else event.action in (SelectionAction.select, SelectionAction.favorite)
+    )
+    values = {
+        "image_id": event.image_id,
+        dimension: value,
+        dimension + "_at": event.created_at,
+        dimension + "_event_id": event.id,
+    }
+    stmt = insert(CurrentSelection).values(**values)
+    table = CurrentSelection.__table__
+    newer = or_(
+        table.c[dimension + "_at"].is_(None),
+        tuple_(table.c[dimension + "_at"], table.c[dimension + "_event_id"])
+        < tuple_(stmt.excluded[dimension + "_at"], stmt.excluded[dimension + "_event_id"]),
+    )
+    connection.execute(
+        stmt.on_conflict_do_update(
+            index_elements=[table.c.image_id],
+            set_={name: stmt.excluded[name] for name in values if name != "image_id"},
+            where=newer,
+        )
+    )

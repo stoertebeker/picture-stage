@@ -18,11 +18,14 @@ from fastapi import FastAPI, UploadFile
 from PIL import Image as PILImage
 from starlette.datastructures import Headers
 from starlette.requests import Request
+from starlette.responses import Response
 
 from app.config import settings
 from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
 from app.frontend import guest as guest_frontend
 from app.guest import router as guest_router
+from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
+from app.guest.service import GuestImagePage
 from app.images import preview_worker
 from app.images import router as image_router
 from app.storage.dependencies import get_storage
@@ -94,9 +97,12 @@ async def test_only_large_preview_is_watermarked(monkeypatch, producer, config) 
         originals = {key: data for key, data in stored.items() if "/originals/" in key}
         assert list(originals.values()) == [original]
     else:
-        image = SimpleNamespace(
+        image = Image(
             id=image_id,
+            gallery_id=gallery_id,
             storage_key=f"{gallery_id}/originals/{image_id}.png",
+            filename="black.png",
+            exif={"DateTimeOriginal": "2024:06:15 14:30:00"},
             processing_status=ImageProcessingStatus.pending,
         )
         db.__aenter__.return_value = db
@@ -119,6 +125,7 @@ async def test_only_large_preview_is_watermarked(monkeypatch, producer, config) 
         monkeypatch.setattr(preview_worker, "run_in_pool", render)
         await preview_worker.process_image_previews(image_id, gallery_id, config)
         assert image.processing_status == ImageProcessingStatus.ready
+        assert image.capture_sort_key == datetime(2024, 6, 15, 14, 30)
         db.commit.assert_awaited_once()
         assert all("/previews/" in key for key in stored)
 
@@ -148,13 +155,28 @@ async def test_guest_variants_are_accessible_without_exposing_original(monkeypat
     ]
     db = AsyncMock()
     consumer_module = guest_router if consumer == "api" else guest_frontend
-    monkeypatch.setattr(consumer_module, "load_sorted_filtered_images", AsyncMock(return_value=([image], {})))
+    if consumer == "api":
+        monkeypatch.setattr(
+            consumer_module,
+            "load_guest_image_page",
+            AsyncMock(return_value=GuestImagePage([image], {}, None, 1, 0, 0, 1)),
+        )
+    else:
+        monkeypatch.setattr(consumer_module, "load_sorted_filtered_images", AsyncMock(return_value=([image], {})))
     if consumer == "api":
         monkeypatch.setattr(guest_router, "resolve_gallery_by_token", AsyncMock(return_value=gallery))
         monkeypatch.setattr(guest_router, "check_gallery_accessible", lambda gallery: None)
         monkeypatch.setattr(guest_router, "require_gallery_read_access", AsyncMock(return_value=gallery))
         [response] = await guest_router.list_shared_images(
-            "capability", request=Request({"type": "http", "headers": []}), db=db
+            "capability",
+            request=Request({"type": "http", "headers": []}),
+            response=Response(),
+            sort_by=ImageSortBy.sort_order,
+            sort_dir=SortDirection.asc,
+            filter=ImageFilter.all,
+            cursor=None,
+            offset=0,
+            db=db,
         )
         fields = response.model_dump()
     else:

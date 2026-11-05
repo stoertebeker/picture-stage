@@ -398,6 +398,18 @@ function guestViewerComponent() {
         // grid view (filter + sort); the server ships it via data-image-order
         // and refreshes it on every filter/sort swap (see setActiveOrder).
         activeOrder: [],
+        nextCursor: null,
+        filteredCount: 0,
+        pageQuery: { sort_by: 'sort_order', sort_dir: 'asc', filter: 'all' },
+        _acceptedQuery: { sort_by: 'sort_order', sort_dir: 'asc', filter: 'all' },
+        pageGeneration: 0,
+        _pageRequest: null,
+        _refreshing: false,
+        _editedImages: {},
+        _beforePageRequest: null,
+        _beforePageSwap: null,
+        _afterPageSwap: null,
+        _afterPageRequest: null,
         totalImages: 0,
         selectedCount: 0,
         favoritedCount: 0,
@@ -441,6 +453,167 @@ function guestViewerComponent() {
             this.favoritedCount = parseInt(root.dataset.favoritedCount || '0', 10);
             // Once the review is completed the selection is read-only (gallery-wide).
             this.completed = root.dataset.sessionCompleted === 'true';
+            this.nextCursor = root.dataset.nextCursor || null;
+            this.filteredCount = parseInt(root.dataset.filteredCount || root.dataset.totalImages || '0', 10);
+            this._beforePageRequest = (event) => this.beforePageRequest(event);
+            this._beforePageSwap = (event) => this.beforePageSwap(event);
+            this._afterPageSwap = (event) => this.afterPageSwap(event);
+            this._afterPageRequest = (event) => this.afterPageRequest(event);
+            document.addEventListener('htmx:beforeRequest', this._beforePageRequest);
+            document.addEventListener('htmx:beforeSwap', this._beforePageSwap);
+            document.addEventListener('htmx:afterSwap', this._afterPageSwap);
+            document.addEventListener('htmx:afterRequest', this._afterPageRequest);
+        },
+
+        destroy() {
+            document.removeEventListener('htmx:beforeRequest', this._beforePageRequest);
+            document.removeEventListener('htmx:beforeSwap', this._beforePageSwap);
+            document.removeEventListener('htmx:afterSwap', this._afterPageSwap);
+            document.removeEventListener('htmx:afterRequest', this._afterPageRequest);
+            if (this._swipeHintTimer) clearTimeout(this._swipeHintTimer);
+        },
+
+        beforePageRequest(event) {
+            const detail = event.detail || {};
+            const elt = detail.elt || detail.requestConfig?.elt;
+            if (!elt || !this.$root.contains(elt)) return;
+            if (elt.hasAttribute('data-guest-page-sentinel')) {
+                // Scroll and lightbox use one request/promise and one cursor.
+                event.preventDefault();
+                this.loadNextPage();
+                return;
+            }
+            if (detail.target?.id !== 'image-grid') return;
+            this.pageGeneration++;
+            this._refreshing = true;
+            this._pageRequest = null;
+            if (detail.xhr) detail.xhr.__guestPageGeneration = this.pageGeneration;
+        },
+
+        beforePageSwap(event) {
+            const detail = event.detail || {};
+            if (detail.target?.id !== 'image-grid' || !this.$root.contains(detail.target)) return;
+            if (detail.xhr?.__guestPageGeneration !== this.pageGeneration) {
+                detail.shouldSwap = false;
+                event.preventDefault();
+            }
+        },
+
+        afterPageSwap(event) {
+            const target = event.detail?.target;
+            if (!target || target.id !== 'image-grid' || !this.$root.contains(target)) return;
+            const metadata = target.querySelector('[data-guest-page]');
+            if (!metadata) return;
+            this.acceptPage(JSON.parse(metadata.dataset.guestPage), false);
+            this._refreshing = false;
+            metadata.remove();
+        },
+
+        afterPageRequest(event) {
+            const detail = event.detail || {};
+            const xhr = detail.xhr;
+            if (detail.target?.id !== 'image-grid' || !this.$root.contains(detail.target) ||
+                xhr?.__guestPageGeneration !== this.pageGeneration) return;
+            // A marked lookup response has scheduled a retry before effects.
+            // Keep that generation pending; an ordinary error releases it.
+            if (xhr.status === 503 &&
+                xhr.getResponseHeader('X-Picture-Stage-Lookup') === 'before-effects') return;
+            if (!detail.failed && xhr.status > 0 && xhr.status < 400) return;
+            this.pageQuery = { ...this._acceptedQuery };
+            this.syncPageControls(this.pageQuery);
+            this._refreshing = false;
+        },
+
+        syncPageControls(query) {
+            for (const [name, value] of Object.entries(query)) {
+                const control = this.$root.querySelector(`[name="${name}"]`);
+                if (control) control.value = value;
+            }
+        },
+
+        acceptPage(page, append) {
+            // A response sent before an acknowledged edit must never erase it.
+            page.images.forEach((incoming) => {
+                const existing = this.imageById[incoming.id];
+                if (existing) {
+                    const state = this._editedImages[incoming.id] || this.selectionQueues[incoming.id];
+                    if (state) {
+                        const { selected, favorited, comment } = existing;
+                        Object.assign(existing, incoming, { selected, favorited, comment });
+                    } else {
+                        Object.assign(existing, incoming);
+                    }
+                } else {
+                    this.imageById[incoming.id] = incoming;
+                    this.images.push(incoming);
+                }
+            });
+            const ids = page.images.map((img) => img.id);
+            this.setActiveOrder(append ? [...new Set([...this.activeOrder, ...ids])] : ids);
+            this.nextCursor = page.next_cursor;
+            this._acceptedQuery = { ...page.query };
+            this.pageQuery = { ...page.query };
+            this.syncPageControls(this.pageQuery);
+            this.filteredCount = page.filtered_count;
+            this.totalImages = page.total_images;
+        },
+
+        setFilterChoice(filter) {
+            this.pageQuery.filter = filter;
+            const control = this.$root.querySelector('[name="filter"]');
+            if (control) control.value = filter;
+        },
+
+        filterChipClass(filter) {
+            const attribute = this.pageQuery.filter === filter ? 'filterActiveClass' : 'filterInactiveClass';
+            return this.$root.dataset?.[attribute] || '';
+        },
+
+        async loadNextPage() {
+            if (this._refreshing || !this.nextCursor) return;
+            if (this._pageRequest) return this._pageRequest;
+            const generation = this.pageGeneration;
+            const cursor = this.nextCursor;
+            const query = new URLSearchParams({ ...this.pageQuery, cursor });
+            const pending = (async () => {
+                try {
+                    const response = await guestLookupFetch(`${this.galleryUrl}/gallery-images?${query}`, {
+                        headers: { 'HX-Request': 'true' },
+                    });
+                    if (!response.ok) throw new Error('Guest page failed');
+                    const html = await response.text();
+                    if (generation !== this.pageGeneration || cursor !== this.nextCursor) return;
+                    const fragment = document.createElement('template');
+                    fragment.innerHTML = html;
+                    const metadata = fragment.content.querySelector('[data-guest-page]');
+                    if (!metadata) throw new Error('Missing guest page');
+                    const page = JSON.parse(metadata.dataset.guestPage);
+                    metadata.remove();
+                    const grid = this.$root.querySelector('#image-grid');
+                    const sentinel = grid?.querySelector('[data-guest-page-sentinel]');
+                    // Merge state before Alpine initializes the appended buttons.
+                    this.acceptPage(page, true);
+                    if (sentinel) {
+                        const parent = sentinel.parentElement;
+                        sentinel.replaceWith(fragment.content);
+                        // Let the current promise settle before a newly revealed
+                        // sentinel asks for the following page.
+                        setTimeout(() => { if (window.htmx) window.htmx.process(parent); }, 0);
+                    }
+                } catch (_error) {
+                    if (generation === this.pageGeneration) this.selectionError = this.selectionSaveFailed;
+                }
+            })();
+            this._pageRequest = pending;
+            try {
+                await pending;
+            } finally {
+                if (this._pageRequest === pending) this._pageRequest = null;
+            }
+        },
+
+        get hasNextImage() {
+            return this.lightboxIndex < this.activeOrder.length - 1 || !!this.nextCursor;
         },
 
         get currentImage() {
@@ -508,7 +681,11 @@ function guestViewerComponent() {
             this.lightboxOpen = false;
         },
 
-        nextImage() {
+        async nextImage() {
+            const generation = this.pageGeneration;
+            const index = this.lightboxIndex;
+            if (index === this.activeOrder.length - 1 && this.nextCursor) await this.loadNextPage();
+            if (generation !== this.pageGeneration || index !== this.lightboxIndex) return;
             if (this.lightboxIndex < this.activeOrder.length - 1) {
                 this.lightboxIndex++;
                 this._preloadAdjacent();
@@ -570,6 +747,7 @@ function guestViewerComponent() {
                 if (!img || this.completed) return;
                 const action = img.selected ? 'deselect' : 'select';
                 if (await this._postSelection(imageId, action)) {
+                    this._editedImages[imageId] = true;
                     img.selected = !img.selected;
                     this.selectedCount += img.selected ? 1 : -1;
                 }
@@ -584,6 +762,7 @@ function guestViewerComponent() {
                 if (!img || this.completed) return;
                 const action = img.favorited ? 'unfavorite' : 'favorite';
                 if (await this._postSelection(imageId, action)) {
+                    this._editedImages[imageId] = true;
                     img.favorited = !img.favorited;
                     this.favoritedCount += img.favorited ? 1 : -1;
                 }
@@ -601,7 +780,10 @@ function guestViewerComponent() {
                 if (this.completed) return;
                 if (await this._postSelection(imageId, 'comment', comment)) {
                     const img = this.imageById[imageId];
-                    if (img) img.comment = comment;
+                    if (img) {
+                        this._editedImages[imageId] = true;
+                        img.comment = comment;
+                    }
                 }
             });
         },
