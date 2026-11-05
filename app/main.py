@@ -33,6 +33,7 @@ from app.logging_config import configure_logging
 from app.notifications.router import router as notifications_router
 from app.security.middleware import CSRFMiddleware, RequestBodySizeLimitMiddleware, SecurityHeadersMiddleware
 from app.security.rate_limit import DefaultRateLimitMiddleware, limiter
+from app.storage.quota import StorageQuotaExceeded
 
 # Configure logging before the app starts so app-level INFO logs are visible
 # in the container log, not swallowed by the lastResort handler (picture-stage-vblf).
@@ -111,6 +112,21 @@ app.include_router(frontend_galleries_router)
 app.include_router(frontend_admin_router)
 app.include_router(frontend_setup_router)
 app.include_router(frontend_legal_router)
+
+
+@app.exception_handler(StorageQuotaExceeded)
+async def storage_quota_error(request: Request, _error: StorageQuotaExceeded) -> Response:
+    locale = getattr(request.state, "locale", "de")
+    message = t("gallery.storage_quota_exceeded", locale)
+    return JSONResponse(
+        {"detail": message},
+        status_code=409,
+        headers={
+            "X-Picture-Stage-Error": "storage-quota",
+            "HX-Reswap": "none",
+            "HX-Trigger": json.dumps({"showToast": {"kind": "danger", "message": message}}),
+        },
+    )
 
 
 @app.exception_handler(StorageCleanupError)

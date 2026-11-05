@@ -74,6 +74,12 @@ class Settings(BaseSettings):
     max_upload_file_mb: int = 50
     max_files_per_upload: int = 500
 
+    # Shared originals and derivatives, including durable failed-write claims.
+    # 10 GiB accommodates photo galleries; 40,000 objects bounds small-file and
+    # queued-original growth independently (about 10,000 complete images).
+    max_storage_bytes_per_owner: int = Field(default=10 * 1024**3, ge=1, le=2**63 - 1)
+    max_storage_objects_per_owner: int = Field(default=40_000, ge=1, le=2**63 - 1)
+
     # Global request-body size limit (picture-stage-m4ct). Defense-in-depth in
     # front of the per-file/count guards above: Starlette spools the whole
     # multipart body to a temp file before the in-handler checks run, so a huge

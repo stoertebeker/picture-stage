@@ -34,7 +34,7 @@ from app.galleries.password_hashing import GalleryPasswordBusy, hash_gallery_pas
 from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
 from app.i18n import t
-from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
+from app.images.storage_cleanup import delete_storage_keys, tracked_image_storage_keys
 from app.images.upload_batch import UploadBatch, UploadPlan
 from app.security.signing import sign_url
 from app.selections.service import get_current_selections
@@ -711,7 +711,7 @@ async def bulk_delete_images(
         images_to_delete = result.scalars().all()
 
         for image in images_to_delete:
-            await delete_storage_keys(storage, image_storage_keys(image))
+            await delete_storage_keys(storage, await tracked_image_storage_keys(db, image), db=db)
             await db.delete(image)
 
         await db.commit()

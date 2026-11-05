@@ -20,7 +20,7 @@ from app.images.processing import (
     render_thumbnail_bytes,
 )
 from app.images.schemas import BulkDeleteRequest, BulkDeleteResponse, ImageResponse, ImageUploadResponse
-from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
+from app.images.storage_cleanup import delete_storage_keys, tracked_image_storage_keys
 from app.images.upload_batch import UploadBatch, UploadPlan
 from app.images.upload_limits import enforce_file_count, invalid_image_error, read_within_limit
 from app.security.signing import verify_signed_url
@@ -209,7 +209,7 @@ async def delete_image(
     if image is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Image not found")
 
-    await delete_storage_keys(storage, image_storage_keys(image))
+    await delete_storage_keys(storage, await tracked_image_storage_keys(db, image), db=db)
 
     await db.delete(image)
     await db.commit()
@@ -242,7 +242,7 @@ async def bulk_delete_images(
     images = img_result.scalars().all()
 
     for image in images:
-        await delete_storage_keys(storage, image_storage_keys(image))
+        await delete_storage_keys(storage, await tracked_image_storage_keys(db, image), db=db)
         await db.delete(image)
 
     await db.commit()

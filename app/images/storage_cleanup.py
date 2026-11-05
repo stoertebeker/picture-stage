@@ -4,8 +4,11 @@ import logging
 import uuid
 from collections.abc import Iterable
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.db.models import Image, PreviewVariant
 from app.storage.base import StorageBackend, storage_key
+from app.storage.quota import allocation_keys, release
 
 logger = logging.getLogger(__name__)
 
@@ -32,7 +35,12 @@ def image_storage_keys(image: Image) -> set[str]:
     )
 
 
-async def delete_storage_keys(storage: StorageBackend, keys: Iterable[str]) -> None:
+async def tracked_image_storage_keys(db: AsyncSession, image: Image) -> set[str]:
+    return image_storage_keys(image) | await allocation_keys(db, gallery_id=image.gallery_id, image_id=image.id)
+
+
+async def delete_storage_keys(storage: StorageBackend, keys: Iterable[str], *, db: AsyncSession | None = None) -> None:
+    keys = set(keys)
     failed = []
     for key in sorted(set(keys)):
         try:
@@ -42,3 +50,5 @@ async def delete_storage_keys(storage: StorageBackend, keys: Iterable[str]) -> N
             failed.append(key)
     if failed:
         raise StorageCleanupError(failed)
+    if db is not None:
+        await release(db, keys)

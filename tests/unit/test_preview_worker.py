@@ -18,6 +18,18 @@ from PIL import Image as PILImage
 from app.config import settings
 from app.db.models import ImageProcessingStatus
 from app.images import preview_worker, process_pool
+from app.storage.uploads import complete_upload
+
+
+@pytest.fixture(autouse=True)
+def isolated_accounting(monkeypatch):
+    """These DB-free worker tests cover processing; PG tests cover accounting."""
+
+    async def upload(db, storage, owner_id, gallery_id, image_id, key, data, content_type):
+        return await complete_upload(storage, key, data, content_type)
+
+    monkeypatch.setattr(preview_worker, "upload", upload)
+    monkeypatch.setattr("app.images.storage_cleanup.release", AsyncMock())
 
 
 def _make_jpeg(width: int = 1600, height: int = 1200) -> bytes:
@@ -45,6 +57,9 @@ class _FakeSession:
         result = MagicMock()
         result.scalar_one_or_none = MagicMock(return_value=self._image)
         return result
+
+    async def scalar(self, *args: object) -> uuid.UUID:
+        return uuid.uuid4()
 
     def add(self, obj: Any) -> None:
         self.added.append(obj)

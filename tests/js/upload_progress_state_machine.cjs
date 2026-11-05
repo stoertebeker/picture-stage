@@ -66,6 +66,7 @@ function uploadZone(fileCount = 1) {
             completeLabel: 'Complete',
             uploadFailedLabel: 'Upload failed',
             uploadInvalidImageLabel: 'Unsupported image',
+            uploadStorageQuotaLabel: 'Storage limit reached',
             processingFailedLabel: 'Processing failed',
         },
     };
@@ -307,6 +308,7 @@ assert.notEqual(uploadFailure.component.progressValue(), 100);
 // Only a server-marked image decode error receives the more specific message.
 for (const [status, marker, expected] of [
     [422, 'invalid-image', 'Unsupported image'],
+    [409, 'storage-quota', 'Storage limit reached'],
     [422, null, 'Upload failed'],
     [500, 'invalid-image', 'Upload failed'],
 ]) {

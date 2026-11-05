@@ -131,7 +131,10 @@ function uploadZoneComponent() {
                 const invalidImage = xhr && xhr.status === 422 &&
                     typeof xhr.getResponseHeader === 'function' &&
                     xhr.getResponseHeader('X-Picture-Stage-Error') === 'invalid-image';
-                this._failureStage = invalidImage ? 'invalid-image' : 'upload';
+                const storageQuota = xhr && xhr.status === 409 &&
+                    typeof xhr.getResponseHeader === 'function' &&
+                    xhr.getResponseHeader('X-Picture-Stage-Error') === 'storage-quota';
+                this._failureStage = storageQuota ? 'storage-quota' : invalidImage ? 'invalid-image' : 'upload';
                 this.state = 'failed';
                 this.$refs.fileInput.value = '';
                 return;
@@ -228,6 +231,7 @@ function uploadZoneComponent() {
             if (this.state === 'uploading') return root.uploadingLabel || '';
             if (this.state === 'complete') return root.completeLabel || '';
             if (this.state === 'failed') {
+                if (this._failureStage === 'storage-quota') return root.uploadStorageQuotaLabel || root.uploadFailedLabel || '';
                 if (this._failureStage === 'invalid-image') return root.uploadInvalidImageLabel || root.uploadFailedLabel || '';
                 return this._failureStage === 'upload'
                     ? root.uploadFailedLabel || ''

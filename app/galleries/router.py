@@ -45,8 +45,10 @@ from app.galleries.schemas import (
     GalleryStatusTransition,
     GalleryUpdate,
 )
+from app.images.upload_batch import UploadBatch, UploadPlan
 from app.storage.base import StorageBackend, storage_key
 from app.storage.dependencies import get_storage
+from app.storage.quota import StorageQuotaExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -314,6 +316,7 @@ async def duplicate_gallery(
     db: AsyncSession = Depends(get_db),
     storage: StorageBackend = Depends(get_storage),
 ) -> GalleryResponse:
+    await lock_gallery(db, gallery_id, shared=True)
     source = await _get_owned_gallery(gallery_id, user, db)
 
     try:
@@ -324,7 +327,10 @@ async def duplicate_gallery(
             detail=f"Gallery limit reached ({exc.limit})",
         ) from exc
 
+    new_gallery_id = uuid.uuid4()
+    await lock_gallery(db, new_gallery_id, shared=True)
     new_gallery = Gallery(
+        id=new_gallery_id,
         owner_id=user.id,
         name=body.name or f"{source.name} (Kopie)",
         guest_message=source.guest_message,
@@ -340,54 +346,66 @@ async def duplicate_gallery(
         .order_by(Image.sort_order)
     )
     source_images = result.scalars().all()
-
+    plans = []
     for img in source_images:
-        new_image_id = uuid.uuid4()
+        image_id = uuid.uuid4()
         ext = img.storage_key.rsplit(".", 1)[-1] if "." in img.storage_key else "jpg"
-        new_original_key = storage_key(str(new_gallery.id), "originals", f"{new_image_id}.{ext}")
+        original_key = storage_key(str(new_gallery_id), "originals", f"{image_id}.{ext}")
+        keys = {original_key} | {
+            storage_key(str(new_gallery_id), "previews", f"{image_id}_{preview.variant.value}.webp")
+            for preview in img.previews
+        }
+        plans.append(UploadPlan(image_id, original_key, ext, frozenset(keys)))
 
-        try:
-            await storage.copy(img.storage_key, new_original_key)
-        except Exception:
-            logger.warning("Failed to copy image %s, skipping", img.id)
-            continue
-
-        new_image = Image(
-            id=new_image_id,
-            gallery_id=new_gallery.id,
-            storage_key=new_original_key,
-            filename=img.filename,
-            content_type=img.content_type,
-            width=img.width,
-            height=img.height,
-            file_size=img.file_size,
-            sha256=img.sha256,
-            exif=img.exif,
-            sort_order=img.sort_order,
-        )
-        db.add(new_image)
-
-        for preview in img.previews:
-            new_preview_key = storage_key(
-                str(new_gallery.id), "previews", f"{new_image_id}_{preview.variant.value}.webp"
-            )
+    # The new gallery is uncommitted. The independently committed quota ledger
+    # owns recovery keys without an FK to that uncommitted gallery/image.
+    async with UploadBatch(db, storage, new_gallery_id, plans, persist_intent=False) as batch:
+        for img, plan in zip(source_images, plans, strict=True):
             try:
-                await storage.copy(preview.storage_key, new_preview_key)
+                await batch.copy(user.id, plan.image_id, img.storage_key, plan.original_key, img.file_size)
+            except StorageQuotaExceeded:
+                raise
             except Exception:
-                logger.warning("Failed to copy preview %s, skipping", preview.storage_key)
+                logger.warning("Failed to copy image %s, skipping", img.id)
                 continue
 
-            new_preview = ImagePreview(
-                image_id=new_image_id,
-                variant=preview.variant,
-                storage_key=new_preview_key,
-                width=preview.width,
-                height=preview.height,
-                file_size=preview.file_size,
+            new_image = Image(
+                id=plan.image_id,
+                gallery_id=new_gallery_id,
+                storage_key=plan.original_key,
+                filename=img.filename,
+                content_type=img.content_type,
+                width=img.width,
+                height=img.height,
+                file_size=img.file_size,
+                sha256=img.sha256,
+                exif=img.exif,
+                sort_order=img.sort_order,
             )
-            db.add(new_preview)
+            db.add(new_image)
+            for preview in img.previews:
+                new_preview_key = storage_key(
+                    str(new_gallery_id), "previews", f"{plan.image_id}_{preview.variant.value}.webp"
+                )
+                try:
+                    await batch.copy(user.id, plan.image_id, preview.storage_key, new_preview_key, preview.file_size)
+                except StorageQuotaExceeded:
+                    raise
+                except Exception:
+                    logger.warning("Failed to copy preview %s, skipping", preview.storage_key)
+                    continue
+                db.add(
+                    ImagePreview(
+                        image_id=plan.image_id,
+                        variant=preview.variant,
+                        storage_key=new_preview_key,
+                        width=preview.width,
+                        height=preview.height,
+                        file_size=preview.file_size,
+                    )
+                )
+        await batch.commit()
 
-    await db.commit()
     await db.refresh(new_gallery)
 
     image_count = await _count_images(new_gallery.id, db)

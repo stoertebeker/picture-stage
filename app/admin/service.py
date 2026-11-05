@@ -19,8 +19,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.passwords import hash_password
 from app.auth.token_lookup import lock_pending_signup
-from app.db.models import AuditLog, Gallery, PendingSignup, User, UserStatus
+from app.db.models import AuditLog, Gallery, PendingSignup, StorageAllocation, User, UserStatus
 from app.galleries.deletion import purge_gallery
+from app.galleries.lifecycle import lock_gallery
+from app.images.storage_cleanup import delete_storage_keys
 from app.storage.base import StorageBackend
 
 
@@ -199,8 +201,25 @@ async def delete_user(
     galleries = (
         (await db.execute(select(Gallery).where(Gallery.owner_id == target.id).order_by(Gallery.id))).scalars().all()
     )
+    # Include claims from rolled-back copies whose Gallery never committed.
+    allocation_galleries = set(
+        (await db.scalars(select(StorageAllocation.gallery_id).where(StorageAllocation.owner_id == target.id))).all()
+    )
+    locked_gallery_ids = allocation_galleries | {gallery.id for gallery in galleries}
+    for gallery_id in sorted(locked_gallery_ids):
+        await lock_gallery(db, gallery_id)
     for gallery in galleries:
         await purge_gallery(gallery, db, storage)
+    remaining_keys = set(
+        (
+            await db.scalars(
+                select(StorageAllocation.key).where(
+                    StorageAllocation.owner_id == target.id, StorageAllocation.gallery_id.in_(locked_gallery_ids)
+                )
+            )
+        ).all()
+    )
+    await delete_storage_keys(storage, remaining_keys, db=db)
 
     # Core delete avoids async lazy-load of cascade relationships; remaining dependents
     # (notification_configs -> deliveries) are removed by DB-level ON DELETE CASCADE.

@@ -170,6 +170,39 @@ class UploadCleanupIntent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class StorageUsage(Base):
+    """Committed reservations, including objects with uncertain write outcomes."""
+
+    __tablename__ = "storage_usage"
+    __table_args__ = (
+        CheckConstraint("bytes >= 0 AND objects >= 0 AND unknown_sizes >= 0", name="ck_storage_usage_nonnegative"),
+    )
+
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    bytes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    objects: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+    unknown_sizes: Mapped[int] = mapped_column(BigInteger, nullable=False, server_default="0")
+
+
+class StorageAllocation(Base):
+    """Quota charge and cleanup ownership persisted before backend I/O.
+
+    Gallery/image IDs deliberately have no FK: copying creates them in another
+    transaction, and failed transactions must not erase storage ownership.
+    """
+
+    __tablename__ = "storage_allocations"
+    __table_args__ = (CheckConstraint("size IS NULL OR size >= 0", name="ck_storage_allocation_size"),)
+
+    key: Mapped[str] = mapped_column(String(1024), primary_key=True)
+    owner_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False, index=True)
+    gallery_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    image_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
+    size: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+
 class Image(TimestampMixin, Base):
     __tablename__ = "images"
 

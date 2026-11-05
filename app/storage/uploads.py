@@ -14,7 +14,14 @@ from app.storage.base import StorageBackend
 
 
 async def complete_upload(storage: StorageBackend, key: str, data: BinaryIO, content_type: str) -> str:
-    write = asyncio.create_task(storage.upload(key, data, content_type))
+    return await _complete_write(asyncio.create_task(storage.upload(key, data, content_type)))
+
+
+async def complete_copy(storage: StorageBackend, source: str, destination: str) -> None:
+    await _complete_write(asyncio.create_task(storage.copy(source, destination)))
+
+
+async def _complete_write[T](write: asyncio.Task[T]) -> T:
     try:
         return await asyncio.shield(write)
     except asyncio.CancelledError:

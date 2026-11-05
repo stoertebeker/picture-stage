@@ -14,6 +14,7 @@ from app.db.models import AuditLog, Gallery, Image, ImagePreview, SelectionEvent
 from app.galleries.lifecycle import lock_gallery
 from app.images.storage_cleanup import delete_storage_keys, image_storage_keys
 from app.storage.base import StorageBackend
+from app.storage.quota import allocation_keys
 
 
 async def purge_gallery(gallery: Gallery, db: AsyncSession, storage: StorageBackend) -> None:
@@ -33,7 +34,8 @@ async def purge_gallery(gallery: Gallery, db: AsyncSession, storage: StorageBack
     intents = (await db.scalars(select(UploadCleanupIntent).where(UploadCleanupIntent.gallery_id == gallery.id))).all()
     keys = {key for image in images for key in image_storage_keys(image)}
     keys.update(key for intent in intents for batch_keys in intent.image_keys.values() for key in batch_keys)
-    await delete_storage_keys(storage, keys)
+    keys.update(await allocation_keys(db, gallery_id=gallery.id))
+    await delete_storage_keys(storage, keys, db=db)
 
     # 2. Delete DB records in dependency order
     await db.execute(

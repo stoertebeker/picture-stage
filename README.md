@@ -174,9 +174,21 @@ their object keys even if immediate cleanup fails. Gallery/user deletion retries
 those keys and retains the references while storage is unavailable. Original
 storage keys use server-generated UUIDs and MIME-based extensions; uploaded
 filenames remain metadata. There is no periodic janitor or automatic discovery
-of historical objects without an image record or cleanup intent. If a commit
+of historical objects without an image record, cleanup intent or storage
+allocation. If a commit
 acknowledgement is lost, committed files are preserved; the request still fails
 and frontend preview dispatch is not automatically retried.
+
+Migration `0013` adds durable storage reservations per owner. Originals, previews,
+gallery copies and incomplete writes count toward `MAX_STORAGE_BYTES_PER_OWNER`
+(default 10 GiB) and `MAX_STORAGE_OBJECTS_PER_OWNER` (default 40,000). Both values
+must be positive. Reservations commit before backend writes and are released
+only after confirmed deletion, including on failed uploads. Existing data is
+retained when limits are lowered; reads and deletion remain available. Historical
+objects with unknown sizes block further allocation for their owner until the
+affected images or galleries are deleted. Failed compensation remains retryable
+through gallery/user deletion; there is no automatic orphan sweep. S3 accounting
+covers current keys, not provider-retained object versions.
 
 Image bytes must decode as JPEG, PNG or WebP, regardless of the supplied MIME
 type. Invalid or unsupported images are rejected with HTTP 422. Previously

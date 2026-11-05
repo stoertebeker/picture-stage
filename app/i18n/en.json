@@ -232,6 +232,7 @@
     "upload_processing_resumed": "Creating previews...",
     "upload_complete": "All previews have been created.",
     "upload_failed": "The upload failed. Please try again.",
+    "storage_quota_exceeded": "Your storage limit has been reached. Delete images or contact the administrator.",
     "upload_invalid_image": "At least one file is not a valid JPEG, PNG, or WebP image. The upload was not saved.",
     "upload_processing_failed": "At least one preview could not be created.",
     "processing": "Processing...",

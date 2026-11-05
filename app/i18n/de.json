@@ -232,6 +232,7 @@
     "upload_processing_resumed": "Vorschauen werden erstellt...",
     "upload_complete": "Alle Vorschauen wurden erstellt.",
     "upload_failed": "Der Upload ist fehlgeschlagen. Bitte versuche es erneut.",
+    "storage_quota_exceeded": "Dein Speicherlimit ist erreicht. Lösche Bilder oder kontaktiere den Administrator.",
     "upload_invalid_image": "Mindestens eine Datei ist kein gültiges JPEG-, PNG- oder WebP-Bild. Der Upload wurde nicht gespeichert.",
     "upload_processing_failed": "Mindestens eine Vorschau konnte nicht erstellt werden.",
     "processing": "Wird verarbeitet...",

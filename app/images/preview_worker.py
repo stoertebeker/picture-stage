@@ -18,7 +18,7 @@ from typing import Any
 from sqlalchemy import select
 
 from app.db.base import async_session
-from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
+from app.db.models import Gallery, Image, ImagePreview, ImageProcessingStatus, PreviewVariant
 from app.galleries.lifecycle import lock_gallery, lock_images
 from app.images.process_pool import ImageProcessingBusy, image_processing_slot, run_in_pool
 from app.images.processing import (
@@ -29,7 +29,7 @@ from app.images.processing import (
 from app.images.storage_cleanup import StorageCleanupError, delete_storage_keys
 from app.storage.base import storage_key
 from app.storage.dependencies import get_storage
-from app.storage.uploads import complete_upload
+from app.storage.quota import upload
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ async def _mark_failed(image_id: uuid.UUID, gallery_id: uuid.UUID, attempted_key
             if image is not None and image.processing_status == ImageProcessingStatus.ready:
                 return
             try:
-                await delete_storage_keys(get_storage(), attempted_keys or set())
+                await delete_storage_keys(get_storage(), attempted_keys or set(), db=db)
             except StorageCleanupError:
                 logger.warning("Preview cleanup incomplete for image %s; retaining its recovery reference", image_id)
             if image is not None:
@@ -124,6 +124,10 @@ async def _process_image_previews(
             if image.processing_status == ImageProcessingStatus.ready:
                 return
 
+            owner_id = await db.scalar(select(Gallery.owner_id).where(Gallery.id == gallery_id))
+            if owner_id is None:
+                return
+
             original_bytes = await _read_original(image.storage_key)
 
             for variant_name, max_width in PREVIEW_SIZES.items():
@@ -142,7 +146,9 @@ async def _process_image_previews(
 
                 preview_key = storage_key(str(gallery_id), "previews", f"{image_id}_{variant_name}.webp")
                 attempted_keys.add(preview_key)
-                await complete_upload(storage, preview_key, io.BytesIO(preview_bytes), "image/webp")
+                await upload(
+                    db, storage, owner_id, gallery_id, image_id, preview_key, io.BytesIO(preview_bytes), "image/webp"
+                )
 
                 db.add(
                     ImagePreview(

@@ -14,11 +14,12 @@ from anyio import CancelScope
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession, async_sessionmaker
 
-from app.db.models import Image, UploadCleanupIntent
+from app.db.models import Gallery, Image, UploadCleanupIntent
 from app.galleries.lifecycle import lock_gallery
 from app.images.storage_cleanup import canonical_preview_keys, delete_storage_keys
 from app.storage.base import StorageBackend, storage_key
-from app.storage.uploads import complete_upload
+from app.storage.quota import StorageQuotaExceeded, reserve, upload
+from app.storage.uploads import complete_copy
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,13 @@ class UploadPlan:
 
 class UploadBatch:
     def __init__(
-        self, db: AsyncSession, storage: StorageBackend, gallery_id: uuid.UUID, plans: list[UploadPlan]
+        self,
+        db: AsyncSession,
+        storage: StorageBackend,
+        gallery_id: uuid.UUID,
+        plans: list[UploadPlan],
+        *,
+        persist_intent: bool = True,
     ) -> None:
         self.db = db
         self.storage = storage
@@ -59,6 +66,7 @@ class UploadBatch:
         self.attempted_keys: set[str] = set()
         self._owned_keys = {key for plan in plans for key in plan.keys}
         self._committed = False
+        self._persist_intent = persist_intent
         bind = db.bind
         if bind is None:
             raise RuntimeError("Upload recovery requires a bound database session")
@@ -68,14 +76,15 @@ class UploadBatch:
         self._sessions = async_sessionmaker(engine, expire_on_commit=False)
 
     async def __aenter__(self) -> "UploadBatch":
-        self.db.add(
-            UploadCleanupIntent(
-                id=self.intent_id,
-                gallery_id=self.gallery_id,
-                image_keys={str(plan.image_id): sorted(plan.keys) for plan in self.plans},
+        if self._persist_intent:
+            self.db.add(
+                UploadCleanupIntent(
+                    id=self.intent_id,
+                    gallery_id=self.gallery_id,
+                    image_keys={str(plan.image_id): sorted(plan.keys) for plan in self.plans},
+                )
             )
-        )
-        await self.db.commit()
+            await self.db.commit()
         # The caller must now reselect gallery + ownership before any writes:
         # deletion may have won the gap after the intent commit released locks.
         await lock_gallery(self.db, self.gallery_id, shared=True)
@@ -86,7 +95,22 @@ class UploadBatch:
             raise ValueError("Storage key is not owned by this upload batch")
         # Register before awaiting a write that may fail after storing bytes.
         self.attempted_keys.add(key)
-        return await complete_upload(self.storage, key, data, content_type)
+        owner_id = await self.db.scalar(select(Gallery.owner_id).where(Gallery.id == self.gallery_id))
+        if owner_id is None:
+            raise RuntimeError("Upload gallery disappeared")
+        plan = next(plan for plan in self.plans if key in plan.keys)
+        return await upload(self.db, self.storage, owner_id, self.gallery_id, plan.image_id, key, data, content_type)
+
+    async def copy(
+        self, owner_id: uuid.UUID, image_id: uuid.UUID, source: str, destination: str, size: int | None
+    ) -> None:
+        if destination not in self._owned_keys:
+            raise ValueError("Storage key is not owned by this copy batch")
+        if size is None or size < 0:
+            raise StorageQuotaExceeded()
+        self.attempted_keys.add(destination)
+        await reserve(self.db, owner_id, self.gallery_id, image_id, destination, size)
+        await complete_copy(self.storage, source, destination)
 
     async def commit(self) -> None:
         # Removing the intent is atomic with the complete image/preview batch.
@@ -124,7 +148,7 @@ class UploadBatch:
                     for key in plan.keys
                     if key in self.attempted_keys
                 }
-                await delete_storage_keys(self.storage, removable)
+                await delete_storage_keys(self.storage, removable, db=db)
                 await db.execute(delete(UploadCleanupIntent).where(UploadCleanupIntent.id == self.intent_id))
                 await db.commit()
         except Exception:
