@@ -196,6 +196,14 @@ or leave it empty to derive a separate key from a sufficiently strong
 `SECRET_KEY`. An explicitly invalid key fails startup instead of falling back.
 `CAPTCHA_ENABLED=false` explicitly disables this signup gate.
 
+Historical hash-only verification links may need several bounded lookup steps.
+On a 503 with `X-Picture-Stage-Lookup: before-effects`, API clients repeat the
+same verification POST with its cookie jar after `Retry-After`. The HTML link
+continues automatically. Each resolver step checks at most 64 candidates;
+successful consumption rechecks the current verifier under its row lock.
+Verification links retain their existing lifetime; progress cookies expire
+after 15 minutes and renew as lookup advances.
+
 Browser logout uses `POST /logout`. The compatible API alias requires the same
 CSRF cookie and matching header/form proof, even without an incoming session
 cookie or when an `Authorization` header is present. Proofs are bound to the
@@ -294,6 +302,15 @@ stored images in other formats cannot be used to generate new previews.
 | GET | `/g/{token}/selections` | Current selection state |
 | POST | `/g/{token}/complete` | Mark review as done |
 
+Image lists use 30-image pages, with the database bound applied before preview
+hydration and URL signing. The JSON body remains a list; responses expose
+`X-Next-Cursor`, `X-Has-More`, `X-Total-Images` and `X-Filtered-Images`.
+Pass `cursor` with the same filter, sort and direction to continue. Nonzero
+offsets are rejected. HTML scrolling and lightbox navigation load further pages
+on demand. Migration `0018` backfills capture-date keys and current selection
+state while retaining the append-only history; older full backups migrate on
+startup, and new backups include the projection.
+
 Guest browsers keep their session credential in a gallery-scoped, host-only
 HttpOnly cookie with SameSite=Lax, the configured Secure flag, and a signed
 12-hour server-checked expiry. The cookie path includes the application mount
@@ -367,12 +384,12 @@ commit. Delivery remains best effort, without a durable queue or crash recovery.
 ## Security
 
 - **Share links:** long random capability URLs are hashed for lookup and stored replayable for the owner UI; optional gallery passwords protect sensitive galleries
-- **Token lookup:** new verification links and recoverable gallery links use indexed lookup keys. Older links remain valid through a compatibility scan; each app process allows up to two gallery scans and two verification scans at once, with excess requests receiving 503 and `Retry-After`. Invalid and non-indexed tokens can still require a linear scan.
+- **Token lookup:** new verification links and recoverable gallery links use indexed lookup keys. Older links remain valid through fixed lookup windows and signed, token-bound progress cookies. A gallery resolver checks at most 64 indexed and 64 legacy candidates plus an optional single hint; verification checks at most 64 candidates before its locked consumption recheck. A first legacy lookup can span several requests. Browsers retry only explicitly marked, pre-effect lookup failures; API clients retain cookies and repeat after `Retry-After`. Each process additionally admits at most two legacy lookups of each kind concurrently. Hints always require current salted verification and access checks; encoded and mounted links retain their cookie scope.
 - **Signed URLs:** HMAC-SHA256 with configurable TTL (thumbnails 1h, previews 15min)
 - **Webhook delivery:** destinations must resolve entirely to public unicast addresses. Delivery connects directly to a checked address with the original hostname for TLS verification; environment HTTP proxies are not used for webhooks. Redirects are rejected and response bodies are not read.
 - **Rate limiting:** undecorated application routes use 200/min per matched route template and client address, before endpoint parsing. Dynamic token values share that default budget. Explicit limits retain their existing scopes (signup 5/min, login 10/min, password verification 5/min). Counters use process-local memory by default; `RATELIMIT_ENABLED=false` disables enforcement. Forwarding headers are not used directly as client identity. Static mounts and unmatched/redirect requests retain their normal handling.
 - **Security headers:** CSP, HSTS, X-Frame-Options, Referrer-Policy
-- **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; rejected POSTs are never automatically replayed.
+- **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; POSTs rejected for stale CSRF proof are never automatically replayed.
 - **Request bodies:** ordinary JSON/forms are capped at 1 MiB before CSRF and parsing. The two image-upload POST routes retain the global upload budget. Declared lengths and received bytes are checked; the smaller enabled ceiling applies.
 - **Image processing admission:** each app process admits at most `IMAGE_PROCESSING_WORKERS` uploads or preview jobs at once, with at most twice that number waiting for up to five seconds. Busy uploads return HTTP 503 with `Retry-After`; accepted frontend uploads keep their slot through preview processing. This limit is per process and does not bound multipart parsing before admission.
 - **Tenant isolation:** all queries filtered by owner_id, verified by structural tests
