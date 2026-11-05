@@ -101,6 +101,16 @@ class SetupState(Base):
     completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
 
+class RevokedToken(Base):
+    """Per-credential logout ledger; independent of user deletion and cutoffs."""
+
+    __tablename__ = "revoked_tokens"
+
+    fingerprint: Mapped[str] = mapped_column(String(64), primary_key=True)
+    # JWT exp + one second, matching python-jose's inclusive exp-second check.
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+
+
 class User(TimestampMixin, Base):
     __tablename__ = "users"
 

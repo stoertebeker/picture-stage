@@ -185,6 +185,19 @@ cookie or when an `Authorization` header is present. Proofs are bound to the
 owner session when one is present. Ordinary bearer-only API routes remain
 exempt from browser CSRF checks.
 
+Successful logout commits a per-credential revocation before deleting the cookie.
+The same credential is then rejected by both bearer and browser authentication,
+including equivalent signature encodings. Other logins remain valid; newly issued
+tokens have independent random IDs even when created in the same second. Two
+different valid header/cookie credentials return 409 without changing either.
+Malformed or expired credentials can still be cleared locally.
+
+Migration `0014` stores only a credential fingerprint and its retention deadline;
+bounded cleanup removes entries only after their JWT can no longer authenticate.
+The ledger is included in full database backups. Historical byte-identical JWTs
+are one credential and cannot be distinguished. Already authenticated requests
+are not interrupted retroactively.
+
 ### Galleries (`/api/v1/galleries/`)
 
 The gallery detail form accepts an optional expiry **date**. A saved date expires

@@ -154,6 +154,7 @@ async def test_json_login_and_bearer_locale_remain_csrf_exempt(monkeypatch, root
     result.scalar_one_or_none.return_value = user
     database = AsyncMock(spec=AsyncSession)
     database.execute.return_value = result
+    database.scalar.return_value = None  # No logout revocation for the bearer control.
 
     async def fake_db():
         yield database

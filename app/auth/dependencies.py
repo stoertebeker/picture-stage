@@ -5,6 +5,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.auth.revocation import is_token_revoked
 from app.auth.tokens import TokenData, decode_access_token
 from app.db.models import LOGIN_ALLOWED_STATUSES, User, UserStatus
 from app.db.session import get_db
@@ -31,6 +32,8 @@ async def get_current_user(
     token_data = decode_access_token(token)
     if token_data is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")
+    if await is_token_revoked(db, token_data):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
 
     try:
         uid = uuid.UUID(token_data.user_id)
@@ -68,6 +71,8 @@ async def get_user_from_cookie(request: Request, db: AsyncSession = Depends(get_
         return None
     token_data = decode_access_token(token)
     if token_data is None:
+        return None
+    if await is_token_revoked(db, token_data):
         return None
     try:
         uid = uuid.UUID(token_data.user_id)

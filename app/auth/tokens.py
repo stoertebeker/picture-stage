@@ -1,3 +1,4 @@
+import hashlib
 import secrets
 import uuid
 from datetime import UTC, datetime, timedelta
@@ -16,6 +17,8 @@ class TokenData(NamedTuple):
 
     user_id: str
     issued_at: datetime
+    expires_at: datetime | None = None
+    fingerprint: str | None = None
 
 
 def create_access_token(user_id: str) -> str:
@@ -23,22 +26,33 @@ def create_access_token(user_id: str) -> str:
     expire = now + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     # iat anchors the token in time so it can be rejected if issued before the
     # user's tokens_valid_after cut-off (see app/auth/dependencies.py).
-    payload = {"sub": user_id, "iat": now, "exp": expire, "type": "access"}
+    payload = {"sub": user_id, "iat": now, "exp": expire, "type": "access", "jti": secrets.token_urlsafe(32)}
     encoded: str = jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
     return encoded
 
 
 def decode_access_token(token: str) -> TokenData | None:
     try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+        payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM], options={"require_exp": True})
         if payload.get("type") != "access":
             return None
-        user_id: str | None = payload.get("sub")
-        iat: int | None = payload.get("iat")
-        if user_id is None or iat is None:
+        user_id = payload.get("sub")
+        iat = payload.get("iat")
+        exp = payload.get("exp")
+        if not isinstance(user_id, str) or not user_id or type(iat) is not int or type(exp) is not int:
             return None
-        return TokenData(user_id=user_id, issued_at=datetime.fromtimestamp(iat, tz=UTC))
-    except JWTError:
+        issued_at = datetime.fromtimestamp(iat, tz=UTC)
+        # python-jose accepts a token throughout its exp second. Retain its
+        # revocation until the following second, including for legacy no-jti JWTs.
+        expires_at = datetime.fromtimestamp(exp, tz=UTC) + timedelta(seconds=1)
+        # Hash only the authenticated signing input AFTER HS256 validation.
+        # Signature base64 padding/pad-bit aliases accepted by jose must identify
+        # the same credential. Historical identical JWTs are one credential;
+        # new random jtis distinguish even simultaneous logins.
+        signing_input = token.rsplit(".", 1)[0]
+        fingerprint = hashlib.sha256(signing_input.encode("ascii")).hexdigest()
+        return TokenData(user_id, issued_at, expires_at, fingerprint)
+    except (JWTError, ValueError, TypeError, OverflowError, OSError):
         return None
 
 

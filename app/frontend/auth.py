@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_user_from_cookie
 from app.auth.email import normalize_mailbox
 from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy
+from app.auth.revocation import logout_credential
 from app.auth.token_lookup import consume_pending_signup
 from app.auth.tokens import create_access_token, generate_verification_token, verification_lookup_id
 from app.auth.utils import get_client_ip
@@ -181,12 +182,8 @@ async def signup_submit(request: Request, db: AsyncSession = Depends(get_db)) ->
 
 
 @router.post("/logout")
-async def logout_page(request: Request) -> RedirectResponse:
-    response = RedirectResponse(url="/login", status_code=303)
-    # Match the set_cookie attributes so the deletion is honoured across browsers
-    # (picture-stage-8ox); a mismatched Secure/SameSite can leave the cookie alive.
-    response.delete_cookie(key="session", path="/", secure=settings.cookie_secure, samesite="lax", httponly=True)
-    return response
+async def logout_page(request: Request, db: AsyncSession = Depends(get_db)) -> RedirectResponse:
+    return await logout_credential(request, db)
 
 
 @router.get("/verify-email/{token}", response_class=HTMLResponse)
