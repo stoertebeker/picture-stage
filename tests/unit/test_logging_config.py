@@ -6,6 +6,10 @@ uvicorn's loggers stay non-propagating (no double logging), and the config keeps
 """
 
 import logging
+import subprocess
+import sys
+import textwrap
+from pathlib import Path
 from unittest.mock import patch
 
 from app.config import settings
@@ -46,3 +50,60 @@ def test_build_config_respects_log_level_setting() -> None:
         cfg = build_logging_config()
     assert cfg["root"]["level"] == "DEBUG"
     assert cfg["loggers"]["app"]["level"] == "DEBUG"
+
+
+def test_reconfigure_after_alembic_restores_child_logs_without_duplicates() -> None:
+    # Isolate the real fileConfig/dictConfig sequence from pytest's handlers and
+    # import order. Nested loggers must work even when their parents are only
+    # PlaceHolders in logging's registry.
+    result = subprocess.run(  # noqa: S603 -- current interpreter and fixed test code
+        [
+            sys.executable,
+            "-c",
+            textwrap.dedent("""\
+                import logging
+                import logging.config
+
+                from app.config import settings
+                from app.images import storage_cleanup
+                from app.logging_config import configure_logging
+
+                settings.log_level = "INFO"
+                loggers = [storage_cleanup.logger, logging.getLogger("app.regression.deep.module")]
+                configure_logging()
+                assert all(not logger.disabled for logger in loggers)
+                logging.config.fileConfig("alembic.ini")
+                assert all(logger.disabled for logger in loggers)
+
+                for iteration in range(2):
+                    configure_logging()
+                    for index, logger in enumerate(loggers):
+                        assert not logger.disabled, logger.name
+                        logger.info("app-info-%s-%s", iteration, index)
+                        logger.error("app-error-%s-%s", iteration, index)
+                    for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+                        logger = logging.getLogger(name)
+                        assert not logger.disabled, name
+                        logger.info("server-%s-%s", iteration, name)
+
+                logging.getLogger("app.imported_later.worker").info("late-app-info")
+                """),
+        ],
+        cwd=Path(__file__).resolve().parents[2],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    lines = result.stdout.splitlines()
+    for iteration in range(2):
+        for index in range(2):
+            for level in ("info", "error"):
+                marker = f"app-{level}-{iteration}-{index}"
+                assert sum(line.endswith(marker) for line in lines) == 1, result.stdout
+        for name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+            marker = f"server-{iteration}-{name}"
+            assert sum(line.endswith(marker) for line in lines) == 1, result.stdout
+    assert sum(line.endswith("late-app-info") for line in lines) == 1, result.stdout
+    assert result.stderr == ""

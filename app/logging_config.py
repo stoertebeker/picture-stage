@@ -59,4 +59,13 @@ def build_logging_config() -> dict[str, Any]:
 
 def configure_logging() -> None:
     """Apply the central logging config. Idempotent (dictConfig replaces, not appends)."""
-    logging.config.dictConfig(build_logging_config())
+    config = build_logging_config()
+    # Alembic's fileConfig disables already imported loggers. dictConfig leaves
+    # that flag unchanged on children of the explicitly configured "app" logger,
+    # even with disable_existing_loggers=False. Name every existing app logger
+    # explicitly so dictConfig re-enables it and restores normal inheritance.
+    # The registry also contains PlaceHolders for packages without a logger.
+    for name, logger in logging.root.manager.loggerDict.copy().items():
+        if name.startswith("app.") and isinstance(logger, logging.Logger):
+            config["loggers"][name] = {"level": "NOTSET", "handlers": [], "propagate": True}
+    logging.config.dictConfig(config)
