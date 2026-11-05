@@ -169,6 +169,11 @@ filenames and comments. Stored values and JSON/TXT exports are unchanged.
 
 ### Images (`/api/v1/galleries/{id}/images/`)
 
+Watermarks apply only to the large preview (up to 1280px wide). The 320px and
+640px thumbnails intentionally remain unwatermarked. A gallery configuration of
+`enabled: false` also disables the large-preview overlay. Guest views receive
+signed thumbnail and preview URLs, never original-image URLs.
+
 Multi-file uploads commit their image records as one batch. Migration `0008`
 adds internal cleanup intents before storage writes, so failed uploads retain
 their object keys even if immediate cleanup fails. Gallery/user deletion retries
