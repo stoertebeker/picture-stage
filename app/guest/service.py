@@ -73,6 +73,40 @@ async def resolve_gallery_by_token(token: str, db: AsyncSession) -> Gallery | No
     return None
 
 
+async def lock_gallery_for_review(token: str, gallery_id: uuid.UUID, db: AsyncSession) -> Gallery:
+    """Serialize review writes on one gallery, then recheck current access.
+
+    Call after storage lifecycle fences and, for selections, the event-budget
+    fence. Never lock the token resolver's legacy scan. A row lock also orders
+    review writes against owner status UPDATEs, including completion/reopening.
+    The separate post-lock query sees access changes committed while we waited.
+    Commit/rollback releases the lock; callers must not mutate before acquiring it.
+    """
+    with db.no_autoflush:
+        locked_id = await db.scalar(select(Gallery.id).where(Gallery.id == gallery_id).with_for_update())
+        if locked_id is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+        gallery = await db.scalar(
+            select(Gallery)
+            .join(User, User.id == Gallery.owner_id)
+            .where(
+                Gallery.id == gallery_id,
+                Gallery.status.in_([GalleryStatus.shared, GalleryStatus.completed]),
+                User.status.in_(LOGIN_ALLOWED_STATUSES),
+            )
+            .execution_options(populate_existing=True)
+        )
+    if (
+        gallery is None
+        or gallery.share_token_hash is None
+        or gallery.share_token_salt is None
+        or not verify_token(token, gallery.share_token_hash, gallery.share_token_salt)
+    ):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
+    check_gallery_accessible(gallery)
+    return gallery
+
+
 def is_gallery_expired(gallery: Gallery) -> bool:
     """Return True if the gallery's share link has passed its expiry instant."""
     expiry = gallery.expires_at

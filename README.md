@@ -199,6 +199,16 @@ stored images in other formats cannot be used to generate new previews.
 | GET | `/g/{token}/selections` | Current selection state |
 | POST | `/g/{token}/complete` | Mark review as done |
 
+Selection writes and review completion lock the specific gallery row until
+commit, also ordering them against owner status changes. Once completed, new
+selections return 403. Repeated completion requests, including fresh sessions
+or concurrent requests, return 409 without another email/webhook attempt.
+Completed galleries remain viewable. An owner can reopen a gallery for another
+review while retaining selection history; a session that already completed a
+review cannot complete again, but another session can complete the reopened
+gallery. Only the successful completion transition attempts notifications after
+commit. Delivery remains best effort, without a durable queue or crash recovery.
+
 ### Admin (`/api/v1/admin/`)
 
 | Method | Endpoint | Description |
