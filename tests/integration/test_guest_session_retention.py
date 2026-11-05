@@ -115,8 +115,9 @@ async def test_reuse_and_existing_credentials_work_above_lowered_budget(
     db.add_all([ShareSession(gallery_id=gallery.id, authorization_epoch=0) for _ in range(4)])
     await db.commit()
     monkeypatch.setattr(settings, "max_share_sessions_per_gallery", 1)
-    reused = await password_form(client, path, "old-password") if protected else await client.get(path)
+    reused = await client.get(path)
     assert reused.status_code == 200 and response_session_id(reused) == session_id
+    assert "data-lookup-password" not in reused.text
     assert guest_csrf(reused) == guest_csrf(visit)
     for surface in ("images", "selections", "gallery-images"):
         assert (await client.get(f"{path}/{surface}")).status_code == 200

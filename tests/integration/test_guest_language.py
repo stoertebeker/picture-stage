@@ -9,6 +9,7 @@ import pytest
 
 from app.auth.passwords import hash_password, hash_token
 from app.db.models import Gallery, GalleryStatus, Image
+from app.guest.credentials import cookie_name
 from app.i18n import t
 from tests.integration.guest_helpers import guest_csrf, password_form
 
@@ -117,16 +118,23 @@ async def test_switch_after_password_post_returns_to_gallery_get(client, db, own
     unlocked = await password_form(client, path, "gallery-password")
     assert unlocked.status_code == 200
     assert 'x-data="langSwitcher"' in unlocked.text
+    grant = client.cookies.get(cookie_name(_gallery_record.id))
+    assert grant is not None
     switched = await client.get(f"/set-lang/{chosen}", headers={"Referer": f"http://test{path}/verify-password"})
     assert switched.status_code == 303
     assert switched.headers["location"] == path
     assert switched.cookies["lang"] == chosen
-    # Returning to the gallery GET uses the existing password gate rather than a POST-only URL.
-    gate = await client.get(switched.headers["location"])
+    # The canonical GET keeps the verified grant and renders the chosen locale.
+    viewer = await client.get(switched.headers["location"])
+    _assert_language(viewer, chosen)
+    assert t("guest.complete_title", chosen) in unescape(viewer.text)
+    assert "data-lookup-password" not in viewer.text
+    assert client.cookies.get(cookie_name(_gallery_record.id)) == grant
+    assert guest_csrf(viewer) == guest_csrf(unlocked)
+    client.cookies.delete(cookie_name(_gallery_record.id))
+    gate = await client.get(path)
     _assert_language(gate, chosen)
     assert t("guest.password_text", chosen) in gate.text
-    final = await password_form(client, path, "gallery-password")
-    _assert_language(final, chosen)
 
 
 async def test_international_expired_gallery_and_non_guest_fallbacks(client, db, owner):
