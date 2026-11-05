@@ -208,14 +208,16 @@ async def test_password_addition_revokes_previous_passwordless_session(client, d
 async def test_password_change_waits_for_full_viewer_materialization(client, db, verify_db, owner, monkeypatch):
     gallery, _, token = await _gallery(db, owner)
     entered, release = asyncio.Event(), asyncio.Event()
-    original = guest_frontend._load_images
+    # The admitted renderer holds its credential fence through bounded image
+    # materialization, signing and template rendering, until its final commit.
+    original = guest_frontend.load_guest_image_page
 
     async def pause(*args, **kwargs):
         entered.set()
         await asyncio.wait_for(release.wait(), timeout=15)
         return await original(*args, **kwargs)
 
-    monkeypatch.setattr(guest_frontend, "_load_images", pause)
+    monkeypatch.setattr(guest_frontend, "load_guest_image_page", pause)
     gate = await client.get(f"/g/{token}")
     viewing = asyncio.create_task(
         client.post(
