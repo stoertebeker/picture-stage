@@ -87,6 +87,6 @@ async def test_real_cookies_and_hsts_follow_configuration_over_direct_http(
         assert logout.status_code == 303
         _assert_cookie_security(logout, ("session",), secure)
 
-        api_logout = await client.post("/api/v1/auth/logout")
+        api_logout = await client.post("/api/v1/auth/logout", headers={**cookie_header, "X-CSRF-Token": csrf})
         assert api_logout.status_code == 303
         _assert_cookie_security(api_logout, ("session",), secure)

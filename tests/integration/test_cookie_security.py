@@ -121,10 +121,14 @@ def test_missing_csrf_cookie_mints_stable_token_for_parallel_session_gets(monkey
 
 @pytest.mark.asyncio
 async def test_api_logout_deletes_session_with_matching_attributes(client, monkeypatch):
-    # /api/ is CSRF-exempt, so the logout POST goes through without a token.
     monkeypatch.setattr(settings, "app_url", "https://photos.example.com")
-    resp = await client.post("/api/v1/auth/logout")
+    token = _mint_csrf_token("opaque-session")
+    resp = await client.post(
+        "/api/v1/auth/logout",
+        headers={"Cookie": f"session=opaque-session; csrf_token={token}", "X-CSRF-Token": token},
+    )
 
+    assert resp.status_code == 303
     session = _set_cookie_for(resp, "session")
     assert session is not None, "logout must emit a session deletion cookie"
     lowered = session.lower()

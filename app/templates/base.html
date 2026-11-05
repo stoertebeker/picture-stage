@@ -61,7 +61,7 @@
                     </div>
                 </div>
             </div>
-            <form method="post" action="/api/v1/auth/logout" style="display:inline;">
+            <form method="post" action="/logout" style="display:inline;">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
                 <button type="submit" class="px-2 py-2 text-sm text-text-secondary hover:text-text-primary rounded-md">{{ t('nav.logout') }}</button>
             </form>

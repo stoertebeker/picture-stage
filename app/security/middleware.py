@@ -6,6 +6,7 @@ import uuid
 from typing import ClassVar
 from urllib.parse import parse_qs
 
+from starlette._utils import get_route_path
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import ClientDisconnect, Request
 from starlette.responses import Response
@@ -52,7 +53,8 @@ def _mint_csrf_token(session_token: str | None) -> str:
 class CSRFMiddleware(BaseHTTPMiddleware):
     """Double-submit cookie CSRF protection.
 
-    Skips API routes (/api/) that use Bearer auth and guest routes (/g/) that use token-in-URL.
+    Skips Bearer API routes (/api/) and token-in-URL guest routes (/g/).
+    API logout mutates a browser cookie and needs the same proof as frontend logout.
     """
 
     SAFE_METHODS: ClassVar[set[str]] = {"GET", "HEAD", "OPTIONS", "TRACE"}
@@ -72,10 +74,15 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         return Response(message, status_code=403, headers=headers)
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
-        path = request.url.path
+        # Match the router's decoded, root-relative path, including its redirect
+        # of any trailing slashes. A raw /api/ exemption can otherwise hide the
+        # cookie-mutating logout route behind an API-shaped deployment prefix.
+        path = get_route_path(request.scope)
 
-        # Skip CSRF for exempt routes
-        if any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES):
+        # Logout deletes a cookie even when no cookies or Bearer header arrive.
+        # Other API routes retain their non-ambient authentication contract.
+        cookie_logout = path.rstrip("/") == "/api/v1/auth/logout"
+        if not cookie_logout and any(path.startswith(prefix) for prefix in self.EXEMPT_PREFIXES):
             return await call_next(request)
 
         if request.method in self.SAFE_METHODS:

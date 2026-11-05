@@ -177,6 +177,13 @@ curl -s https://DEINE-DOMAIN/login | grep -o "/static/css/styles.css?v=[^\"]*"
 | POST | `/api/v1/auth/verify-email/{token}` | Verify email address |
 | POST | `/api/v1/auth/login` | Login, receive JWT |
 | GET | `/api/v1/auth/me` | Current user profile |
+| POST | `/api/v1/auth/logout` | Compatible logout alias; requires browser CSRF proof |
+
+Browser logout uses `POST /logout`. The compatible API alias requires the same
+CSRF cookie and matching header/form proof, even without an incoming session
+cookie or when an `Authorization` header is present. Proofs are bound to the
+owner session when one is present. Ordinary bearer-only API routes remain
+exempt from browser CSRF checks.
 
 ### Galleries (`/api/v1/galleries/`)
 
