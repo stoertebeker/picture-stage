@@ -48,6 +48,13 @@
   "admin": {
     "title": "Ausstehende Registrierungen – Picture-Stage",
     "heading": "Ausstehende Registrierungen",
+    "verification_col": "E-Mail-Bestätigung",
+    "email_confirmed": "Bestätigt",
+    "email_unconfirmed": "Bestätigung ausstehend",
+    "email_reconfirm": "Ablehnen und erneut registrieren lassen.",
+    "err_signup_not_found": "Registrierungsanfrage nicht gefunden.",
+    "err_signup_unverified": "Die E-Mail-Adresse muss vor der Freigabe bestätigt werden.",
+    "err_signup_duplicate": "Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.",
     "email_col": "E-Mail",
     "registered_col": "Registriert am",
     "ip_col": "IP-Adresse",

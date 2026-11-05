@@ -2,9 +2,19 @@
 <tr>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-text-primary">{{ signup.email }}</td>
     <td class="px-6 py-4 whitespace-nowrap text-sm text-text-secondary">{{ signup.requested_at.strftime('%d.%m.%Y %H:%M') }}</td>
+    <td class="px-6 py-4 text-sm text-text-secondary">
+        {% if signup.email_verified_at %}
+            {{ t('admin.email_confirmed') }}: {{ signup.email_verified_at.strftime('%d.%m.%Y %H:%M') }}
+        {% elif not signup.verification_token_hash or not signup.verification_token_salt %}
+            {{ t('admin.email_reconfirm') }}
+        {% else %}
+            {{ t('admin.email_unconfirmed') }}
+        {% endif %}
+    </td>
     <td class="hidden sm:table-cell px-6 py-4 whitespace-nowrap text-sm text-text-muted font-mono">{{ signup.ip_address or '—' }}</td>
     <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
         <div class="flex justify-end gap-2">
+            {% if signup.email_verified_at %}
             {% call button(variant='success', size='sm', attrs={
                 'hx-post': '/admin/approve/' ~ signup.id,
                 'hx-target': 'closest tr',
@@ -13,6 +23,7 @@
             }) %}
                 {{ t('admin.approve') }}
             {% endcall %}
+            {% endif %}
             {% call button(variant='danger', size='sm', attrs={
                 'hx-post': '/admin/reject/' ~ signup.id,
                 'hx-target': 'closest tr',

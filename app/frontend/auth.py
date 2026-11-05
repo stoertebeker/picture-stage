@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth.dependencies import get_user_from_cookie
 from app.auth.email import normalize_mailbox
 from app.auth.passwords import hash_password, hash_token, verify_password_or_dummy
-from app.auth.token_lookup import resolve_pending_signup
+from app.auth.token_lookup import consume_pending_signup
 from app.auth.tokens import create_access_token, generate_verification_token, verification_lookup_id
 from app.auth.utils import get_client_ip
 from app.config import settings
@@ -191,7 +191,7 @@ async def logout_page(request: Request) -> RedirectResponse:
 
 @router.get("/verify-email/{token}", response_class=HTMLResponse)
 async def verify_email_page(request: Request, token: str, db: AsyncSession = Depends(get_db)) -> HTMLResponse:
-    matched_signup = await resolve_pending_signup(token, db)
+    matched_signup = await consume_pending_signup(token, db)
 
     if matched_signup is None:
         return templates.TemplateResponse(
@@ -200,12 +200,6 @@ async def verify_email_page(request: Request, token: str, db: AsyncSession = Dep
             {"request": request, "success": False, "error": "auth.invalid_verify_token"},
             status_code=404,
         )
-
-    # Clear token so it can't be reused
-    matched_signup.verification_token_hash = b""
-    matched_signup.verification_token_salt = b""
-    matched_signup.verification_lookup_id = None
-    await db.commit()
 
     return templates.TemplateResponse(
         request,

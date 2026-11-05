@@ -14,9 +14,11 @@ import uuid
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.passwords import hash_password
+from app.auth.token_lookup import lock_pending_signup
 from app.db.models import AuditLog, Gallery, PendingSignup, User, UserStatus
 from app.galleries.deletion import purge_gallery
 from app.storage.base import StorageBackend
@@ -30,6 +32,43 @@ class AdminActionError(Exception):
         self.status_code = status_code
         self.detail = detail
         self.i18n_key = i18n_key
+
+
+async def _pending_signup(db: AsyncSession, signup_id: int) -> PendingSignup:
+    signup = await lock_pending_signup(signup_id, db)
+    if signup is None:
+        raise AdminActionError(404, "Pending signup not found", "admin.err_signup_not_found")
+    return signup
+
+
+async def approve_pending_signup(db: AsyncSession, signup_id: int) -> User:
+    signup = await _pending_signup(db, signup_id)
+    if signup.email_verified_at is None:
+        raise AdminActionError(409, "Email has not been verified", "admin.err_signup_unverified")
+    # The email conflict target also handles a concurrent account insertion,
+    # without masking unrelated integrity failures or replacing credentials.
+    user: User | None = await db.scalar(
+        pg_insert(User)
+        .values(
+            email=signup.email,
+            password_hash=signup.password_hash,
+            status=UserStatus.active,
+            email_verified_at=signup.email_verified_at,
+        )
+        .on_conflict_do_nothing(index_elements=[User.email])
+        .returning(User)
+    )
+    await db.delete(signup)
+    await db.commit()
+    if user is None:
+        raise AdminActionError(409, "User with this email already exists", "admin.err_signup_duplicate")
+    return user
+
+
+async def reject_pending_signup(db: AsyncSession, signup_id: int) -> None:
+    signup = await _pending_signup(db, signup_id)
+    await db.delete(signup)
+    await db.commit()
 
 
 async def count_admins(db: AsyncSession) -> int:

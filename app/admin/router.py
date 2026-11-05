@@ -1,5 +1,4 @@
 import uuid
-from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
@@ -53,30 +52,10 @@ async def approve_signup(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    result = await db.execute(select(PendingSignup).where(PendingSignup.id == signup_id))
-    signup = result.scalar_one_or_none()
-
-    if signup is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending signup not found")
-
-    existing = await db.execute(select(User).where(User.email == signup.email))
-    if existing.scalar_one_or_none() is not None:
-        await db.delete(signup)
-        await db.commit()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User with this email already exists")
-
-    user = User(
-        email=signup.email,
-        password_hash=signup.password_hash,
-        status=UserStatus.active,
-        email_verified_at=datetime.now(UTC),
-    )
-    db.add(user)
-    await db.delete(signup)
-    await db.commit()
-    await db.refresh(user)
-
-    return user
+    try:
+        return await service.approve_pending_signup(db, signup_id)
+    except AdminActionError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail) from err
 
 
 @router.delete("/reject/{signup_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -85,14 +64,10 @@ async def reject_signup(
     _admin: User = Depends(require_admin),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    result = await db.execute(select(PendingSignup).where(PendingSignup.id == signup_id))
-    signup = result.scalar_one_or_none()
-
-    if signup is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Pending signup not found")
-
-    await db.delete(signup)
-    await db.commit()
+    try:
+        await service.reject_pending_signup(db, signup_id)
+    except AdminActionError as err:
+        raise HTTPException(status_code=err.status_code, detail=err.detail) from err
 
 
 @router.get("/pending-signups/count", response_model=PendingSignupCountResponse)

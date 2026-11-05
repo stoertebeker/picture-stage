@@ -316,6 +316,7 @@ class PendingSignup(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)
     password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     verification_token_hash: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     verification_token_salt: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     verification_lookup_id: Mapped[uuid.UUID | None] = mapped_column(

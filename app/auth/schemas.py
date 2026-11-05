@@ -43,6 +43,7 @@ class PendingSignupResponse(BaseModel):
     id: int
     email: str
     requested_at: datetime
+    email_verified_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 

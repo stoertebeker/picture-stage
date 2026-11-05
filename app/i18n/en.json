@@ -48,6 +48,13 @@
   "admin": {
     "title": "Pending Registrations – Picture-Stage",
     "heading": "Pending Registrations",
+    "verification_col": "Email verification",
+    "email_confirmed": "Verified",
+    "email_unconfirmed": "Awaiting verification",
+    "email_reconfirm": "Reject and ask the applicant to register again.",
+    "err_signup_not_found": "Pending signup not found.",
+    "err_signup_unverified": "The email address must be verified before approval.",
+    "err_signup_duplicate": "A user with this email address already exists.",
     "email_col": "Email",
     "registered_col": "Registered",
     "ip_col": "IP Address",

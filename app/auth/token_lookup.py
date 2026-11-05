@@ -4,6 +4,7 @@ import hashlib
 import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import HTTPException, status
@@ -72,3 +73,35 @@ async def resolve_pending_signup(token: str, db: AsyncSession) -> PendingSignup 
         finally:
             await result.close()
     return None
+
+
+async def lock_pending_signup(signup_id: int, db: AsyncSession) -> PendingSignup | None:
+    """Serialize lifecycle changes and reload any previously resolved candidate."""
+    signup: PendingSignup | None = await db.scalar(
+        select(PendingSignup)
+        .where(PendingSignup.id == signup_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    return signup
+
+
+async def consume_pending_signup(token: str, db: AsyncSession) -> PendingSignup | None:
+    candidate = await resolve_pending_signup(token, db)
+    if candidate is None:
+        return None
+    signup = await lock_pending_signup(candidate.id, db)
+    if (
+        signup is None
+        or signup.email_verified_at is not None
+        or not signup.verification_token_hash
+        or not signup.verification_token_salt
+        or not verify_token(token, signup.verification_token_hash, signup.verification_token_salt)
+    ):
+        return None
+    signup.email_verified_at = datetime.now(UTC)
+    signup.verification_token_hash = b""
+    signup.verification_token_salt = b""
+    signup.verification_lookup_id = None
+    await db.commit()
+    return signup
