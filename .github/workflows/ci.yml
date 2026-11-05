@@ -10,7 +10,8 @@ on:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    # Ubuntu 24.04 provides the PostgreSQL 16 client matching our test service.
+    runs-on: ubuntu-24.04
 
     services:
       postgres:
@@ -35,7 +36,11 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -e ".[dev]"
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-16
+          echo "/usr/lib/postgresql/16/bin" >> "$GITHUB_PATH"
+          pip install -e ".[dev]"
 
       - name: Lint (ruff)
         run: ruff check .

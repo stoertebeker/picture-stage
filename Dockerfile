@@ -51,11 +51,20 @@ COPY frontend/static/spikes/ ./frontend/static/spikes/
 RUN npm install --no-save --no-audit --no-fund tailwindcss@3.4.17 \
     && npx tailwindcss -c tailwind.config.js -i ./input.css -o ./styles.css --minify
 
-FROM python:3.12-slim
+# Match the PostgreSQL 16 service: newer pg_dump versions can emit settings
+# unsupported by 16, which must now fail rather than silently be ignored.
+FROM postgres:16-trixie AS postgres-client
+
+FROM python:3.12-slim-trixie
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends fonts-dejavu-core && \
+    apt-get install -y --no-install-recommends fonts-dejavu-core libpq5 libreadline8t64 liblz4-1 libzstd1 && \
     rm -rf /var/lib/apt/lists/*
+
+COPY --from=postgres-client /usr/lib/postgresql/16/bin/psql /usr/local/bin/psql
+COPY --from=postgres-client /usr/lib/postgresql/16/bin/pg_dump /usr/local/bin/pg_dump
+COPY --from=postgres-client /usr/lib/postgresql/16/bin/pg_isready /usr/local/bin/pg_isready
+COPY --from=postgres-client /usr/share/doc/postgresql-client-16/copyright /usr/share/doc/postgresql-client-16/copyright
 
 RUN groupadd -r app && useradd -r -g app -d /app -s /sbin/nologin app
 

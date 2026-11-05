@@ -10,7 +10,7 @@ Usage:
   picture-stage backup [--output /path/to/backup.tar.gz]
   picture-stage restore --input /path/to/backup.tar.gz --confirm
 
-Requires pg_dump/pg_restore in PATH (available in the Docker image).
+Requires pg_dump and psql in PATH (available in the Docker image).
 Database connection is read from DATABASE_URL env var.
 """
 
@@ -19,10 +19,12 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+from contextlib import ExitStack
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -77,6 +79,21 @@ def _safe_tar_extract(tar: tarfile.TarFile, dest: Path) -> None:
         if not str(member_path).startswith(str(dest_resolved)):
             raise ValueError(f"Refusing to extract {member.name!r}: path traversal detected")
     tar.extractall(dest, filter="data")
+
+
+def _image_destination(upload_dir: Path, relative_path: Path) -> Path:
+    """Validate a restore target before staging and again before publication."""
+    destination = upload_dir / relative_path
+    if not destination.resolve().is_relative_to(upload_dir.resolve()):
+        raise ValueError(f"Refusing image destination {relative_path}: path traversal detected")
+    if destination.exists() and not destination.is_file():
+        raise ValueError(f"Image destination is not a file: {relative_path}")
+    for parent in destination.parents:
+        if parent == upload_dir:
+            break
+        if parent.exists() and not parent.is_dir():
+            raise ValueError(f"Image destination parent is not a directory: {relative_path}")
+    return destination
 
 
 # ---------------------------------------------------------------------------
@@ -272,92 +289,111 @@ def cmd_restore(args: argparse.Namespace) -> int:
             print("[restore] ERROR: Archive is missing db.sql — invalid backup.", file=sys.stderr)
             return 1
 
-        # --- Warn if DB is non-empty ---
+        # Full pg_dump archives require an empty target. Never imply that
+        # feeding CREATE/COPY statements into an existing schema replaces it.
+        psql = [
+            "psql",
+            "-X",
+            "--no-password",
+            "--set",
+            "ON_ERROR_STOP=on",
+            "-h",
+            db["host"],
+            "-p",
+            db["port"],
+            "-U",
+            db["user"],
+            "-d",
+            db["dbname"],
+        ]
         try:
             result = subprocess.run(
                 [
-                    "psql",
-                    "-h",
-                    db["host"],
-                    "-p",
-                    db["port"],
-                    "-U",
-                    db["user"],
-                    "-d",
-                    db["dbname"],
+                    *psql,
                     "-t",
                     "-A",
                     "-c",
-                    "SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public';",
+                    "SELECT count(*) FROM pg_catalog.pg_class c "
+                    "JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace "
+                    "WHERE n.nspname !~ '^pg_' AND n.nspname <> 'information_schema';",
                 ],
                 env=_pg_env(db),
+                stdin=subprocess.DEVNULL,
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            table_count = int(result.stdout.strip())
-            if table_count > 0:
+            if int(result.stdout.strip()) != 0:
                 print(
-                    f"[restore] WARNING: Target database has {table_count} existing table(s). "
-                    "Restore will overwrite data."
+                    "[restore] ERROR: Target database is not empty. Restore requires an empty database; "
+                    "existing-schema and data-only restores are not supported. No data was changed.",
+                    file=sys.stderr,
                 )
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            print("[restore] WARNING: Could not check if database is empty (psql unavailable).")
-
-        # --- Restore database ---
-        print("[restore] Restoring database …")
-        try:
-            subprocess.run(
-                [
-                    "psql",
-                    "-h",
-                    db["host"],
-                    "-p",
-                    db["port"],
-                    "-U",
-                    db["user"],
-                    "-d",
-                    db["dbname"],
-                    "-f",
-                    str(dump_path),
-                ],
-                env=_pg_env(db),
-                check=True,
-                capture_output=True,
-            )
-        except FileNotFoundError:
-            print("[restore] ERROR: psql not found. Install PostgreSQL client tools.", file=sys.stderr)
+                return 1
+        except (OSError, subprocess.CalledProcessError, ValueError) as exc:
+            print(f"[restore] ERROR: Could not verify an empty target database: {exc}", file=sys.stderr)
             return 1
-        except subprocess.CalledProcessError as exc:
-            print(f"[restore] ERROR: Database restore failed: {exc.stderr.decode()}", file=sys.stderr)
-            return 1
-        print("[restore]   Database restored.")
 
-        # --- Restore images ---
         backup_storage = metadata.get("storage_type", "local")
         images_dir = tmp / "images"
-
-        if backup_storage == "local" and images_dir.is_dir():
+        with ExitStack() as staging:
+            # Stage on the upload filesystem before changing the DB. SQL
+            # failures leave existing images untouched; file replacement is
+            # atomic per image, including when upload_dir is a volume mount.
             upload_dir = Path(settings.upload_dir)
-            upload_dir.mkdir(parents=True, exist_ok=True)
-            file_count = 0
-            for src in images_dir.rglob("*"):
-                if not src.is_file():
-                    continue
-                rel = src.relative_to(images_dir)
-                dst = upload_dir / rel
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                # Validate destination is within upload_dir (belt-and-suspenders)
-                if not str(dst.resolve()).startswith(str(upload_dir.resolve())):
-                    print(f"[restore] WARNING: Skipping {rel} — path traversal detected", file=sys.stderr)
-                    continue
-                with open(src, "rb") as fsrc, open(dst, "wb") as fdst:
-                    while chunk := fsrc.read(65536):
-                        fdst.write(chunk)
-                file_count += 1
-            print(f"[restore]   Restored {file_count} image file(s) to {upload_dir}")
+            staged_images: Path | None = None
+            image_paths: list[Path] = []
+            if backup_storage == "local" and images_dir.is_dir():
+                try:
+                    upload_dir.mkdir(parents=True, exist_ok=True)
+                    staged_images = Path(
+                        staging.enter_context(tempfile.TemporaryDirectory(prefix=".restore-", dir=upload_dir))
+                    )
+                    for src in images_dir.rglob("*"):
+                        if not src.is_file():
+                            continue
+                        rel = src.relative_to(images_dir)
+                        _image_destination(upload_dir, rel)
+                        staged = staged_images / rel
+                        staged.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copyfile(src, staged)
+                        image_paths.append(rel)
+                except (OSError, ValueError) as exc:
+                    print(f"[restore] ERROR: Could not stage images; database was not changed: {exc}", file=sys.stderr)
+                    return 1
 
-        elif backup_storage == "s3":
+            print("[restore] Restoring database …")
+            try:
+                subprocess.run(
+                    [*psql, "--single-transaction", "-f", str(dump_path)],
+                    env=_pg_env(db),
+                    stdin=subprocess.DEVNULL,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+            except (OSError, subprocess.CalledProcessError) as exc:
+                detail = exc.stderr if isinstance(exc, subprocess.CalledProcessError) else str(exc)
+                print(f"[restore] ERROR: Database restore failed; images were not changed: {detail}", file=sys.stderr)
+                return 1
+            print("[restore]   Database restored.")
+
+            if staged_images is not None:
+                try:
+                    for rel in image_paths:
+                        dst = _image_destination(upload_dir, rel)
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        os.replace(staged_images / rel, dst)
+                except (OSError, ValueError) as exc:
+                    print(
+                        f"[restore] ERROR: Database was restored, but image restoration is incomplete: {exc}. "
+                        "Keep the application stopped and recover the images from the backup before using it.",
+                        file=sys.stderr,
+                    )
+                    return 1
+                print(f"[restore]   Restored {len(image_paths)} image file(s) to {upload_dir}")
+
+        if backup_storage == "s3":
             manifest_path_s3 = tmp / "manifest.json"
             if manifest_path_s3.exists():
                 manifest = json.loads(manifest_path_s3.read_text())

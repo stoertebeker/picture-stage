@@ -69,6 +69,32 @@ upgrade. Downgrading removes that guard and the setup marker. A full database
 dump and restore was tested; a data-only restore into an existing schema is
 not supported with this guard.
 
+### Backup and restore
+
+The `picture-stage` CLI and PostgreSQL 16 client tools are included in the image:
+
+```bash
+picture-stage backup --output /backups/picture-stage.tar.gz
+picture-stage restore --input /backups/picture-stage.tar.gz --confirm
+```
+
+Run restore with the application stopped and `DATABASE_URL` pointing to an
+existing, empty database (created from `template0`). A database containing user
+tables, views or sequences is rejected before changes; restore does not replace
+an existing schema. Use a full archive produced by `picture-stage backup`;
+data-only dumps are not supported. The command ignores psql startup files,
+stops on SQL errors and restores the dump in one transaction. SQL failure
+returns a nonzero exit status and rolls back database changes.
+
+Local images are staged on the upload filesystem before restoring SQL, requiring
+additional space for the image files. Existing images stay untouched if staging
+or SQL restoration fails. After the database commits, each image is replaced
+atomically. Database and filesystem changes cannot commit together: a later
+image-publication failure returns a nonzero status and explicitly reports that
+the database was restored but the images are incomplete. Keep the application
+stopped and recover the files from the backup before using it. S3 archives
+contain a manifest only; the bucket must be backed up and recovered separately.
+
 ### Update auf eine neue Version
 
 Reihenfolge ist wichtig — `pull` **vor** `up -d`, sonst läuft das alte
@@ -261,6 +287,11 @@ pytest --cov=app
 # Run tenant isolation tests
 pytest tests/security/ -v
 ```
+
+Restore tests in `tests/cli/` additionally require PostgreSQL 16 `psql` and
+`pg_dump` on `PATH`, and a test database role with `CREATEDB`. They create and
+drop uniquely named temporary databases from `template0`; without the client
+tools these tests are skipped. CI installs the matching tools explicitly.
 
 The checked-in `frontend/static/css/styles.css` is a placeholder. Docker builds
 the complete Tailwind stylesheet and vendors the pinned HTMX/Alpine CSP assets.
