@@ -37,6 +37,7 @@ cp -f .env.example .env
 #    HMAC_SECRET_KEY    (generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
 #    APP_URL            (öffentliche HTTPS-Domain, z.B. https://deine-domain.tld — sonst zeigen Share-Links auf den internen Host)
 #    BOOTSTRAP_TOKEN    (für die Ersteinrichtung generieren: python3 -c "import secrets; print(secrets.token_urlsafe(32))")
+#    Nur für lokale HTTP-Entwicklung: ENVIRONMENT=development und APP_URL=http://localhost:8000.
 #
 #    Optional — E-Mail-Benachrichtigungen (z.B. Mailjet, leer = aus):
 #    SMTP_HOST/_PORT/_USER/_PASSWORD/_FROM   (Mailjet: HOST=in-v3.mailjet.com, PORT=587,
@@ -50,9 +51,9 @@ cp -f .env.example .env
 docker compose up -d
 
 # 5. Öffnen — beim ersten Start erscheint der Setup-Assistent
-#    http://localhost:8000
+#    Deine konfigurierte öffentliche HTTPS-Adresse (lokal im Development-Modus: http://localhost:8000).
 #    Gib das BOOTSTRAP_TOKEN ein und erstelle den Admin-Account.
-#    API-Docs: http://localhost:8000/docs
+#    API-Docs: /docs unter derselben Adresse.
 ```
 
 If all users have been removed, the public setup remains closed. An operator
@@ -281,13 +282,21 @@ commit. Delivery remains best effort, without a durable queue or crash recovery.
 
 All configuration is done via environment variables. See [`.env.example`](.env.example) for the full list with descriptions.
 
+`ENVIRONMENT` accepts only `production` (the default), `development` or `test`;
+case and surrounding whitespace are normalized. Production requires a complete
+HTTPS `APP_URL` with a valid host and optional port/path prefix. Credentials,
+query strings, fragments, backslashes, whitespace and control characters are
+rejected. For local HTTP, explicitly set `ENVIRONMENT=development` and
+`APP_URL=http://localhost:8000`. Cookie security and HSTS use this configuration,
+independently of the request scheme or forwarded headers.
+
 Key variables:
 
 | Variable | Description |
 |----------|-------------|
 | `SECRET_KEY` | JWT signing key (must change from default) |
 | `HMAC_SECRET_KEY` | Image URL signing key (must change from default) |
-| `APP_URL` | Public base URL for share links — set to your real HTTPS domain in production (forced to https behind a TLS proxy) |
+| `APP_URL` | Public base URL; production requires your valid HTTPS address, independently of reverse-proxy headers |
 | `DATABASE_URL` | PostgreSQL connection string |
 | `STORAGE_BACKEND` | `local` or `s3` |
 | `MAX_REQUEST_BODY_MB` | Global body ceiling in MiB, default `1024`; `0` disables this ceiling |

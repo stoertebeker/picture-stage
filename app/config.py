@@ -1,4 +1,6 @@
-from pydantic import Field, SecretStr, model_validator
+from urllib.parse import urlsplit
+
+from pydantic import Field, HttpUrl, SecretStr, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Sentinel default for crypto secrets. A production instance MUST override these
@@ -151,23 +153,57 @@ class Settings(BaseSettings):
         request scheme (picture-stage-8ox): behind a TLS-terminating proxy the
         container only sees plain HTTP, and the port may be reachable directly,
         so trusting ``X-Forwarded-Proto`` would be spoofable and proxy-specific.
-        ``APP_URL`` is the existing source of truth for the public scheme (see
-        ``build_share_url`` / picture-stage-0hp), and any HTTPS deployment must
-        set it to https anyway (else share tokens leak), so the Secure flag
-        tracks it automatically. A local http:// deployment yields False, so the
-        plain-HTTP dev stack keeps working.
+        Production startup requires a valid HTTPS ``APP_URL``. Fail closed even
+        if settings are later mutated without validation: only an explicitly
+        selected development/test environment with an HTTP URL may disable
+        Secure cookies and HSTS.
         """
-        return self.app_url.lower().startswith("https://")
+        return self.environment not in {"development", "test"} or not self.app_url.lower().startswith("http://")
+
+    @field_validator("environment")
+    @classmethod
+    def _validate_environment(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"production", "development", "test"}:
+            raise ValueError("ENVIRONMENT must be production, development, or test")
+        return normalized
+
+    @model_validator(mode="after")
+    def _require_https_in_production(self) -> "Settings":
+        if self.environment != "production":
+            return self
+
+        error = "APP_URL must be an absolute HTTPS base URL without credentials, query, fragment, or whitespace"
+        # Both parsers normalize some malformed input (e.g. embedded newlines),
+        # and HttpUrl repairs missing slashes. Check the original spelling first
+        # and retain that string: callers append paths to this configured base.
+        if (
+            not self.app_url.lower().startswith("https://")
+            or any(char.isspace() or ord(char) < 32 or 127 <= ord(char) <= 159 for char in self.app_url)
+            or any(char in self.app_url for char in ("\\", "?", "#"))
+        ):
+            raise ValueError(error)
+        try:
+            parts = urlsplit(self.app_url)
+            if not parts.netloc or not parts.hostname or "@" in parts.netloc or parts.netloc.endswith(":"):
+                raise ValueError(error)
+            # Validate port syntax/range and host/URL validity using the standard
+            # parsers; neither parser's normalized representation replaces APP_URL.
+            _ = parts.port
+            HttpUrl(self.app_url)
+        except ValueError as exc:
+            raise ValueError(error) from exc
+        return self
 
     @model_validator(mode="after")
     def _reject_default_secrets_in_production(self) -> "Settings":
         """Fail fast if crypto secrets are left at their insecure default in production.
 
         Default secrets would allow forging JWT access tokens and HMAC image-URL
-        signatures (account takeover). Only enforced when ENV=production so that
+        signatures (account takeover). Only enforced when ENVIRONMENT=production so that
         development, CI and tests keep working without a populated .env.
         """
-        if self.environment.lower() == "production":
+        if self.environment == "production":
             insecure = [
                 name
                 for name, value in (("SECRET_KEY", self.secret_key), ("HMAC_SECRET_KEY", self.hmac_secret_key))
