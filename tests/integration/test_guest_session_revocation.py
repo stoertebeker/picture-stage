@@ -1,7 +1,6 @@
 """Guest authorization changes invalidate sessions without deleting history."""
 
 import asyncio
-import re
 import uuid
 from unittest.mock import AsyncMock
 
@@ -22,6 +21,7 @@ from app.security.middleware import _mint_csrf_token
 from app.security.rate_limit import limiter
 from app.selections.service import lock_selection_budget
 from tests.integration.conftest import _override_get_db
+from tests.integration.guest_helpers import guest_csrf, password_form, response_session_id
 
 _TOKEN = "revocation-token"
 _OLD_PASSWORD = "old-password"
@@ -74,13 +74,11 @@ async def _unlock(client, token, password=_OLD_PASSWORD, *, json_api=False):
     if json_api:
         response = await client.post(f"/g/{token}/verify-password", json={"password": password})
     else:
-        response = await client.post(f"/g/{token}/verify-password", data={"password": password})
+        response = await password_form(client, f"/g/{token}", password)
     assert response.status_code == 200, response.text
     if json_api:
         return response.json()["session_id"]
-    match = re.search(r'data-session-id="([0-9a-f-]+)"', response.text)
-    assert match is not None
-    return match.group(1)
+    return response_session_id(response)
 
 
 def _owner_headers(client, owner):
@@ -138,7 +136,7 @@ async def test_password_change_revokes_existing_guest_session(client, db, verify
     elif surface == "complete":
         stale = await client.post(f"/g/{token}/complete", json={"session_id": old_session})
     else:
-        stale = await client.get(f"/g/{token}/{surface}", params={"session_id": old_session})
+        stale = await client.get(f"/g/{token}/{surface}", headers={"X-Guest-Session": old_session})
     assert stale.status_code == (404 if surface == "complete" else 403), stale.text
     assert "private-proof.jpg" not in stale.text
     assert "/media/" not in stale.text
@@ -146,7 +144,7 @@ async def test_password_change_revokes_existing_guest_session(client, db, verify
     assert await verify_db.scalar(select(Gallery.status).where(Gallery.id == gallery.id)) == GalleryStatus.shared
 
     fresh = await _unlock(client, token, "new-password")
-    summary = await client.get(f"/g/{token}/selections", params={"session_id": fresh})
+    summary = await client.get(f"/g/{token}/selections", headers={"X-Guest-Session": fresh})
     assert summary.status_code == 200
     assert summary.json()["selected_count"] == 1
     assert (await _select(client, token, image, fresh, "favorite")).status_code == 201
@@ -170,7 +168,7 @@ async def test_every_authorization_writer_advances_generation(client, db, verify
     assert await verify_db.get(ShareSession, uuid.UUID(old_session)) is not None
     assert await verify_db.scalar(select(func.count(SelectionEvent.id))) == 1
     if route.endswith("revoke"):
-        assert (await client.get(f"/g/{token}/images", params={"session_id": old_session})).status_code == 404
+        assert (await client.get(f"/g/{token}/images", headers={"X-Guest-Session": old_session})).status_code == 404
         assert (await _change(client, owner, gallery, "api_share")).status_code == 200
         await db.refresh(gallery)
         assert gallery.authorization_epoch == 2
@@ -197,10 +195,10 @@ async def test_password_removal_keeps_public_reads_but_requires_new_session_for_
 async def test_password_addition_revokes_previous_passwordless_session(client, db, owner):
     gallery, image, token = await _gallery(db, owner, protected=False)
     visit = await client.get(f"/g/{token}")
-    old_session = re.search(r'data-session-id="([0-9a-f-]+)"', visit.text).group(1)
+    old_session = response_session_id(visit)
     assert (await _change(client, owner, gallery)).status_code == 200
     for surface in ("images", "gallery-images", "selections"):
-        assert (await client.get(f"/g/{token}/{surface}", params={"session_id": old_session})).status_code == 403
+        assert (await client.get(f"/g/{token}/{surface}", headers={"X-Guest-Session": old_session})).status_code == 403
     assert (await _select(client, token, image, old_session)).status_code == 403
     assert (await client.post(f"/g/{token}/complete", json={"session_id": old_session})).status_code == 404
     fresh = await _unlock(client, token, "new-password")
@@ -218,7 +216,13 @@ async def test_password_change_waits_for_full_viewer_materialization(client, db,
         return await original(*args, **kwargs)
 
     monkeypatch.setattr(guest_frontend, "_load_images", pause)
-    viewing = asyncio.create_task(client.post(f"/g/{token}/verify-password", data={"password": "old-password"}))
+    gate = await client.get(f"/g/{token}")
+    viewing = asyncio.create_task(
+        client.post(
+            f"/g/{token}/verify-password",
+            data={"password": "old-password", "guest_csrf_token": guest_csrf(gate)},
+        )
+    )
     await asyncio.wait_for(entered.wait(), timeout=8)
     changing = asyncio.create_task(_change(client, owner, gallery))
     try:
@@ -227,9 +231,9 @@ async def test_password_change_waits_for_full_viewer_materialization(client, db,
         release.set()
         await asyncio.wait_for(asyncio.gather(viewing, changing, return_exceptions=True), timeout=15)
     assert viewing.result().status_code == changing.result().status_code == 200
-    session_id = re.search(r'data-session-id="([0-9a-f-]+)"', viewing.result().text).group(1)
+    session_id = response_session_id(viewing.result())
     assert "private-proof.jpg" in viewing.result().text
-    assert (await client.get(f"/g/{token}/images", params={"session_id": session_id})).status_code == 403
+    assert (await client.get(f"/g/{token}/images", headers={"X-Guest-Session": session_id})).status_code == 403
 
 
 @pytest.mark.parametrize("producer", ["html_public", "api_public", "html_password", "api_password"])
@@ -246,11 +250,7 @@ async def test_all_session_producers_stamp_current_generation(client, api_client
     else:
         response = await (api_client if producer.startswith("api") else client).get(f"/g/{token}")
         assert response.status_code == 200
-        session_id = (
-            response.json()["session_id"]
-            if producer.startswith("api")
-            else re.search(r'data-session-id="([0-9a-f-]+)"', response.text).group(1)
-        )
+        session_id = response.json()["session_id"] if producer.startswith("api") else response_session_id(response)
     row = await db.get(ShareSession, uuid.UUID(session_id))
     assert row.authorization_epoch == 1
     assert (await _select(client, token, image, session_id)).status_code == 201
@@ -279,6 +279,7 @@ async def test_two_concurrent_auth_updates_do_not_lose_an_increment(client, db, 
 async def test_queued_session_admission_uses_current_credentials(client, api_client, db, verify_db, owner, producer):
     protected = "password" in producer
     gallery, _, token = await _gallery(db, owner, protected=protected)
+    gate = await client.get(f"/g/{token}") if producer == "html_password" else None
     await db.execute(select(Gallery.id).where(Gallery.id == gallery.id).with_for_update())
     requester = api_client if producer.startswith("api") else client
     if protected:
@@ -287,7 +288,7 @@ async def test_queued_session_admission_uses_current_credentials(client, api_cli
             **(
                 {"json": {"password": "old-password"}}
                 if producer.startswith("api")
-                else {"data": {"password": "old-password"}}
+                else {"data": {"password": "old-password", "guest_csrf_token": guest_csrf(gate)}}
             ),
         )
     else:
@@ -320,7 +321,7 @@ async def test_queued_read_refreshes_password_and_session_generation(client, db,
     session_id = await _unlock(client, token) if protected else None
     await db.execute(select(Gallery.id).where(Gallery.id == gallery.id).with_for_update())
     request = asyncio.create_task(
-        client.get(f"/g/{token}/{surface}", params={"session_id": session_id} if session_id else {})
+        client.get(f"/g/{token}/{surface}", headers={"X-Guest-Session": session_id} if session_id else {})
     )
     try:
         await _wait_for_lock(request, verify_db)
@@ -366,6 +367,6 @@ async def test_busy_password_hash_preserves_existing_authorization(client, db, o
     session_id = await _unlock(client, token)
     monkeypatch.setattr(password_hashing, "_MAX_CONCURRENT_HASHES", 0)
     assert (await _change(client, owner, gallery)).status_code == 503
-    assert (await client.get(f"/g/{token}/images", params={"session_id": session_id})).status_code == 200
+    assert (await client.get(f"/g/{token}/images", headers={"X-Guest-Session": session_id})).status_code == 200
     await db.refresh(gallery)
     assert gallery.authorization_epoch == 0

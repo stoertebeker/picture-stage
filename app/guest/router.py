@@ -18,6 +18,7 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.galleries.lifecycle import lock_gallery, lock_images
+from app.guest.credentials import private_guest_response, request_session_id
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
@@ -42,7 +43,7 @@ from app.selections.service import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/g", tags=["guest"])
+router = APIRouter(prefix="/g", tags=["guest"], dependencies=[Depends(private_guest_response)])
 
 
 class GuestGalleryResponse(BaseModel):
@@ -58,7 +59,7 @@ class PasswordVerifyRequest(BaseModel):
 
 
 class CompleteReviewRequest(BaseModel):
-    session_id: uuid.UUID
+    session_id: uuid.UUID | None = None
 
 
 class GuestImageResponse(BaseModel):
@@ -144,10 +145,10 @@ async def verify_gallery_password(
 @router.get("/{token}/images", response_model=list[GuestImageResponse])
 async def list_shared_images(
     token: str,
+    request: Request,
     sort_by: ImageSortBy = Query(ImageSortBy.sort_order),
     sort_dir: SortDirection = Query(SortDirection.asc),
     filter: ImageFilter = Query(ImageFilter.all),
-    session_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> list[GuestImageResponse]:
     gallery = await resolve_gallery_by_token(token, db)
@@ -155,6 +156,7 @@ async def list_shared_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
+    session_id = request_session_id(request, gallery.id)
     gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
     # Selection map is unused here (the JSON API omits selection fields), but the
@@ -183,6 +185,7 @@ async def list_shared_images(
 async def create_selection_event(
     token: str,
     body: SelectionEventCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, str]:
     gallery = await resolve_gallery_by_token(token, db)
@@ -190,6 +193,7 @@ async def create_selection_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     check_gallery_accessible(gallery)
 
+    session_id = request_session_id(request, gallery.id, body=body)
     await lock_gallery(db, gallery.id, shared=True)
     await lock_images(db, gallery.id, [body.image_id])
     gallery = await db.scalar(select(Gallery).where(Gallery.id == gallery.id).execution_options(populate_existing=True))
@@ -206,7 +210,7 @@ async def create_selection_event(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review already completed")
 
     # Session is still resolved for event attribution / audit (one row per visit).
-    session = await current_share_session(gallery, body.session_id, db)
+    session = await current_share_session(gallery, session_id, db)
     if session is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
 
@@ -214,7 +218,7 @@ async def create_selection_event(
     gallery = await lock_gallery_for_review(token, gallery.id, db)
     if gallery.status == GalleryStatus.completed:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Review already completed")
-    session = await current_share_session(gallery, body.session_id, db)
+    session = await current_share_session(gallery, session_id, db)
     if session is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No active session")
     try:
@@ -237,13 +241,14 @@ async def create_selection_event(
 @router.get("/{token}/selections", response_model=SelectionSummary)
 async def get_selections(
     token: str,
-    session_id: uuid.UUID | None = Query(None),
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> SelectionSummary:
     gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     check_gallery_accessible(gallery)
+    session_id = request_session_id(request, gallery.id)
     gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
     selections = await get_current_selections(gallery.id, db)
@@ -266,14 +271,15 @@ async def get_selections(
 async def complete_review(
     token: str,
     body: CompleteReviewRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ) -> CompleteReviewResponse:
-    session_id = body.session_id
     gallery = await resolve_gallery_by_token(token, db)
     if gallery is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
     check_gallery_accessible(gallery)
 
+    session_id = request_session_id(request, gallery.id, body=body)
     await lock_gallery(db, gallery.id, shared=True)
     gallery = await lock_gallery_for_review(token, gallery.id, db)
     session = await current_share_session(gallery, session_id, db)

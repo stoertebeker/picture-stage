@@ -1,6 +1,6 @@
 """Regression tests for the guest complete-review endpoint contract (picture-stage-4gr).
 
-The frontend JS (completeReview()) POSTs `{ "session_id": ... }` as a JSON body.
+Explicit API clients may still POST `{ "session_id": ... }` as a JSON body.
 The endpoint previously declared session_id as a bare uuid.UUID, which FastAPI
 treats as a *query* parameter, so the real browser button got 422 (silently — the
 JS never checked the status) and galleries were never completed via the web UI.
@@ -33,7 +33,7 @@ async def _shared_gallery_with_session(db, owner_id, token: str):
 
 
 async def test_complete_accepts_session_id_in_json_body(client, db, verify_db, owner):
-    """The exact shape the frontend JS sends must return 200 and complete the gallery."""
+    """The explicit API body bearer still returns 200 and completes the gallery."""
     token = "complete-contract-body"
     gallery, session = await _shared_gallery_with_session(db, owner.id, token)
 
@@ -48,13 +48,10 @@ async def test_complete_accepts_session_id_in_json_body(client, db, verify_db, o
 
 
 async def test_complete_rejects_missing_session_id(client, db, owner):
-    """An empty body is a 422 — session_id is required in the body, not the query."""
+    """Without a cookie or explicit bearer an empty body cannot complete a review."""
     token = "complete-contract-empty"
     await _shared_gallery_with_session(db, owner.id, token)
 
     resp = await client.post(f"/g/{token}/complete", json={})
 
-    assert resp.status_code == 422
-    # The missing field must be located in the body, proving it is no longer a query param.
-    locs = [tuple(err["loc"]) for err in resp.json()["detail"]]
-    assert ("body", "session_id") in locs
+    assert resp.status_code == 404

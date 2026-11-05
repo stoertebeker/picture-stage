@@ -94,7 +94,7 @@
        sort/filter so progressive loading respects the active view. #}
     {% if has_more %}
     <div class="col-span-full flex justify-center py-6"
-         hx-get="/g/{{ token }}/gallery-images?offset={{ next_offset }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&filter={{ filter }}{% if session_id %}&session_id={{ session_id }}{% endif %}"
+         hx-get="{{ request.scope.get('root_path', '') }}/g/{{ token }}/gallery-images?offset={{ next_offset }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}&filter={{ filter }}"
          hx-trigger="revealed"
          hx-swap="outerHTML">
         <span class="text-xs text-text-muted">{{ t('guest.loading_more') }}</span>

@@ -26,6 +26,7 @@ from app.db.models import (
 from app.guest import router as guest_router
 from app.notifications import service as notifications
 from app.security.middleware import _mint_csrf_token
+from tests.integration.guest_helpers import password_form
 
 
 async def _gallery(db, owner, token, *, protected=False):
@@ -103,7 +104,7 @@ async def test_revisit_cannot_repeat_email_or_webhook(client, db, verify_db, own
 
     assert (await _complete(client, token, sessions[0])).status_code == 200
     if protected:
-        revisit = await client.post(f"/g/{token}/verify-password", data={"password": "guest-password"})
+        revisit = await password_form(client, f"/g/{token}", "guest-password")
     else:
         revisit = await client.get(f"/g/{token}", headers={"Accept": "text/html"})
     assert revisit.status_code == 200

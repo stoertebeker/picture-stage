@@ -29,6 +29,7 @@ from app.db.models import (
     User,
 )
 from app.galleries.lifecycle import lock_gallery
+from app.guest.credentials import browser_cookie_session_id
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.security.signing import sign_url
 from app.selections.schemas import SelectionState
@@ -129,6 +130,7 @@ async def create_share_session(
     db: AsyncSession,
     *,
     password: str | None = None,
+    reuse_browser_session: bool = False,
 ) -> tuple[Gallery, ShareSession]:
     """Validate current credentials and stamp their epoch in one transaction.
 
@@ -141,6 +143,17 @@ async def create_share_session(
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
     elif password is not None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid password")
+
+    # Browser tabs share a cookie. Keep a valid visit and its CSRF context
+    # stable, after password verification and the fresh gallery/epoch lock.
+    # A completed visit must be replaced so an owner-reopened review can be
+    # completed again; API callers retain their explicit new-visit contract.
+    if reuse_browser_session:
+        session_id = browser_cookie_session_id(request, gallery.id)
+        existing_session = await current_share_session(gallery, session_id, db)
+        if existing_session is not None and existing_session.completed_at is None:
+            return gallery, existing_session
+
     session = ShareSession(
         gallery_id=gallery.id,
         authorization_epoch=gallery.authorization_epoch,
@@ -152,8 +165,12 @@ async def create_share_session(
     return gallery, session
 
 
-async def current_share_session(gallery: Gallery, session_id: uuid.UUID, db: AsyncSession) -> ShareSession | None:
+async def current_share_session(
+    gallery: Gallery, session_id: uuid.UUID | None, db: AsyncSession
+) -> ShareSession | None:
     """Preserve old sessions for attribution but reject their obsolete grants."""
+    if session_id is None:
+        return None
     session: ShareSession | None = await db.scalar(
         select(ShareSession)
         .where(

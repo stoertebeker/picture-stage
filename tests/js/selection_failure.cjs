@@ -117,3 +117,28 @@ test('completion waits for queued saves and does not proceed after a failed save
     assert.equal(viewer.selectionError, 'limit reached');
     assert.equal(viewer.selectionCompleting, false);
 });
+
+
+test('browser selection and completion send only the guest CSRF proof, never a session bearer', async () => {
+    const requests = [];
+    const viewer = viewerWithFetch(async (url, options) => {
+        requests.push({url, options});
+        return {ok: true};
+    });
+    viewer.$root = {dataset: {
+        token: 'gallery-share', guestCsrfToken: 'csrf-proof', galleryUrl: '/mount/g/gallery-share',
+        images: JSON.stringify([{id: 'one', selected: false, favorited: false}]),
+    }};
+    viewer.init();
+    assert.equal('sessionId' in viewer, false);
+    await viewer.toggleSelect('one');
+    await viewer.completeReview();
+    assert.deepEqual(requests.map((request) => request.url), [
+        '/mount/g/gallery-share/selections', '/mount/g/gallery-share/complete',
+    ]);
+    for (const request of requests) {
+        assert.equal(request.options.headers['X-Guest-CSRF-Token'], 'csrf-proof');
+        assert.equal('session_id' in JSON.parse(request.options.body), false);
+        assert.equal('X-Guest-Session' in request.options.headers, false);
+    }
+});

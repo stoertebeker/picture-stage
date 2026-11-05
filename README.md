@@ -264,11 +264,27 @@ stored images in other formats cannot be used to generate new previews.
 | GET | `/g/{token}/selections` | Current selection state |
 | POST | `/g/{token}/complete` | Mark review as done |
 
+Guest browsers keep their session credential in a gallery-scoped, host-only
+HttpOnly cookie with SameSite=Lax, the configured Secure flag, and a signed
+12-hour server-checked expiry. The cookie path includes the application mount
+prefix and share link. The bearer is absent from browser HTML, JavaScript and
+generated URLs. Reads use the cookie or the explicit API header
+`X-Guest-Session: <UUID>`; a `session_id` query parameter no longer authenticates.
+API writes can still supply an explicit UUID in JSON or that header. Invalid,
+null or conflicting explicit credentials never fall back to a browser cookie.
+
+Cookie-based browser writes require `X-Guest-CSRF-Token`; the password form also
+requires the challenge from its preceding GET. This guest proof is separate
+from owner CSRF. Valid browser cookies and their exact CSRF/expiry context are
+reused across tabs of the same gallery; different galleries remain separate.
+Guest representations are private and non-cacheable.
+
 Guest sessions carry the gallery's current authorization generation. Setting,
 changing or removing a password, creating/rotating a share link and revoking a
 link advance that generation atomically. Previous sessions can no longer write
 selections or complete a review, and cannot read password-protected data. A
-fresh password verification or passwordless visit creates a current session.
+fresh password verification or passwordless visit creates a current session,
+or reuses the browser's existing valid, unfinished session.
 Removing password protection restores token-only reads. Historical sessions and
 their selection events remain stored; password changes preserve the gallery
 link. Migration `0011` initializes existing galleries and sessions at generation

@@ -17,6 +17,7 @@ import pytest
 from fastapi import FastAPI, UploadFile
 from PIL import Image as PILImage
 from starlette.datastructures import Headers
+from starlette.requests import Request
 
 from app.config import settings
 from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
@@ -152,7 +153,9 @@ async def test_guest_variants_are_accessible_without_exposing_original(monkeypat
         monkeypatch.setattr(guest_router, "resolve_gallery_by_token", AsyncMock(return_value=gallery))
         monkeypatch.setattr(guest_router, "check_gallery_accessible", lambda gallery: None)
         monkeypatch.setattr(guest_router, "require_gallery_read_access", AsyncMock(return_value=gallery))
-        [response] = await guest_router.list_shared_images("capability", db=db)
+        [response] = await guest_router.list_shared_images(
+            "capability", request=Request({"type": "http", "headers": []}), db=db
+        )
         fields = response.model_dump()
     else:
         [fields] = await guest_frontend._load_images(gallery, db)

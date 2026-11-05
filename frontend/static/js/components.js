@@ -378,7 +378,8 @@ function uploadZoneComponent() {
 function guestViewerComponent() {
     return {
         token: '',
-        sessionId: '',
+        guestCsrfToken: '',
+        galleryUrl: '',
         images: [],
         imageById: {},
         // Ordered id list the lightbox navigates (rfii). Mirrors the current
@@ -406,7 +407,8 @@ function guestViewerComponent() {
         init() {
             const root = this.$root;
             this.token = root.dataset.token || '';
-            this.sessionId = root.dataset.sessionId || '';
+            this.guestCsrfToken = root.dataset.guestCsrfToken || '';
+            this.galleryUrl = root.dataset.galleryUrl || `/g/${this.token}`;
             this.selectionSaveFailed = root.dataset.selectionSaveFailed || '';
             this.selectionLimitReached = root.dataset.selectionLimitReached || '';
             this.selectionCommentTooLong = root.dataset.selectionCommentTooLong || '';
@@ -607,13 +609,12 @@ function guestViewerComponent() {
             const body = {
                 image_id: imageId,
                 action: action,
-                session_id: this.sessionId,
             };
             if (comment !== undefined) body.comment = comment;
             try {
-                const response = await fetch(`/g/${this.token}/selections`, {
+                const response = await fetch(`${this.galleryUrl}/selections`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json', 'X-Guest-CSRF-Token': this.guestCsrfToken },
                     body: JSON.stringify(body),
                 });
                 if (!response.ok) {
@@ -633,10 +634,10 @@ function guestViewerComponent() {
             try {
                 await Promise.all(Object.values(this.selectionQueues));
                 if (this.selectionError) return;
-                const response = await fetch(`/g/${this.token}/complete`, {
+                const response = await fetch(`${this.galleryUrl}/complete`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ session_id: this.sessionId }),
+                    headers: { 'Content-Type': 'application/json', 'X-Guest-CSRF-Token': this.guestCsrfToken },
+                    body: JSON.stringify({}),
                 });
                 if (!response.ok) {
                     this.selectionError = this.selectionSaveFailed;

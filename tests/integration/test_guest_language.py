@@ -1,6 +1,5 @@
 """Browser language stays consistent through guest gallery requests (GitHub #5)."""
 
-import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from html import unescape
@@ -11,6 +10,7 @@ import pytest
 from app.auth.passwords import hash_password, hash_token
 from app.db.models import Gallery, GalleryStatus, Image
 from app.i18n import t
+from tests.integration.guest_helpers import guest_csrf, password_form
 
 
 async def _gallery(db, owner, *, protected=False):
@@ -61,18 +61,18 @@ async def test_guest_browser_language_survives_grid_selection_and_completion(
     assert t("guest.complete_title", locale) in unescape(viewer.text)
     assert 'href="/set-lang/de"' in viewer.text
     assert 'href="/set-lang/en"' in viewer.text
-    session_id = re.search(r'data-session-id="([0-9a-f-]+)"', viewer.text).group(1)
+    headers = {"X-Guest-CSRF-Token": guest_csrf(viewer)}
 
     selection = await client.post(
-        f"{path}/selections", json={"session_id": session_id, "image_id": str(image.id), "action": "select"}
+        f"{path}/selections", json={"image_id": str(image.id), "action": "select"}, headers=headers
     )
     assert selection.status_code == 201
-    grid = await client.get(f"{path}/gallery-images", params={"session_id": session_id, "filter": "selected"})
+    grid = await client.get(f"{path}/gallery-images", params={"filter": "selected"})
     assert grid.status_code == 200
     assert t("guest.open_image", locale) in grid.text
     assert "portrait.png" in grid.text
 
-    completed = await client.post(f"{path}/complete", json={"session_id": session_id})
+    completed = await client.post(f"{path}/complete", json={}, headers=headers)
     assert completed.status_code == 200
     final = await client.get(path)
     _assert_language(final, locale)
@@ -88,10 +88,10 @@ async def test_password_gate_and_verification_keep_browser_language(client, db, 
     _assert_language(gate, locale)
     assert t("guest.password_text", locale) in gate.text
 
-    rejected = await client.post(f"{path}/verify-password", data={"password": "wrong-password"})
+    rejected = await password_form(client, path, "wrong-password")
     _assert_language(rejected, locale, status=401)
     assert t("guest.password_error", locale) in unescape(rejected.text)
-    unlocked = await client.post(f"{path}/verify-password", data={"password": "gallery-password"})
+    unlocked = await password_form(client, path, "gallery-password")
     _assert_language(unlocked, locale)
     assert t("guest.complete_title", locale) in unescape(unlocked.text)
 
@@ -114,7 +114,7 @@ async def test_manual_language_switch_overrides_browser_on_following_requests(cl
 async def test_switch_after_password_post_returns_to_gallery_get(client, db, owner, language, chosen):
     _gallery_record, _image, path = await _gallery(db, owner, protected=True)
     client.headers["Accept-Language"] = language
-    unlocked = await client.post(f"{path}/verify-password", data={"password": "gallery-password"})
+    unlocked = await password_form(client, path, "gallery-password")
     assert unlocked.status_code == 200
     assert 'x-data="langSwitcher"' in unlocked.text
     switched = await client.get(f"/set-lang/{chosen}", headers={"Referer": f"http://test{path}/verify-password"})
@@ -125,7 +125,7 @@ async def test_switch_after_password_post_returns_to_gallery_get(client, db, own
     gate = await client.get(switched.headers["location"])
     _assert_language(gate, chosen)
     assert t("guest.password_text", chosen) in gate.text
-    final = await client.post(f"{path}/verify-password", data={"password": "gallery-password"})
+    final = await password_form(client, path, "gallery-password")
     _assert_language(final, chosen)
 
 

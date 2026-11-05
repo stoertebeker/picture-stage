@@ -1,6 +1,5 @@
 """Regression tests for password authorization on guest data routes."""
 
-import re
 import uuid
 
 from app.auth.passwords import hash_password, hash_token
@@ -14,6 +13,7 @@ from app.db.models import (
     SelectionEvent,
     ShareSession,
 )
+from tests.integration.guest_helpers import password_form, response_session_id
 
 
 async def _create_gallery(db, owner, token: str, *, protected: bool) -> tuple[Gallery, Image]:
@@ -57,14 +57,10 @@ async def test_protected_guest_data_routes_require_gallery_bound_session(client,
     token = "protected-gallery-token"
     _gallery, image = await _create_gallery(db, owner, token, protected=True)
 
-    unlock = await client.post(
-        f"/g/{token}/verify-password",
-        data={"password": "correct horse battery staple"},
-    )
+    unlock = await password_form(client, f"/g/{token}", "correct horse battery staple")
     assert unlock.status_code == 200
-    session_match = re.search(r'data-session-id="([0-9a-f-]+)"', unlock.text)
-    assert session_match is not None
-    valid_session_id = session_match.group(1)
+    valid_session_id = response_session_id(unlock)
+    client.cookies.clear()
 
     db.add(
         SelectionEvent(
@@ -96,13 +92,13 @@ async def test_protected_guest_data_routes_require_gallery_bound_session(client,
         assert "private review note" not in missing.text
         assert "/media/" not in missing.text
 
-        foreign = await client.get(path, params={"session_id": str(foreign_session.id)})
+        foreign = await client.get(path, headers={"X-Guest-Session": str(foreign_session.id)})
         assert foreign.status_code == 403
         assert "secret-proof.jpg" not in foreign.text
         assert "private review note" not in foreign.text
         assert "/media/" not in foreign.text
 
-        unlocked = await client.get(path, params={"session_id": valid_session_id})
+        unlocked = await client.get(path, headers={"X-Guest-Session": valid_session_id})
         assert unlocked.status_code == 200
 
 

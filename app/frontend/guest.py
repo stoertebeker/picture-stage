@@ -1,7 +1,6 @@
 """Frontend guest router - serves HTML gallery viewer for share-link visitors."""
 
 import logging
-import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
@@ -15,6 +14,16 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.guest.credentials import (
+    PRIVATE_HEADERS,
+    browser_session,
+    password_challenge,
+    private_guest_response,
+    request_session_id,
+    set_browser_session,
+    set_password_challenge,
+    verify_password_csrf,
+)
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
 from app.guest.service import (
     check_gallery_accessible,
@@ -29,7 +38,7 @@ from app.security.rate_limit import limiter
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/g", tags=["frontend-guest"])
+router = APIRouter(prefix="/g", tags=["frontend-guest"], dependencies=[Depends(private_guest_response)])
 
 
 # Number of grid items rendered per page. The full image list is still sent to
@@ -108,6 +117,7 @@ async def guest_viewer(
             "guest/expired.html",
             {"request": request, "gallery_name": gallery.name},
             status_code=410,
+            headers=PRIVATE_HEADERS,
         )
 
     if gallery.password_hash is not None:
@@ -121,7 +131,8 @@ def _render_password_gate(
     request: Request, gallery: Gallery, token: str, error_key: str | None = None, status_code: int = 200
 ) -> HTMLResponse:
     """Render the password gate full-page (qdz.16), optionally with an error alert."""
-    return templates.TemplateResponse(
+    challenge, csrf = password_challenge(request, gallery.id)
+    response = templates.TemplateResponse(
         request,
         "guest/viewer.html",
         {
@@ -133,7 +144,7 @@ def _render_password_gate(
             "all_images": [],
             "image_order": [],
             "images": [],
-            "session_id": None,
+            "guest_csrf_token": csrf,
             "total_images": 0,
             "selected_count": 0,
             "favorited_count": 0,
@@ -142,7 +153,10 @@ def _render_password_gate(
             "filter": "all",
         },
         status_code=status_code,
+        headers=PRIVATE_HEADERS,
     )
+    set_password_challenge(response, request, token, gallery.id, challenge)
+    return response
 
 
 async def _render_gallery_viewer(
@@ -150,7 +164,9 @@ async def _render_gallery_viewer(
 ) -> HTMLResponse:
     """Create a share session and render the full gallery viewer page."""
     try:
-        gallery, session = await create_share_session(token, gallery.id, request, db, password=password)
+        gallery, session = await create_share_session(
+            token, gallery.id, request, db, password=password, reuse_browser_session=True
+        )
     except HTTPException as exc:
         if exc.status_code == status.HTTP_401_UNAUTHORIZED:
             response = _render_password_gate(
@@ -162,13 +178,18 @@ async def _render_gallery_viewer(
             )
         elif exc.status_code == 410 and password is None:
             response = templates.TemplateResponse(
-                request, "guest/expired.html", {"request": request, "gallery_name": gallery.name}, status_code=410
+                request,
+                "guest/expired.html",
+                {"request": request, "gallery_name": gallery.name},
+                status_code=410,
+                headers=PRIVATE_HEADERS,
             )
         else:
             raise
         await db.commit()
         return response
 
+    cookie, csrf = browser_session(gallery.id, session.id, request=request)
     images = await _load_images(gallery, db)
     total = len(images)
     selected_count = sum(1 for img in images if img["selected"])
@@ -194,7 +215,7 @@ async def _render_gallery_viewer(
             "append_mode": False,
             "next_offset": GALLERY_PAGE_SIZE,
             "has_more": total > GALLERY_PAGE_SIZE,
-            "session_id": str(session.id),
+            "guest_csrf_token": csrf,
             "total_images": total,
             "selected_count": selected_count,
             "favorited_count": favorited_count,
@@ -206,6 +227,7 @@ async def _render_gallery_viewer(
         },
     )
     await db.commit()
+    set_browser_session(response, request, token, gallery.id, cookie)
     return response
 
 
@@ -217,7 +239,6 @@ async def guest_gallery_images(
     sort_dir: SortDirection = Query(SortDirection.asc),
     filter: ImageFilter = Query(ImageFilter.all),
     offset: int = Query(0, ge=0),
-    session_id: uuid.UUID | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """HTMX partial: image grid page.
@@ -231,6 +252,7 @@ async def guest_gallery_images(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
+    session_id = request_session_id(request, gallery.id)
     gallery = await require_gallery_read_access(gallery, session_id, db, token=token)
 
     images = await _load_images(gallery, db, sort_by, sort_dir, filter)
@@ -257,7 +279,6 @@ async def guest_gallery_images(
             "append_mode": offset > 0,
             "image_order": image_order,
             "token": token,
-            "session_id": str(session_id) if session_id else None,
             "total_images": total,
             "selected_count": selected_count,
             "favorited_count": favorited_count,
@@ -268,6 +289,7 @@ async def guest_gallery_images(
             "next_offset": offset + GALLERY_PAGE_SIZE,
             "has_more": total > offset + GALLERY_PAGE_SIZE,
         },
+        headers=PRIVATE_HEADERS,
     )
     await db.commit()
     return response
@@ -279,6 +301,7 @@ async def guest_verify_password(
     token: str,
     request: Request,
     password: str = Form(...),
+    guest_csrf_token: str | None = Form(None),
     db: AsyncSession = Depends(get_db),
 ) -> HTMLResponse:
     """Verify the gallery password (plain form POST, qdz.16).
@@ -294,4 +317,5 @@ async def guest_verify_password(
 
     check_gallery_accessible(gallery)
 
+    verify_password_csrf(request, gallery.id, guest_csrf_token)
     return await _render_gallery_viewer(request, gallery, token, db, password=password)

@@ -129,12 +129,14 @@ class TestEndpointStructure:
             source = f.read()
         assert "filter: ImageFilter" in source
 
-    def test_endpoint_has_session_id_param(self) -> None:
+    def test_endpoint_uses_request_credentials_instead_of_query_session(self) -> None:
         with open("app/guest/router.py") as f:
             source = f.read()
         idx = source.index("list_shared_images")
-        block = source[idx : idx + 500]
-        assert "session_id" in block
+        block = source[idx : source.index("# Selection map", idx)]
+        assert "request: Request" in block
+        assert "request_session_id(request, gallery.id)" in block
+        assert "session_id: uuid.UUID | None = Query" not in block
 
     def test_filter_does_not_require_session_id(self) -> None:
         # Selections are gallery-wide (magic-link = one model), so filtering

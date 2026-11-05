@@ -2,6 +2,7 @@
 
 import json
 import pathlib
+import uuid
 from html.parser import HTMLParser
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -80,6 +81,7 @@ def _render_viewer(images: list[dict[str, object]], gallery_message: str | None 
     return templates.env.get_template("guest/viewer.html").render(
         t=_t,
         locale="de",
+        request=Request({"type": "http", "headers": [], "root_path": ""}),
         gallery_name="Test Gallery",
         gallery_message=gallery_message,
         token="tok123",
@@ -271,7 +273,8 @@ def test_guest_selection_api_requires_explicit_session_id():
     assert "session_id: uuid.UUID" in schema_py
     # Read-only is now gallery-wide, not per-session.
     assert "gallery.status == GalleryStatus.completed" in router_py
-    assert "session_id: this.sessionId" in components_js
+    assert "session_id: this.sessionId" not in components_js
+    assert "X-Guest-CSRF-Token" in components_js
 
 
 def test_guest_viewer_has_complete_button():
@@ -339,7 +342,8 @@ def test_guest_password_gate_uses_plain_form_post():
     guest_py = (PROJECT_ROOT / "app" / "frontend" / "guest.py").read_text()
 
     assert "hx-post" not in gate
-    assert 'action="/g/{{ token }}/verify-password"' in gate
+    assert "/g/{{ token }}/verify-password" in gate
+    assert 'name="guest_csrf_token"' in gate
     # Both outcomes render the full viewer template, never the bare grid.
     assert "_render_gallery_viewer" in guest_py
     assert "_render_password_gate" in guest_py
@@ -425,6 +429,7 @@ def _render_image_grid(
     return templates.env.get_template("guest/_image_grid.html").render(
         t=_t,
         locale="de",
+        request=Request({"type": "http", "headers": [], "root_path": ""}),
         images=images,
         token=token,
         session_id=session_id,
@@ -475,7 +480,7 @@ async def test_guest_grid_route_returns_flat_second_page(monkeypatch):
     images = [_make_image(f"{idx + 1}.jpg", idx) for idx in range(61)]
 
     async def fake_resolve_gallery_by_token(token, db):
-        return SimpleNamespace(status=GalleryStatus.shared, password_hash=None)
+        return SimpleNamespace(id=uuid.uuid4(), status=GalleryStatus.shared, password_hash=None)
 
     async def fake_load_images(gallery, db, sort_by, sort_dir, filter_mode):
         return images
@@ -507,7 +512,6 @@ async def test_guest_grid_route_returns_flat_second_page(monkeypatch):
         sort_dir=SortDirection.asc,
         filter=ImageFilter.all,
         offset=30,
-        session_id=None,
         db=AsyncMock(),
     )
     html = response.body.decode()

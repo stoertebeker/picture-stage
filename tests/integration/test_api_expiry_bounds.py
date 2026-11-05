@@ -9,6 +9,7 @@ from sqlalchemy import func, select, text
 
 from app.auth.passwords import hash_password, hash_token
 from app.db.models import Gallery, GalleryStatus
+from tests.integration.guest_helpers import password_form
 
 INVALID_EXPIRIES = [
     "9999-12-31T23:59:59.999999Z",
@@ -122,9 +123,10 @@ async def test_existing_infinite_expiry_keeps_guest_and_password_semantics(
     assert images.status_code == (403 if protected and status == 200 else status)
     if protected and status == 200:
         assert 'name="password"' in viewer.text
-        unlocked = await client.post(f"{guest_path}/verify-password", data={"password": "existing-password"})
+        unlocked = await password_form(client, guest_path, "existing-password")
         assert unlocked.status_code == 200
-        assert 'data-session-id="' in unlocked.text
+        assert 'data-guest-csrf-token="' in unlocked.text
+        assert 'data-session-id="' not in unlocked.text
     # Reading a legacy value must not rewrite its storage semantics.
     stored = await verify_db.scalar(text("SELECT expires_at::text FROM galleries WHERE id = :id"), {"id": gallery.id})
     assert stored == expiry
