@@ -210,7 +210,7 @@ def test_full_backup_roundtrip_restores_admin_guard_and_images(database, tmp_pat
     assert _restore(archive, legacy=False) == 0
     assert database.sql("SELECT email FROM users WHERE status = 'admin'") == "admin@example.com"
     assert database.sql("SELECT completed FROM setup_state WHERE id = 1") == "t"
-    assert database.sql("SELECT version_num FROM alembic_version") == "0018"
+    assert database.sql("SELECT version_num FROM alembic_version") == "0019"
     with pytest.raises(subprocess.CalledProcessError, match="exit status"):
         database.sql(
             "INSERT INTO users (id, email, password_hash, status) "

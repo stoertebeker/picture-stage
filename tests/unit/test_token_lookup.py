@@ -1,7 +1,6 @@
 """Legacy scan capacity and token format contracts."""
 
 import asyncio
-from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import HTTPException
@@ -45,31 +44,15 @@ async def test_legacy_scan_permit_is_released_on_cancellation(monkeypatch):
     assert token_lookup._legacy_running == {"gallery": 0, "verification": 0}
 
 
-async def test_cancellation_closes_pending_signup_cursor_and_releases_permit():
+async def test_cancellation_of_pending_signup_window_releases_permit():
     started = asyncio.Event()
     never = asyncio.Event()
 
-    class Cursor:
-        def __init__(self):
-            self.close = AsyncMock()
-
-        def scalars(self):
-            return self
-
-        def __aiter__(self):
-            return self
-
-        async def __anext__(self):
+    class DB:
+        async def scalars(self, query):
+            assert query._limit_clause.value == 65
             started.set()
             await never.wait()
-            raise StopAsyncIteration
-
-    class DB:
-        def __init__(self):
-            self.cursor = Cursor()
-
-        async def stream(self, _query):
-            return self.cursor
 
     db = DB()
     task = asyncio.create_task(token_lookup.resolve_pending_signup("old-opaque-token", db))
@@ -77,5 +60,4 @@ async def test_cancellation_closes_pending_signup_cursor_and_releases_permit():
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
-    db.cursor.close.assert_awaited_once()
     assert token_lookup._legacy_running["verification"] == 0

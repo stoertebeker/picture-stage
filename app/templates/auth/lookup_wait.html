@@ -1,0 +1,6 @@
+{% extends "auth_base.html" %}
+{% block title %}{{ t('auth.verify_title') }}{% endblock %}
+{% block auth_card %}
+<div data-lookup-wait role="status" class="p-6 text-center">{{ t('guest.lookup_wait') }}</div>
+<script src="{{ request.scope.get('root_path', '') }}{{ asset('js/lookup-retry.js') }}"></script>
+{% endblock %}

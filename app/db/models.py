@@ -423,6 +423,13 @@ class NotificationDelivery(Base):
 
 class PendingSignup(Base):
     __tablename__ = "pending_signups"
+    __table_args__ = (
+        Index(
+            "ix_pending_signups_legacy_token_candidates",
+            "id",
+            postgresql_where=text("verification_lookup_id IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False, index=True)

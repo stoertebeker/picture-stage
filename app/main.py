@@ -128,6 +128,16 @@ async def lookup_http_error(request: Request, error: StarletteHTTPException) -> 
         error.status_code == 503
         and (error.headers or {}).get(RETRY_HEADER) == RETRY_VALUE
         and request.method == "GET"
+        and len(path.rstrip("/").split("/")) == 3
+        and path.startswith("/verify-email/")
+    ):
+        from app.frontend.deps import templates
+
+        return templates.TemplateResponse(request, "auth/lookup_wait.html", {}, status_code=503, headers=error.headers)
+    if (
+        error.status_code == 503
+        and (error.headers or {}).get(RETRY_HEADER) == RETRY_VALUE
+        and request.method == "GET"
         and request.headers.get("HX-Request") != "true"
         and "application/json" not in request.headers.get("accept", "")
         and len(path.rstrip("/").split("/")) == 3

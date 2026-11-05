@@ -11,7 +11,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.lookup_progress import RETRY_HEADER, RETRY_VALUE
+from app.auth.lookup_progress import LOOKUP_WINDOW, RETRY_HEADER, RETRY_VALUE, LookupProgress
 from app.auth.passwords import verify_token
 from app.auth.tokens import verification_lookup_id
 from app.db.models import PendingSignup
@@ -31,8 +31,8 @@ def token_locator(token: str) -> bytes:
 async def legacy_token_scan(kind: LegacyTokenKind) -> AsyncIterator[None]:
     """Limit concurrent legacy scans without retaining an unbounded wait queue.
 
-    This bounds simultaneous work and buffered rows per process; the number of
-    verifier operations in an individual legacy scan is still linear.
+    Callers also bound each admitted request to a fixed candidate window;
+    historical links can advance through several requests without a full scan.
     """
     with _lock:
         if _legacy_running[kind] >= _MAX_LEGACY_SCANS:
@@ -50,29 +50,52 @@ async def legacy_token_scan(kind: LegacyTokenKind) -> AsyncIterator[None]:
 
 
 async def resolve_pending_signup(token: str, db: AsyncSession) -> PendingSignup | None:
-    """Use a new-token locator, then retain compatibility with old links."""
-    locator = verification_lookup_id(token)
+    """Resolve one indexed candidate or a bounded legacy ID window.
+
+    Old links have no recoverable locator and no expiry. Signed progress lets
+    them traverse any backlog without making one public request scan it all.
+    Eligibility is checked only after selecting IDs, including cleared rows.
+    """
+    progress = LookupProgress("verification", token)
+    cursor = progress.read()
+    # PendingSignup.id is PostgreSQL int4, including imported negative IDs.
+    # Reject authenticated but out-of-range values before constructing SQL.
+    if cursor is not None and (cursor[0] != "l" or int(cursor[1], 16) > 2**32 - 1):
+        cursor = None
+    remaining = LOOKUP_WINDOW
+    locator = verification_lookup_id(token) if cursor is None else None
     if locator is not None:
         candidate = await db.scalar(select(PendingSignup).where(PendingSignup.verification_lookup_id == locator))
-        if candidate is not None and verify_token(
-            token, candidate.verification_token_hash, candidate.verification_token_salt
-        ):
-            return candidate
+        if candidate is not None and candidate.verification_token_hash and candidate.verification_token_salt:
+            remaining -= 1
+            if verify_token(token, candidate.verification_token_hash, candidate.verification_token_salt):
+                progress.clear()
+                return candidate
 
-    # A legacy signup has no recoverable locator. Stream rather than load the
-    # complete pending-signup table; old instances can still create such rows.
     async with legacy_token_scan("verification"):
-        result = await db.stream(
-            select(PendingSignup)
-            .where(PendingSignup.verification_lookup_id.is_(None), PendingSignup.verification_token_hash != b"")
-            .execution_options(yield_per=100)
-        )
-        try:
-            async for signup in result.scalars():
-                if verify_token(token, signup.verification_token_hash, signup.verification_token_salt):
+        window = select(PendingSignup.id).where(PendingSignup.verification_lookup_id.is_(None))
+        if cursor is not None:
+            window = window.where(PendingSignup.id > int(cursor[1], 16) - 2**31)
+        ids = list((await db.scalars(window.order_by(PendingSignup.id).limit(remaining + 1))).all())
+        if ids:
+            candidates = (
+                await db.scalars(
+                    select(PendingSignup)
+                    .where(PendingSignup.id.in_(ids[:remaining]))
+                    .execution_options(populate_existing=True)
+                )
+            ).all()
+            for signup in candidates:
+                if (
+                    signup.verification_token_hash
+                    and signup.verification_token_salt
+                    and verify_token(token, signup.verification_token_hash, signup.verification_token_salt)
+                ):
+                    progress.clear()
                     return signup
-        finally:
-            await result.close()
+        if len(ids) > remaining:
+            progress.retry("l", f"{ids[remaining - 1] + 2**31:032x}")
+    progress.clear()
     return None
 
 
