@@ -25,8 +25,8 @@ from app.guest.service import (
     create_share_session,
     current_share_session,
     load_sorted_filtered_images,
-    lock_gallery_for_guest_read,
     lock_gallery_for_review,
+    lock_gallery_for_session_admission,
     require_gallery_read_access,
     resolve_gallery_by_token,
     sign_preview_urls,
@@ -89,7 +89,8 @@ async def get_shared_gallery(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
 
     check_gallery_accessible(gallery)
-    gallery = await lock_gallery_for_guest_read(token, gallery.id, db)
+    # Session producers must never hold FOR SHARE before admission/cleanup.
+    gallery = await lock_gallery_for_session_admission(token, gallery.id, db)
 
     image_count_result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id))
     image_count = image_count_result.scalar() or 0

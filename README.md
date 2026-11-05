@@ -292,6 +292,21 @@ from owner CSRF. Valid browser cookies and their exact CSRF/expiry context are
 reused across tabs of the same gallery; different galleries remain separate.
 Guest representations are private and non-cacheable.
 
+`MAX_SHARE_SESSIONS_PER_GALLERY` limits all retained visits per gallery to 1,000
+by default, including completed, historical and obsolete-generation sessions.
+Admission is serialized across workers; dropping cookies does not bypass the
+limit. New visits return 409 at capacity, while existing valid visits remain
+usable. `SHARE_SESSION_TTL_SECONDS` expires new sessions after 43,200 seconds
+(12 hours). Both settings require positive integers up to 2,147,483,647.
+
+Each admission examines at most 100 expired, unfinished sessions for cleanup.
+A persisted per-gallery cursor rotates past sessions referenced by selection
+history or audit entries; those sessions are preserved. Cleanup also persists
+when admission is refused, so a lowered limit can recover over several requests.
+Migration `0015` leaves existing sessions without an expiry and preserves their
+grants and history; these rows still count toward the limit. Cleanup is driven
+by admission attempts rather than a background schedule.
+
 Guest sessions carry the gallery's current authorization generation. Setting,
 changing or removing a password, creating/rotating a share link and revoking a
 link advance that generation atomically. Previous sessions can no longer write

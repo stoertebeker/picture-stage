@@ -105,6 +105,11 @@ class Settings(BaseSettings):
     max_selection_events_per_gallery: int = Field(default=20000, ge=1)
     max_selection_comment_chars: int = Field(default=2000, ge=1)
 
+    # All retained visits count, including historical/completed sessions. Never
+    # unlimited: cookie deletion or changing IPs must not bypass admission.
+    max_share_sessions_per_gallery: int = Field(default=1000, ge=1, le=2**31 - 1)
+    share_session_ttl_seconds: int = Field(default=43200, ge=1, le=2**31 - 1)
+
     # Decompression-bomb guard (picture-stage-ccx). Caps the decoded pixel count
     # Pillow will process before raising DecompressionBombError instead of
     # allocating hundreds of MB of RAM. Applied module-wide in

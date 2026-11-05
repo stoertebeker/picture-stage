@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -294,11 +295,35 @@ class ShareSession(Base):
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # NULL preserves the original authorization/retention of legacy visits.
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (
+        Index(
+            "ix_share_sessions_gallery_expiry",
+            "gallery_id",
+            "expires_at",
+            "id",
+            postgresql_where=text("completed_at IS NULL AND expires_at IS NOT NULL"),
+        ),
+    )
 
     gallery: Mapped["Gallery"] = relationship(back_populates="share_sessions")
     selection_events: Mapped[list["SelectionEvent"]] = relationship(
         back_populates="share_session", cascade="all, delete-orphan"
     )
+
+
+class ShareSessionCleanupState(Base):
+    """One durable rotating retention checkpoint per gallery, never a grant."""
+
+    __tablename__ = "share_session_cleanup_state"
+
+    gallery_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("galleries.id", ondelete="CASCADE"), primary_key=True
+    )
+    last_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
 
 
 class AuditLog(Base):
@@ -310,7 +335,7 @@ class AuditLog(Base):
     )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     actor_user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
-    actor_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
+    actor_session_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True, index=True)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(512), nullable=True)
     details: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
