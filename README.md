@@ -79,6 +79,46 @@ picture-stage backup --output /backups/picture-stage.tar.gz
 picture-stage restore --input /backups/picture-stage.tar.gz --confirm
 ```
 
+New backups contain a PostgreSQL custom-format `db.dump` and are authenticated
+by an external HMAC sidecar, such as `picture-stage.tar.gz.sig`. Keep both files
+together and securely retain the original `HMAC_SECRET_KEY` separately; it is
+not included in the archive and must contain at least 32 bytes of random secret
+material. Restoring on another host requires that original key. Key rotation
+invalidates earlier backup signatures and existing signed media URLs. Existing
+archive or sidecar paths are never overwritten; choose a new backup filename.
+Restore verifies the complete compressed archive before extraction and restores
+from a private verified snapshot using `pg_restore`.
+
+Old, unsigned backups you created yourself can be restored only after checking
+their provenance and explicitly choosing the legacy exception:
+
+```bash
+picture-stage restore --input /backups/old.tar.gz --confirm --trust-legacy-unsigned
+```
+
+This exception executes archive-controlled SQL through `psql`, which can run
+commands as the restore process. It does not bypass an invalid or malformed
+signature and applies only to the old unsigned format. Trusted database contents
+remain necessary even with signed custom dumps, since PostgreSQL SQL can execute
+server-side code.
+
+Every restore, including the legacy exception, uses finite resource limits.
+The defaults allow 100 GiB of compressed input, 512 GiB of expanded TAR bytes
+(including headers/padding), 64 GiB per file, and 500,000 raw headers and output
+objects including directories. Paths are limited to 16 components and 4,096
+UTF-8 bytes. Parser extensions allow 64 KiB each, 16 MiB in total, and 16 chained
+headers; metadata/manifest JSON is limited to 64 KiB. The compression-ratio cap
+is 1,000 and the archive-processing deadline is 900 seconds through image
+staging. The deadline is cooperative and does not interrupt kernel I/O or the
+database subprocess.
+
+`picture-stage restore --help` lists the positive, finite `--max-*` overrides
+for larger existing archives. Zero never disables a limit. Peak temporary disk
+use can include the compressed snapshot, expanded contents, and a second copy
+of local images on the upload filesystem. Extraction rejects unsafe member
+types, traversal, duplicate destinations, sparse formats and malformed trailing
+data before changing the database.
+
 Run restore with the application stopped and `DATABASE_URL` pointing to an
 existing, empty database (created from `template0`). A database containing user
 tables, views or sequences is rejected before changes; restore does not replace
@@ -340,8 +380,8 @@ pytest --cov=app
 pytest tests/security/ -v
 ```
 
-Restore tests in `tests/cli/` additionally require PostgreSQL 16 `psql` and
-`pg_dump` on `PATH`, and a test database role with `CREATEDB`. They create and
+Restore tests in `tests/cli/` additionally require PostgreSQL 16 `psql`,
+`pg_dump` and `pg_restore` on `PATH`, and a test database role with `CREATEDB`. They create and
 drop uniquely named temporary databases from `template0`; without the client
 tools these tests are skipped. CI installs the matching tools explicitly.
 

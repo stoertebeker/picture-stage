@@ -63,6 +63,7 @@ RUN apt-get update && \
 
 COPY --from=postgres-client /usr/lib/postgresql/16/bin/psql /usr/local/bin/psql
 COPY --from=postgres-client /usr/lib/postgresql/16/bin/pg_dump /usr/local/bin/pg_dump
+COPY --from=postgres-client /usr/lib/postgresql/16/bin/pg_restore /usr/local/bin/pg_restore
 COPY --from=postgres-client /usr/lib/postgresql/16/bin/pg_isready /usr/local/bin/pg_isready
 COPY --from=postgres-client /usr/share/doc/postgresql-client-16/copyright /usr/share/doc/postgresql-client-16/copyright
 

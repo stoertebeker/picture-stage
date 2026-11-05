@@ -2,7 +2,7 @@
 
 Creates/restores a .tar.gz archive containing:
   - metadata.json    — app version, timestamp, storage type
-  - db.sql           — PostgreSQL dump (via pg_dump)
+  - db.dump          — PostgreSQL custom-format dump (via pg_dump)
   - images/          — image files (LocalStorage only)
   - manifest.json    — S3 keys + bucket info (S3Storage only)
 
@@ -10,7 +10,8 @@ Usage:
   picture-stage backup [--output /path/to/backup.tar.gz]
   picture-stage restore --input /path/to/backup.tar.gz --confirm
 
-Requires pg_dump and psql in PATH (available in the Docker image).
+An adjacent .tar.gz.sig authenticates the complete archive using HMAC_SECRET_KEY.
+Requires pg_dump, pg_restore and psql in PATH (available in the Docker image).
 Database connection is read from DATABASE_URL env var.
 """
 
@@ -19,15 +20,20 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
+import zlib
 from contextlib import ExitStack
+from dataclasses import fields
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import BinaryIO
 from urllib.parse import urlparse
+
+from app.cli.backup_auth import authenticated_snapshot, publish_backup, sign_archive, signing_key
+from app.cli.restore_archive import RestoreBudget, RestoreLimits, copy_bounded, extract_archive, read_json
 
 APP_VERSION = "0.1.0"
 
@@ -71,14 +77,9 @@ def _collect_local_images(upload_dir: str) -> list[str]:
     return sorted(str(p.relative_to(base)) for p in base.rglob("*") if p.is_file())
 
 
-def _safe_tar_extract(tar: tarfile.TarFile, dest: Path) -> None:
-    """Extract *tar* into *dest* with path-traversal protection."""
-    dest_resolved = dest.resolve()
-    for member in tar.getmembers():
-        member_path = (dest / member.name).resolve()
-        if not str(member_path).startswith(str(dest_resolved)):
-            raise ValueError(f"Refusing to extract {member.name!r}: path traversal detected")
-    tar.extractall(dest, filter="data")
+def _safe_tar_extract(snapshot: BinaryIO, dest: Path, budget: RestoreBudget) -> None:
+    """Apply shared restore budgets at the authenticated compressed boundary."""
+    extract_archive(snapshot, dest, budget)
 
 
 def _image_destination(upload_dir: Path, relative_path: Path) -> Path:
@@ -108,6 +109,12 @@ def cmd_backup(args: argparse.Namespace) -> int:
     db = _parse_database_url(settings.database_url)
     storage_type = settings.storage_backend  # "local" or "s3"
     upload_dir = settings.upload_dir
+
+    try:
+        key = signing_key(settings.hmac_secret_key)
+    except ValueError as exc:
+        print(f"[backup] ERROR: {exc}", file=sys.stderr)
+        return 1
 
     # Determine output path
     if args.output:
@@ -149,7 +156,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
 
         # --- pg_dump ---
         print("[backup] Dumping database …")
-        dump_path = tmp / "db.sql"
+        dump_path = tmp / "db.dump"
         try:
             subprocess.run(
                 [
@@ -162,6 +169,7 @@ def cmd_backup(args: argparse.Namespace) -> int:
                     db["user"],
                     "-d",
                     db["dbname"],
+                    "--format=custom",
                     "--no-owner",
                     "--no-acl",
                     "-f",
@@ -177,13 +185,14 @@ def cmd_backup(args: argparse.Namespace) -> int:
         except subprocess.CalledProcessError as exc:
             print(f"[backup] ERROR: pg_dump failed: {exc.stderr.decode()}", file=sys.stderr)
             return 1
-        print(f"[backup]   db.sql ({dump_path.stat().st_size:,} bytes)")
+        print(f"[backup]   db.dump ({dump_path.stat().st_size:,} bytes)")
 
         # --- Metadata ---
         metadata: dict[str, object] = {
             "app_version": APP_VERSION,
             "timestamp": datetime.now(UTC).isoformat(),
             "storage_type": storage_type,
+            "backup_format": 2,
         }
 
         # --- Images / manifest ---
@@ -211,25 +220,29 @@ def cmd_backup(args: argparse.Namespace) -> int:
         # --- Build tar.gz ---
         print(f"[backup] Creating archive {output_path} …")
         try:
-            with tarfile.open(output_path, "w:gz") as tar:
-                tar.add(str(metadata_path), arcname="metadata.json")
-                tar.add(str(dump_path), arcname="db.sql")
+            # Stage on the destination filesystem so exclusive publication
+            # never exposes partial archives or overwrites an existing pair.
+            with tempfile.TemporaryDirectory(prefix=".backup-", dir=output_path.parent) as publication:
+                staged_archive = Path(publication) / "archive.tar.gz"
+                with tarfile.open(staged_archive, "w:gz") as tar:
+                    tar.add(str(metadata_path), arcname="metadata.json")
+                    tar.add(str(dump_path), arcname="db.dump")
 
-                if storage_type == "s3" and manifest_path is not None:
-                    tar.add(str(manifest_path), arcname="manifest.json")
-                elif storage_type == "local":
-                    base = Path(upload_dir)
-                    for rel in image_files:
-                        full = base / rel
-                        tar.add(str(full), arcname=f"images/{rel}")
-        except Exception:
-            # Clean up partial archive
-            if output_path.exists():
-                output_path.unlink()
-            raise
+                    if storage_type == "s3" and manifest_path is not None:
+                        tar.add(str(manifest_path), arcname="manifest.json")
+                    elif storage_type == "local":
+                        base = Path(upload_dir)
+                        for rel in image_files:
+                            full = base / rel
+                            tar.add(str(full), arcname=f"images/{rel}")
+                publish_backup(staged_archive, output_path, sign_archive(staged_archive, key))
+        except (OSError, tarfile.TarError) as exc:
+            print(f"[backup] ERROR: Could not publish signed backup: {exc}", file=sys.stderr)
+            return 1
 
         size_mb = output_path.stat().st_size / (1024 * 1024)
         print(f"[backup] Done. Archive size: {size_mb:.1f} MB")
+        print(f"[backup] Keep {output_path}.sig with the archive and retain the original HMAC_SECRET_KEY separately.")
 
     return 0
 
@@ -244,10 +257,6 @@ def cmd_restore(args: argparse.Namespace) -> int:
     from app.config import settings  # lazy import
 
     archive_path = Path(args.input)
-    if not archive_path.is_file():
-        print(f"[restore] ERROR: File not found: {archive_path}", file=sys.stderr)
-        return 1
-
     if not args.confirm:
         print(
             "[restore] ERROR: Restore requires --confirm flag to prevent accidental data loss.",
@@ -255,6 +264,17 @@ def cmd_restore(args: argparse.Namespace) -> int:
         )
         return 1
 
+    try:
+        limits = RestoreLimits(
+            **{
+                field.name: getattr(args, f"max_{field.name}", getattr(RestoreLimits(), field.name))
+                for field in fields(RestoreLimits)
+            }
+        )
+        budget = RestoreBudget(limits)
+    except ValueError as exc:
+        print(f"[restore] ERROR: {exc}", file=sys.stderr)
+        return 1
     db = _parse_database_url(settings.database_url)
 
     print(f"[restore] Archive : {archive_path}")
@@ -266,9 +286,14 @@ def cmd_restore(args: argparse.Namespace) -> int:
         # --- Extract and validate ---
         print("[restore] Extracting archive …")
         try:
-            with tarfile.open(archive_path, "r:gz") as tar:
-                _safe_tar_extract(tar, tmp)
-        except (tarfile.TarError, ValueError) as exc:
+            with authenticated_snapshot(
+                archive_path,
+                settings.hmac_secret_key,
+                trust_legacy=getattr(args, "trust_legacy_unsigned", False),
+                budget=budget,
+            ) as (snapshot, authenticated):
+                _safe_tar_extract(snapshot, tmp, budget)
+        except (OSError, EOFError, tarfile.TarError, ValueError, zlib.error) as exc:
             print(f"[restore] ERROR: {exc}", file=sys.stderr)
             return 1
 
@@ -278,16 +303,30 @@ def cmd_restore(args: argparse.Namespace) -> int:
             print("[restore] ERROR: Archive is missing metadata.json — invalid backup.", file=sys.stderr)
             return 1
 
-        metadata = json.loads(metadata_path.read_text())
+        try:
+            metadata = read_json(metadata_path, budget)
+            manifest_path = tmp / "manifest.json"
+            manifest = read_json(manifest_path, budget, manifest=True) if manifest_path.exists() else None
+        except (OSError, ValueError) as exc:
+            print(f"[restore] ERROR: Invalid metadata.json: {exc}", file=sys.stderr)
+            return 1
         print(
             f"[restore] Backup from {metadata.get('timestamp', 'unknown')} "
             f"(app v{metadata.get('app_version', '?')}, storage: {metadata.get('storage_type', '?')})"
         )
 
-        dump_path = tmp / "db.sql"
-        if not dump_path.exists():
-            print("[restore] ERROR: Archive is missing db.sql — invalid backup.", file=sys.stderr)
+        legacy = not authenticated
+        dump_path = tmp / ("db.sql" if legacy else "db.dump")
+        other_dump = tmp / ("db.dump" if legacy else "db.sql")
+        expected_format = metadata.get("backup_format") is None if legacy else metadata.get("backup_format") == 2
+        if not expected_format or not dump_path.is_file() or other_dump.exists():
+            print("[restore] ERROR: Archive has an invalid or unsupported database backup format.", file=sys.stderr)
             return 1
+        if legacy:
+            print(
+                "[restore] WARNING: Trusting an unsigned legacy backup. Its SQL can execute commands as this process.",
+                file=sys.stderr,
+            )
 
         # Full pg_dump archives require an empty target. Never imply that
         # feeding CREATE/COPY statements into an existing schema replaces it.
@@ -350,22 +389,51 @@ def cmd_restore(args: argparse.Namespace) -> int:
                         staging.enter_context(tempfile.TemporaryDirectory(prefix=".restore-", dir=upload_dir))
                     )
                     for src in images_dir.rglob("*"):
+                        budget.check()
                         if not src.is_file():
                             continue
                         rel = src.relative_to(images_dir)
                         _image_destination(upload_dir, rel)
                         staged = staged_images / rel
                         staged.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.copyfile(src, staged)
+                        with src.open("rb") as source, staged.open("xb") as output:
+                            copy_bounded(source, output, budget, expected=src.stat().st_size)
                         image_paths.append(rel)
                 except (OSError, ValueError) as exc:
                     print(f"[restore] ERROR: Could not stage images; database was not changed: {exc}", file=sys.stderr)
                     return 1
 
+            try:
+                budget.check()
+            except ValueError as exc:
+                print(f"[restore] ERROR: {exc}; database was not changed", file=sys.stderr)
+                return 1
             print("[restore] Restoring database …")
+            restore_command = (
+                [*psql, "--single-transaction", "-f", str(dump_path)]
+                if legacy
+                else [
+                    "pg_restore",
+                    "--no-password",
+                    "-h",
+                    db["host"],
+                    "-p",
+                    db["port"],
+                    "-U",
+                    db["user"],
+                    "-d",
+                    db["dbname"],
+                    "--format=custom",
+                    "--exit-on-error",
+                    "--single-transaction",
+                    "--no-owner",
+                    "--no-acl",
+                    str(dump_path),
+                ]
+            )
             try:
                 subprocess.run(
-                    [*psql, "--single-transaction", "-f", str(dump_path)],
+                    restore_command,
                     env=_pg_env(db),
                     stdin=subprocess.DEVNULL,
                     check=True,
@@ -394,9 +462,7 @@ def cmd_restore(args: argparse.Namespace) -> int:
                 print(f"[restore]   Restored {len(image_paths)} image file(s) to {upload_dir}")
 
         if backup_storage == "s3":
-            manifest_path_s3 = tmp / "manifest.json"
-            if manifest_path_s3.exists():
-                manifest = json.loads(manifest_path_s3.read_text())
+            if manifest is not None:
                 print(f"[restore]   S3 backend — images are in bucket {manifest.get('bucket', '?')}.")
                 print("[restore]   Ensure the S3 bucket is intact. This archive does not contain image files.")
             else:
@@ -436,10 +502,24 @@ def main() -> None:
         help="Path to the backup archive",
     )
     p_restore.add_argument(
+        "--trust-legacy-unsigned",
+        action="store_true",
+        help="Trust only known, operator-owned old unsigned backups; their SQL can execute commands as this process",
+    )
+    p_restore.add_argument(
         "--confirm",
         action="store_true",
         help="Required flag to confirm restore (prevents accidental overwrites)",
     )
+
+    for field in fields(RestoreLimits):
+        default = getattr(RestoreLimits(), field.name)
+        p_restore.add_argument(
+            f"--max-{field.name.replace('_', '-')}",
+            type=float if field.name == "seconds" else int,
+            default=default,
+            help=f"Positive finite restore {field.name.replace('_', ' ')} limit (default: {default})",
+        )
 
     args = parser.parse_args()
 

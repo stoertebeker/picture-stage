@@ -21,10 +21,12 @@ from urllib.parse import urlsplit, urlunsplit
 import pytest
 
 from app.cli import backup
+from app.cli.backup_auth import sign_archive, signature_path, signing_key
 from app.config import settings
 
 pytestmark = pytest.mark.skipif(
-    not shutil.which("psql") or not shutil.which("pg_dump"), reason="PostgreSQL client tools required"
+    not all(shutil.which(tool) for tool in ("psql", "pg_dump", "pg_restore")),
+    reason="PostgreSQL client tools required",
 )
 
 IMAGE_PATH = "gallery/original.webp"
@@ -88,6 +90,7 @@ def database(monkeypatch, tmp_path):
         monkeypatch.setenv("DATABASE_URL", url)
         monkeypatch.setattr(settings, "storage_backend", "local")
         monkeypatch.setattr(settings, "upload_dir", str(tmp_path / "uploads"))
+        monkeypatch.setattr(settings, "hmac_secret_key", "restore-tests-only-key-with-at-least-32-bytes")
         yield RestoreDatabase(base_url, url, name)
     finally:
         _sql(base_url, f'DROP DATABASE "{name}" WITH (FORCE)')
@@ -111,8 +114,8 @@ def _archive(tmp_path: Path, sql: str, *, storage: str = "local") -> Path:
     return path
 
 
-def _restore(path: Path) -> int:
-    return backup.cmd_restore(argparse.Namespace(input=str(path), confirm=True))
+def _restore(path: Path, *, legacy: bool = True) -> int:
+    return backup.cmd_restore(argparse.Namespace(input=str(path), confirm=True, trust_legacy_unsigned=legacy))
 
 
 def _existing_image() -> Path:
@@ -198,9 +201,13 @@ def test_full_backup_roundtrip_restores_admin_guard_and_images(database, tmp_pat
     image = _existing_image()
     archive = tmp_path / "roundtrip.tar.gz"
     assert backup.cmd_backup(argparse.Namespace(output=str(archive))) == 0
+    assert signature_path(archive).is_file()
+    with tarfile.open(archive) as contents:
+        assert "db.dump" in contents.getnames()
+        assert "db.sql" not in contents.getnames()
     database.reset()
     image.write_bytes(b"changed bytes")
-    assert _restore(archive) == 0
+    assert _restore(archive, legacy=False) == 0
     assert database.sql("SELECT email FROM users WHERE status = 'admin'") == "admin@example.com"
     assert database.sql("SELECT completed FROM setup_state WHERE id = 1") == "t"
     assert database.sql("SELECT version_num FROM alembic_version") == "0013"
@@ -236,7 +243,7 @@ def test_image_staging_failure_leaves_database_and_images_unchanged(database, tm
     def disk_full(*args, **kwargs):
         raise OSError("disk full")
 
-    monkeypatch.setattr(backup.shutil, "copyfile", disk_full)
+    monkeypatch.setattr(backup, "copy_bounded", disk_full)
     assert _restore(archive) == 1
     assert database.sql("SELECT to_regclass('should_not_exist') IS NULL") == "t"
     assert image.read_bytes() == b"original image bytes"
@@ -277,3 +284,53 @@ def test_s3_restore_keeps_manifest_semantics(database, tmp_path, capsys):
     assert database.sql("SELECT to_regclass('restored') IS NOT NULL") == "t"
     assert not Path(settings.upload_dir).exists()
     assert "images are in bucket test-bucket" in capsys.readouterr().out
+
+
+def test_signed_custom_restore_failure_rolls_back_schema_data_and_images(database, tmp_path, monkeypatch, capsys):
+    # The source can hold these rows; restoring with the different client
+    # application name fails its CHECK during COPY, after CREATE TABLE.
+    database.sql(
+        "CREATE TABLE restored (id integer CHECK (current_setting('application_name') <> 'pg_restore')); "
+        "INSERT INTO restored VALUES (1)"
+    )
+    image = _existing_image()
+    archive = tmp_path / "custom-failure.tar.gz"
+    assert backup.cmd_backup(argparse.Namespace(output=str(archive))) == 0
+    database.reset()
+    image.write_bytes(b"current image")
+    monkeypatch.setenv("PGAPPNAME", "pg_restore")
+    assert _restore(archive, legacy=False) == 1
+    assert database.sql("SELECT to_regclass('restored') IS NULL") == "t"
+    assert image.read_bytes() == b"current image"
+    assert not list(Path(settings.upload_dir).glob(".restore-*"))
+    assert "Database restore failed" in capsys.readouterr().err
+
+
+def test_unsigned_meta_command_archive_is_rejected_without_marker_or_changes(database, tmp_path, capsys):
+    marker = tmp_path / "psql-meta-marker"
+    archive = _archive(tmp_path, f"\\! touch {marker}\nCREATE TABLE should_not_exist (id integer);\n")
+    image = _existing_image()
+    assert _restore(archive, legacy=False) == 1
+    assert not marker.exists()
+    assert database.sql("SELECT to_regclass('should_not_exist') IS NULL") == "t"
+    assert image.read_bytes() == b"original image bytes"
+    assert "signature is missing" in capsys.readouterr().err
+
+
+def test_signed_custom_payload_cannot_invoke_psql_meta_commands(database, tmp_path, capsys):
+    marker = tmp_path / "psql-meta-marker"
+    archive = tmp_path / "fake-custom.tar.gz"
+    members = {
+        "metadata.json": json.dumps({"storage_type": "local", "backup_format": 2}).encode(),
+        "db.dump": f"\\! touch {marker}\nCREATE TABLE should_not_exist (id integer);\n".encode(),
+    }
+    with tarfile.open(archive, "w:gz") as contents:
+        for name, payload in members.items():
+            info = tarfile.TarInfo(name)
+            info.size = len(payload)
+            contents.addfile(info, io.BytesIO(payload))
+    signature_path(archive).write_bytes(sign_archive(archive, signing_key(settings.hmac_secret_key)))
+    assert _restore(archive, legacy=False) == 1
+    assert not marker.exists()
+    assert database.sql("SELECT to_regclass('should_not_exist') IS NULL") == "t"
+    assert "Database restore failed" in capsys.readouterr().err
