@@ -10,18 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import get_user_from_cookie, require_authenticated_page
-from app.db.models import (
-    Gallery,
-    Image,
-    ImagePreview,
-    PreviewVariant,
-    SelectionAction,
-    SelectionEvent,
-    ShareSession,
-    User,
-)
+from app.db.models import Gallery, User
 from app.db.session import get_db
 from app.frontend.deps import templates
+from app.galleries.dashboard import load_dashboard_galleries
 from app.galleries.quota import GalleryQuotaExceeded, get_gallery_limit, reserve_gallery_slot
 from app.security.signing import sign_url
 
@@ -137,78 +129,21 @@ def _gallery_quota_context(user: User, gallery_count: int) -> dict[str, Any]:
 
 
 async def _load_gallery_data(user: User, db: AsyncSession) -> list[dict[str, Any]]:
-    """Load galleries with image counts and selection progress for the dashboard."""
-    result = await db.execute(select(Gallery).where(Gallery.owner_id == user.id).order_by(Gallery.updated_at.desc()))
-    galleries = result.scalars().all()
-
-    gallery_data: list[dict[str, Any]] = []
-    for gallery in galleries:
-        # Image count
-        img_count_result = await db.execute(
-            select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
-        )
-        image_count = img_count_result.scalar() or 0
-
-        # Selection counts
-        sel_counts = await db.execute(
-            select(
-                func.count(func.distinct(SelectionEvent.image_id)).filter(
-                    SelectionEvent.action == SelectionAction.select
-                ),
-                func.count(func.distinct(SelectionEvent.image_id)).filter(
-                    SelectionEvent.action == SelectionAction.favorite
-                ),
-                func.count(func.distinct(SelectionEvent.image_id)).filter(
-                    SelectionEvent.action == SelectionAction.comment
-                ),
-            )
-            .join(Image, SelectionEvent.image_id == Image.id)
-            .where(Image.gallery_id == gallery.id)
-        )
-        row = sel_counts.one()
-        selected_count, favorited_count, commented_count = row[0], row[1], row[2]
-
-        # Last activity
-        last_access_result = await db.execute(
-            select(func.max(ShareSession.started_at)).where(ShareSession.gallery_id == gallery.id)
-        )
-        last_activity = last_access_result.scalar()
-        cover_url = await _load_gallery_cover_url(gallery, db)
-
-        gallery_data.append(
-            {
-                "gallery": gallery,
-                "image_count": image_count,
-                "selected_count": selected_count,
-                "favorited_count": favorited_count,
-                "commented_count": commented_count,
-                "last_activity": last_activity,
-                "cover_url": cover_url,
-            }
-        )
-
-    return gallery_data
-
-
-async def _load_gallery_cover_url(gallery: Gallery, db: AsyncSession) -> str | None:
-    """Return a signed medium thumbnail URL for the first image in a gallery."""
-    result = await db.execute(
-        select(ImagePreview.storage_key)
-        .join(Image, ImagePreview.image_id == Image.id)
-        .where(Image.gallery_id == gallery.id, ImagePreview.variant == PreviewVariant.thumb_md)
-        .order_by(Image.sort_order)
-        .limit(1)
-    )
-    storage_key = result.scalar_one_or_none()
-    if storage_key is None:
-        result = await db.execute(
-            select(ImagePreview.storage_key)
-            .join(Image, ImagePreview.image_id == Image.id)
-            .where(Image.gallery_id == gallery.id, ImagePreview.variant == PreviewVariant.thumb_sm)
-            .order_by(Image.sort_order)
-            .limit(1)
-        )
-        storage_key = result.scalar_one_or_none()
-    if storage_key is None:
-        return None
-    return sign_url(f"/media/{storage_key}", expires_in=3600)
+    """Adapt batched gallery summaries to the dashboard template context."""
+    summaries = await load_dashboard_galleries(user.id, db, order_by="updated_at", include_covers=True)
+    return [
+        {
+            "gallery": summary.gallery,
+            "image_count": summary.image_count,
+            "selected_count": summary.selected_count,
+            "favorited_count": summary.favorited_count,
+            "commented_count": summary.commented_count,
+            "last_activity": summary.last_activity,
+            "cover_url": (
+                sign_url(f"/media/{summary.cover_storage_key}", expires_in=3600)
+                if summary.cover_storage_key is not None
+                else None
+            ),
+        }
+        for summary in summaries
+    ]

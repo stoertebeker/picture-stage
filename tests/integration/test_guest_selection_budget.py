@@ -45,7 +45,8 @@ async def test_comment_limit_and_action_validation(client, db, owner, monkeypatc
     assert (await client.post(path, json=body(images[0], sessions[0], "select"))).status_code == 201
     summary = await client.get(path, params={"session_id": str(sessions[1].id)})
     assert summary.status_code == 200
-    assert summary.json()["selections"][0]["comment"] == "ü🙂ab"
+    selection = next(row for row in summary.json()["selections"] if row["image_id"] == str(images[0].id))
+    assert selection["comment"] == "ü🙂ab"
     assert summary.json()["selected_count"] == 1
     assert await db.scalar(select(func.count(SelectionEvent.id))) == 2
 
@@ -89,7 +90,8 @@ async def test_existing_history_above_lowered_limit_is_preserved_and_readable(cl
     path = "/g/selection-existing-history/selections"
     result = await client.get(path, params={"session_id": str(sessions[1].id)})
     assert result.status_code == 200
-    assert result.json()["selections"][0]["comment"] == "old long comment"
+    selection = next(row for row in result.json()["selections"] if row["image_id"] == str(images[0].id))
+    assert selection["comment"] == "old long comment"
     assert result.json()["selected_count"] == 1
     response = await client.post(path, json=body(images[0], sessions[0], "comment", "old long comment"))
     assert response.status_code == 422

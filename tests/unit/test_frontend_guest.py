@@ -63,7 +63,7 @@ class _AttrExtractor(HTMLParser):
 
 
 def _make_image(filename: str, idx: int = 0) -> dict[str, object]:
-    """Mirror the dict shape produced by app.frontend.guest._load_images."""
+    """Mirror the dict shape produced by app.frontend.guest._serialize_images."""
     return {
         "id": f"00000000-0000-0000-0000-{idx:012d}",
         "filename": filename,

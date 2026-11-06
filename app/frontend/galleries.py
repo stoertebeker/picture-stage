@@ -2,20 +2,17 @@
 
 import json
 import logging
-import secrets
 import uuid
 from datetime import UTC, date, datetime, time
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import require_authenticated_page
-from app.auth.passwords import hash_token
-from app.auth.token_lookup import token_locator
 from app.db.models import (
     ALLOWED_TRANSITIONS,
     AuditLog,
@@ -27,9 +24,15 @@ from app.db.models import (
 )
 from app.db.session import get_db
 from app.frontend.deps import templates
-from app.galleries.authorization import lock_owned_gallery_authorization
 from app.galleries.deletion import purge_gallery
 from app.galleries.lifecycle import lock_gallery
+from app.galleries.management import (
+    change_gallery_status,
+    create_gallery_share,
+    revoke_gallery_share,
+    update_gallery_password,
+)
+from app.galleries.management import get_owned_gallery as _get_owned_gallery
 from app.galleries.password_hashing import GalleryPasswordBusy, hash_gallery_password
 from app.galleries.schemas import GUEST_MESSAGE_MAX_LENGTH, WatermarkConfig
 from app.galleries.sharing import build_share_url
@@ -81,15 +84,6 @@ def _validate_future_expiry(raw: str) -> datetime:
     return expires_at
 
 
-async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
-    """Load gallery with owner check. Raises 404 if not found or not owned."""
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    gallery = result.scalar_one_or_none()
-    if gallery is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
-    return gallery
-
-
 async def _load_images_with_signed_urls(gallery_id: uuid.UUID, db: AsyncSession) -> list[dict[str, Any]]:
     """Load images with previews and generate signed URLs for thumbnails."""
     result = await db.execute(
@@ -134,6 +128,21 @@ async def _load_selection_map(gallery_id: uuid.UUID, db: AsyncSession) -> dict[s
         for s in selections
         if s.selected or s.favorited
     }
+
+
+def _build_share_context(request: Request, gallery: Gallery, user: User, **extra: object) -> dict[str, Any]:
+    """Build the share partial without loading images or preparing page controls."""
+    ctx = {
+        "request": request,
+        "user": user,
+        "gallery": gallery,
+        "has_share_token": gallery.share_token_hash is not None,
+        "csrf_token": request.cookies.get("csrf_token", ""),
+    }
+    if gallery.share_token:
+        ctx["share_url"] = build_share_url(request, gallery.share_token)
+    ctx.update(extra)
+    return ctx
 
 
 def _build_context(
@@ -189,21 +198,17 @@ def _build_context(
             expiry = expiry.replace(tzinfo=UTC)
         expiry_date = expiry.astimezone(UTC).date()
 
-    ctx = {
-        "request": request,
-        "user": user,
-        "gallery": gallery,
-        "expiry_date": expiry_date,
-        "images": images,
-        "lightbox_images": lightbox_images,
-        "image_count": len(images),
-        "transitions": transitions,
-        "has_share_token": gallery.share_token_hash is not None,
-        "csrf_token": request.cookies.get("csrf_token", ""),
-        "selection_map": selection_map or {},
-    }
-    if gallery.share_token:
-        ctx["share_url"] = build_share_url(request, gallery.share_token)
+    ctx = _build_share_context(request, gallery, user)
+    ctx.update(
+        {
+            "expiry_date": expiry_date,
+            "images": images,
+            "lightbox_images": lightbox_images,
+            "image_count": len(images),
+            "transitions": transitions,
+            "selection_map": selection_map or {},
+        }
+    )
     ctx.update(extra)
     return ctx
 
@@ -440,28 +445,14 @@ async def create_share_link(
             return _password_busy_response(request, exc)
         raise
 
-    token = secrets.token_urlsafe(32)
-    token_hash, token_salt = hash_token(token)
-
-    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
-    gallery.authorization_epoch += 1
-    gallery.share_token_hash = token_hash
-    gallery.share_token_salt = token_salt
-    gallery.share_token = token
-    gallery.share_token_lookup = token_locator(token)
-
-    gallery.password_hash = password_hash
-
-    if gallery.status == GalleryStatus.draft:
-        gallery.status = GalleryStatus.shared
+    gallery, token = await create_gallery_share(gallery.id, user.id, db, password_hash=password_hash)
 
     await db.commit()
     await db.refresh(gallery)
 
     share_url = build_share_url(request, token)
 
-    images = await _load_images_with_signed_urls(gallery_id, db)
-    ctx = _build_context(request, gallery, images, user, share_url=share_url)
+    ctx = _build_share_context(request, gallery, user, share_url=share_url)
     return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
 
 
@@ -475,22 +466,12 @@ async def revoke_share_link(
     """Revoke the share link and return updated share modal partial."""
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
-    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
-    gallery.authorization_epoch += 1
-    gallery.share_token_hash = None
-    gallery.share_token_salt = None
-    gallery.share_token = None
-    gallery.share_token_lookup = None
-    gallery.password_hash = None
-
-    if gallery.status == GalleryStatus.shared:
-        gallery.status = GalleryStatus.draft
+    gallery = await revoke_gallery_share(gallery.id, user.id, db)
 
     await db.commit()
     await db.refresh(gallery)
 
-    images = await _load_images_with_signed_urls(gallery_id, db)
-    ctx = _build_context(request, gallery, images, user)
+    ctx = _build_share_context(request, gallery, user)
     return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
 
 
@@ -518,14 +499,11 @@ async def set_gallery_password(
             return _password_busy_response(request, exc)
         raise
 
-    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
-    gallery.password_hash = password_hash
-    gallery.authorization_epoch += 1
+    gallery = await update_gallery_password(gallery.id, user.id, db, password_hash=password_hash)
     await db.commit()
     await db.refresh(gallery)
 
-    images = await _load_images_with_signed_urls(gallery_id, db)
-    ctx = _build_context(request, gallery, images, user)
+    ctx = _build_share_context(request, gallery, user)
     return templates.TemplateResponse(request, "galleries/_share_modal.html", ctx)
 
 
@@ -650,21 +628,7 @@ async def transition_status(
     except ValueError as err:
         raise HTTPException(status_code=422, detail=f"Invalid status: {target}") from err
 
-    if target_status == gallery.status:
-        pass  # No-op, just re-render
-    else:
-        allowed = ALLOWED_TRANSITIONS.get(gallery.status, set())
-        if target_status not in allowed:
-            raise HTTPException(
-                status_code=409,
-                detail=f"Transition from '{gallery.status.value}' to '{target_status.value}' is not allowed",
-            )
-        if target_status == GalleryStatus.shared and gallery.share_token_hash is None:
-            raise HTTPException(
-                status_code=409,
-                detail="Cannot share gallery without a share link. Create one first.",
-            )
-        gallery.status = target_status
+    if change_gallery_status(gallery, target_status):
         await db.commit()
         await db.refresh(gallery)
 

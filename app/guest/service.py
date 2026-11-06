@@ -537,19 +537,6 @@ async def load_guest_image_page(
     return GuestImagePage(images, selections, next_cursor, *counts)
 
 
-# Preserve the internal adapter name for callers without reintroducing an
-# unbounded list. New routes consume GuestImagePage continuation metadata.
-async def load_sorted_filtered_images(
-    gallery: Gallery,
-    db: AsyncSession,
-    sort_by: ImageSortBy = ImageSortBy.sort_order,
-    sort_dir: SortDirection = SortDirection.asc,
-    filter_mode: ImageFilter = ImageFilter.all,
-) -> tuple[list[Image], dict[uuid.UUID, SelectionState]]:
-    page = await load_guest_image_page(gallery, db, sort_by, sort_dir, filter_mode)
-    return page.images, page.selections
-
-
 def sign_preview_urls(img: Image) -> dict[str, str]:
     """Build signed thumbnail/preview URLs for an image's preview variants.
 

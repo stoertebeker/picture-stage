@@ -121,43 +121,6 @@ def generate_thumbnail(image_data: BinaryIO, max_width: int) -> tuple[io.BytesIO
     return buf, img.width, img.height
 
 
-def apply_watermark(
-    image_data: BinaryIO,
-    text: str | None = None,
-    *,
-    watermark_config: dict[str, Any] | None = None,
-    gallery_id: str | None = None,
-) -> io.BytesIO:
-    img = _open_supported_image(image_data, "RGBA")
-
-    wm_text, position, opacity_alpha, font_size = _resolve_watermark_settings(watermark_config, gallery_id, img.width)
-    # Legacy: explicit text parameter overrides config
-    if text:
-        wm_text = text
-
-    overlay = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
-
-    font: FreeTypeFont
-    try:
-        font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", size=font_size)
-    except OSError:
-        font = ImageFont.load_default(size=font_size)  # type: ignore[assignment]
-
-    bbox = draw.textbbox((0, 0), wm_text, font=font)
-    text_width = int(bbox[2] - bbox[0])
-    text_height = int(bbox[3] - bbox[1])
-    x, y = _calculate_text_position(position, img.width, img.height, text_width, text_height)
-
-    draw.text((x, y), wm_text, fill=(255, 255, 255, opacity_alpha), font=font)
-
-    composited = Image.alpha_composite(img, overlay).convert("RGB")
-    buf = io.BytesIO()
-    composited.save(buf, format="WEBP", quality=85)
-    buf.seek(0)
-    return buf
-
-
 def generate_preview_with_watermark(
     image_data: BinaryIO,
     max_width: int,

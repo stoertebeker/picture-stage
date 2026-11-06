@@ -15,23 +15,21 @@ from sqlalchemy.orm import selectinload
 
 from app.auth.dependencies import require_active_user
 from app.db.models import (
-    ALLOWED_TRANSITIONS,
     AuditLog,
     Gallery,
-    GalleryStatus,
     Image,
     ImagePreview,
     PendingSignup,
-    SelectionAction,
-    SelectionEvent,
-    ShareSession,
     User,
     UserStatus,
 )
 from app.db.session import get_db
 from app.galleries.csv_security import spreadsheet_text
+from app.galleries.dashboard import load_dashboard_galleries
 from app.galleries.deletion import purge_gallery
 from app.galleries.lifecycle import lock_gallery
+from app.galleries.management import change_gallery_status
+from app.galleries.management import get_owned_gallery as _get_owned_gallery
 from app.galleries.quota import GalleryQuotaExceeded, reserve_gallery_slot
 from app.galleries.schemas import (
     AuditLogEntry,
@@ -78,14 +76,6 @@ def _gallery_to_response(gallery: Gallery, image_count: int) -> GalleryResponse:
     )
 
 
-async def _get_owned_gallery(gallery_id: uuid.UUID, user: User, db: AsyncSession) -> Gallery:
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    gallery = result.scalar_one_or_none()
-    if gallery is None:
-        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Gallery not found")
-    return gallery
-
-
 async def _count_images(gallery_id: uuid.UUID, db: AsyncSession) -> int:
     result = await db.execute(select(func.count()).select_from(Image).where(Image.gallery_id == gallery_id))
     return result.scalar() or 0
@@ -96,56 +86,23 @@ async def get_dashboard(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> DashboardResponse:
-    gallery_result = await db.execute(
-        select(Gallery).where(Gallery.owner_id == user.id).order_by(Gallery.created_at.desc())
-    )
-    galleries = gallery_result.scalars().all()
-
-    dashboard_galleries: list[DashboardGalleryResponse] = []
-    for gallery in galleries:
-        img_count_result = await db.execute(
-            select(func.count()).select_from(Image).where(Image.gallery_id == gallery.id)
+    summaries = await load_dashboard_galleries(user.id, db, order_by="created_at")
+    dashboard_galleries = [
+        DashboardGalleryResponse(
+            id=summary.gallery.id,
+            name=summary.gallery.name,
+            status=summary.gallery.status,
+            image_count=summary.image_count,
+            selected_count=summary.selected_count,
+            favorited_count=summary.favorited_count,
+            commented_count=summary.commented_count,
+            has_share_token=summary.gallery.share_token_hash is not None,
+            expires_at=summary.gallery.expires_at,
+            last_activity=summary.last_activity,
+            created_at=summary.gallery.created_at,
         )
-        image_count = img_count_result.scalar() or 0
-
-        sel_counts = await db.execute(
-            select(
-                func.count(func.distinct(SelectionEvent.image_id)).filter(
-                    SelectionEvent.action == SelectionAction.select
-                ),
-                func.count(func.distinct(SelectionEvent.image_id)).filter(
-                    SelectionEvent.action == SelectionAction.favorite
-                ),
-                func.count(func.distinct(SelectionEvent.image_id)).filter(
-                    SelectionEvent.action == SelectionAction.comment
-                ),
-            )
-            .join(Image, SelectionEvent.image_id == Image.id)
-            .where(Image.gallery_id == gallery.id)
-        )
-        row = sel_counts.one()
-        selected_count, favorited_count, commented_count = row[0], row[1], row[2]
-
-        last_access_result = await db.execute(
-            select(func.max(ShareSession.started_at)).where(ShareSession.gallery_id == gallery.id)
-        )
-        last_activity = last_access_result.scalar()
-
-        dashboard_galleries.append(
-            DashboardGalleryResponse(
-                id=gallery.id,
-                name=gallery.name,
-                status=gallery.status,
-                image_count=image_count,
-                selected_count=selected_count,
-                favorited_count=favorited_count,
-                commented_count=commented_count,
-                has_share_token=gallery.share_token_hash is not None,
-                expires_at=gallery.expires_at,
-                last_activity=last_activity,
-                created_at=gallery.created_at,
-            )
-        )
+        for summary in summaries
+    ]
 
     pending_signups_count = None
     if user.status == UserStatus.admin:
@@ -279,26 +236,9 @@ async def transition_gallery_status(
 ) -> GalleryResponse:
     gallery = await _get_owned_gallery(gallery_id, user, db)
 
-    if body.status == gallery.status:
-        image_count = await _count_images(gallery_id, db)
-        return _gallery_to_response(gallery, image_count)
-
-    allowed = ALLOWED_TRANSITIONS.get(gallery.status, set())
-    if body.status not in allowed:
-        raise HTTPException(
-            status_code=http_status.HTTP_409_CONFLICT,
-            detail=f"Transition from '{gallery.status.value}' to '{body.status.value}' is not allowed",
-        )
-
-    if body.status == GalleryStatus.shared and gallery.share_token_hash is None:
-        raise HTTPException(
-            status_code=http_status.HTTP_409_CONFLICT,
-            detail="Cannot share gallery without a share link. Create one first.",
-        )
-
-    gallery.status = body.status
-    await db.commit()
-    await db.refresh(gallery)
+    if change_gallery_status(gallery, body.status):
+        await db.commit()
+        await db.refresh(gallery)
 
     image_count = await _count_images(gallery_id, db)
     return _gallery_to_response(gallery, image_count)

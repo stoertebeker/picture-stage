@@ -21,7 +21,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.config import settings
-from app.db.models import Image, ImagePreview, ImageProcessingStatus, PreviewVariant
+from app.db.models import GalleryStatus, Image, ImagePreview, ImageProcessingStatus, PreviewVariant
 from app.frontend import guest as guest_frontend
 from app.guest import router as guest_router
 from app.guest.schemas import ImageFilter, ImageSortBy, SortDirection
@@ -145,7 +145,7 @@ async def test_only_large_preview_is_watermarked(monkeypatch, producer, config) 
 
 @pytest.mark.parametrize("consumer", ["api", "frontend"])
 async def test_guest_variants_are_accessible_without_exposing_original(monkeypatch, consumer) -> None:
-    gallery = SimpleNamespace(id=uuid.uuid4())
+    gallery = SimpleNamespace(id=uuid.uuid4(), status=GalleryStatus.shared)
     image = SimpleNamespace(
         id=uuid.uuid4(), filename="black.png", sort_order=0, storage_key=f"{gallery.id}/originals/private.png"
     )
@@ -155,22 +155,19 @@ async def test_guest_variants_are_accessible_without_exposing_original(monkeypat
     ]
     db = AsyncMock()
     consumer_module = guest_router if consumer == "api" else guest_frontend
+    load_page = AsyncMock(return_value=GuestImagePage([image], {}, "next-page", 2, 0, 0, 2))
+    monkeypatch.setattr(consumer_module, "load_guest_image_page", load_page)
+    monkeypatch.setattr(consumer_module, "resolve_gallery_by_token", AsyncMock(return_value=gallery))
+    monkeypatch.setattr(consumer_module, "check_gallery_accessible", lambda gallery: None)
+    read_access = AsyncMock(return_value=gallery)
+    monkeypatch.setattr(consumer_module, "require_gallery_read_access", read_access)
+    request = Request({"type": "http", "headers": []})
     if consumer == "api":
-        monkeypatch.setattr(
-            consumer_module,
-            "load_guest_image_page",
-            AsyncMock(return_value=GuestImagePage([image], {}, None, 1, 0, 0, 1)),
-        )
-    else:
-        monkeypatch.setattr(consumer_module, "load_sorted_filtered_images", AsyncMock(return_value=([image], {})))
-    if consumer == "api":
-        monkeypatch.setattr(guest_router, "resolve_gallery_by_token", AsyncMock(return_value=gallery))
-        monkeypatch.setattr(guest_router, "check_gallery_accessible", lambda gallery: None)
-        monkeypatch.setattr(guest_router, "require_gallery_read_access", AsyncMock(return_value=gallery))
+        page_response = Response()
         [response] = await guest_router.list_shared_images(
             "capability",
-            request=Request({"type": "http", "headers": []}),
-            response=Response(),
+            request=request,
+            response=page_response,
             sort_by=ImageSortBy.sort_order,
             sort_dir=SortDirection.asc,
             filter=ImageFilter.all,
@@ -179,8 +176,27 @@ async def test_guest_variants_are_accessible_without_exposing_original(monkeypat
             db=db,
         )
         fields = response.model_dump()
+        assert page_response.headers["X-Next-Cursor"] == "next-page"
+        assert page_response.headers["X-Has-More"] == "true"
     else:
-        [fields] = await guest_frontend._load_images(gallery, db)
+        page_response = await guest_frontend.guest_gallery_images(
+            "capability",
+            request=request,
+            sort_by=ImageSortBy.sort_order,
+            sort_dir=SortDirection.asc,
+            filter=ImageFilter.all,
+            cursor=None,
+            offset=0,
+            db=db,
+        )
+        [fields] = page_response.context["page_metadata"]["images"]
+        assert page_response.context["all_images"] == [fields]
+        assert page_response.context["image_order"] == [str(image.id)]
+        assert page_response.context["next_cursor"] == "next-page"
+
+    read_access.assert_awaited_once_with(gallery, None, db, token="capability")
+    load_page.assert_awaited_once_with(gallery, db, ImageSortBy.sort_order, SortDirection.asc, ImageFilter.all, None)
+    db.commit.assert_awaited_once()
 
     urls = [fields[name] for name in ("thumb_sm_url", "thumb_md_url", "preview_url")]
     assert {urlsplit(url).path for url in urls} == {f"/media/{preview.storage_key}" for preview in image.previews}

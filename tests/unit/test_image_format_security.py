@@ -10,7 +10,6 @@ from PIL import Image, Jpeg2KImagePlugin, UnidentifiedImageError
 
 from app.images.processing import (
     InvalidImageContentError,
-    apply_watermark,
     extract_exif,
     extract_image_metadata,
     generate_preview_with_watermark,
@@ -53,7 +52,7 @@ def test_supported_images_retain_metadata_and_preview_behavior(image_format: str
         lambda data: get_image_dimensions(io.BytesIO(data)),
         lambda data: generate_thumbnail(io.BytesIO(data), 20),
         lambda data: generate_preview_with_watermark(io.BytesIO(data), 20, ""),
-        lambda data: apply_watermark(io.BytesIO(data)),
+        lambda data: render_preview_bytes(data, 20, None, None),
     ],
 )
 @pytest.mark.parametrize("data", [_JP2, _J2K], ids=["jp2-container", "raw-codestream"])

@@ -10,10 +10,16 @@ Verifies that:
 - Double-complete is rejected (409 idempotency guard)
 """
 
-import pytest
+import uuid
+from unittest.mock import AsyncMock
 
-from app.db.models import GalleryStatus
-from app.galleries.router import ALLOWED_TRANSITIONS
+import pytest
+from fastapi import HTTPException
+
+from app.auth.passwords import verify_token
+from app.auth.token_lookup import token_locator
+from app.db.models import ALLOWED_TRANSITIONS, Gallery, GalleryStatus
+from app.galleries import management
 
 
 class TestAllowedTransitions:
@@ -88,39 +94,52 @@ class TestStatusTransitionSchema:
 class TestShareLinkAutoTransition:
     """Verify share-link creation/revocation auto-sets status."""
 
-    def test_sharing_code_sets_status_to_shared(self) -> None:
-        with open("app/galleries/sharing.py") as f:
-            source = f.read()
-        assert "gallery.status = GalleryStatus.shared" in source
+    @pytest.mark.parametrize("initial_status", list(GalleryStatus))
+    async def test_sharing_rotates_credentials_after_reload(self, monkeypatch, initial_status) -> None:
+        gallery = Gallery(id=uuid.uuid4(), owner_id=uuid.uuid4(), status=initial_status, authorization_epoch=7)
+        db = AsyncMock()
+        lock = AsyncMock(return_value=gallery)
+        monkeypatch.setattr(management, "lock_owned_gallery_authorization", lock)
 
-    def test_revoke_code_sets_status_to_draft(self) -> None:
-        with open("app/galleries/sharing.py") as f:
-            source = f.read()
-        assert "gallery.status = GalleryStatus.draft" in source
+        saved, token = await management.create_gallery_share(gallery.id, gallery.owner_id, db, password_hash="hash")
 
-    def test_sharing_only_transitions_from_draft(self) -> None:
-        with open("app/galleries/sharing.py") as f:
-            source = f.read()
-        assert "gallery.status == GalleryStatus.draft" in source
+        lock.assert_awaited_once_with(gallery.id, gallery.owner_id, db)
+        assert saved is gallery
+        assert gallery.authorization_epoch == 8
+        assert gallery.password_hash == "hash"
+        assert gallery.share_token == token
+        assert verify_token(token, gallery.share_token_hash, gallery.share_token_salt)
+        assert gallery.share_token_lookup == token_locator(token)
+        assert gallery.status == (GalleryStatus.shared if initial_status == GalleryStatus.draft else initial_status)
+        db.commit.assert_not_awaited()
 
-    def test_revoke_only_transitions_from_shared(self) -> None:
-        with open("app/galleries/sharing.py") as f:
-            source = f.read()
-        assert "gallery.status == GalleryStatus.shared" in source
+    @pytest.mark.parametrize("initial_status", list(GalleryStatus))
+    async def test_revoking_clears_credentials_after_reload(self, monkeypatch, initial_status) -> None:
+        gallery = Gallery(
+            id=uuid.uuid4(),
+            owner_id=uuid.uuid4(),
+            status=initial_status,
+            authorization_epoch=7,
+            share_token="old",
+            share_token_hash=b"old-hash",
+            share_token_salt=b"old-salt",
+            share_token_lookup="old-lookup",
+            password_hash="old-password",
+        )
+        db = AsyncMock()
+        lock = AsyncMock(return_value=gallery)
+        monkeypatch.setattr(management, "lock_owned_gallery_authorization", lock)
 
-    def test_sharing_persists_replayable_share_token(self) -> None:
-        with open("app/galleries/sharing.py") as f:
-            api_source = f.read()
-        with open("app/frontend/galleries.py") as f:
-            frontend_source = f.read()
-        with open("app/db/models.py") as f:
-            model_source = f.read()
+        saved = await management.revoke_gallery_share(gallery.id, gallery.owner_id, db)
 
-        assert "share_token: Mapped[str | None]" in model_source
-        assert "gallery.share_token = token" in api_source
-        assert "gallery.share_token = token" in frontend_source
-        assert "gallery.share_token = None" in api_source
-        assert "gallery.share_token = None" in frontend_source
+        lock.assert_awaited_once_with(gallery.id, gallery.owner_id, db)
+        assert saved is gallery
+        assert gallery.authorization_epoch == 8
+        assert gallery.password_hash is None
+        assert gallery.share_token is gallery.share_token_hash is gallery.share_token_salt is None
+        assert gallery.share_token_lookup is None
+        assert gallery.status == (GalleryStatus.draft if initial_status == GalleryStatus.shared else initial_status)
+        db.commit.assert_not_awaited()
 
     def test_frontend_rebuilds_share_url_from_persisted_token(self) -> None:
         with open("app/frontend/galleries.py") as f:
@@ -144,16 +163,33 @@ class TestShareLinkAutoTransition:
 class TestTransitionEndpointGuards:
     """Verify the transition endpoint enforces share-token requirement."""
 
-    def test_endpoint_checks_share_token_for_shared(self) -> None:
-        with open("app/galleries/router.py") as f:
-            source = f.read()
-        assert "share_token_hash is None" in source
-        assert "Cannot share gallery without a share link" in source
+    @pytest.mark.parametrize("initial_status", [GalleryStatus.draft, GalleryStatus.completed, GalleryStatus.archived])
+    def test_sharing_requires_token(self, initial_status) -> None:
+        gallery = Gallery(status=initial_status)
+        with pytest.raises(HTTPException) as exc:
+            management.change_gallery_status(gallery, GalleryStatus.shared)
+        assert exc.value.status_code == 409
+        assert exc.value.detail == "Cannot share gallery without a share link. Create one first."
+        assert gallery.status == initial_status
 
-    def test_endpoint_uses_409_for_invalid_transition(self) -> None:
-        with open("app/galleries/router.py") as f:
-            source = f.read()
-        assert "HTTP_409_CONFLICT" in source
+    @pytest.mark.parametrize("initial_status", list(GalleryStatus))
+    @pytest.mark.parametrize("target", list(GalleryStatus))
+    def test_status_transition_rules_and_noop(self, initial_status, target) -> None:
+        gallery = Gallery(status=initial_status, share_token_hash=b"token-hash")
+        if target == initial_status:
+            # A no-op remains valid even if no share credentials exist.
+            gallery.share_token_hash = None
+            assert management.change_gallery_status(gallery, target) is False
+        elif target in ALLOWED_TRANSITIONS[initial_status]:
+            assert management.change_gallery_status(gallery, target) is True
+        else:
+            with pytest.raises(HTTPException) as exc:
+                management.change_gallery_status(gallery, target)
+            assert exc.value.status_code == 409
+            assert exc.value.detail == f"Transition from '{initial_status.value}' to '{target.value}' is not allowed"
+            assert gallery.status == initial_status
+            return
+        assert gallery.status == target
 
     def test_transition_endpoint_filters_by_owner(self) -> None:
         with open("app/galleries/router.py") as f:

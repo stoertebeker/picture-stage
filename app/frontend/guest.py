@@ -35,7 +35,6 @@ from app.guest.service import (
     current_share_session,
     is_gallery_expired,
     load_guest_image_page,
-    load_sorted_filtered_images,
     require_gallery_read_access,
     resolve_gallery_by_token,
     sign_preview_urls,
@@ -49,23 +48,6 @@ router = APIRouter(prefix="/g", tags=["frontend-guest"], dependencies=[Depends(p
 
 # Guest images and lightbox data are both loaded one bounded page at a time.
 GALLERY_PAGE_SIZE = 30
-
-
-async def _load_images(
-    gallery: Gallery,
-    db: AsyncSession,
-    sort_by: ImageSortBy = ImageSortBy.sort_order,
-    sort_dir: SortDirection = SortDirection.asc,
-    filter_mode: ImageFilter = ImageFilter.all,
-) -> list[dict[str, Any]]:
-    """Load images for a gallery with sorting, filtering, and signed URLs.
-
-    Thin adapter over the shared loader (d7z): keeps the dict shape the templates
-    expect (incl. per-image selection state for the lightbox/grid).
-    """
-    images, sel_map = await load_sorted_filtered_images(gallery, db, sort_by, sort_dir, filter_mode)
-
-    return _serialize_images(images, sel_map)
 
 
 def _serialize_images(images: list[Any], sel_map: dict[Any, Any]) -> list[dict[str, Any]]:

@@ -66,7 +66,7 @@ class TestDashboardEndpointStructure:
     def test_dashboard_uses_active_user_not_admin(self) -> None:
         with open("app/galleries/router.py") as f:
             source = f.read()
-        idx = source.index("dashboard")
+        idx = source.index("async def get_dashboard")
         endpoint_block = source[idx : idx + 800]
         assert "require_active_user" in endpoint_block
         assert "require_admin" not in endpoint_block
@@ -78,14 +78,14 @@ class TestDashboardEndpointStructure:
         assert "PendingSignup" in source
 
     def test_dashboard_queries_selection_events(self) -> None:
-        with open("app/galleries/router.py") as f:
+        with open("app/galleries/dashboard.py") as f:
             source = f.read()
         assert "SelectionEvent" in source
         assert "SelectionAction.select" in source
         assert "SelectionAction.favorite" in source
 
     def test_dashboard_queries_last_activity(self) -> None:
-        with open("app/galleries/router.py") as f:
+        with open("app/galleries/dashboard.py") as f:
             source = f.read()
         assert "ShareSession" in source
         assert "last_activity" in source

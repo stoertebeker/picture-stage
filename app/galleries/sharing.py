@@ -1,17 +1,12 @@
-import secrets
-
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.dependencies import require_active_user
-from app.auth.passwords import hash_token
-from app.auth.token_lookup import token_locator
 from app.config import settings
-from app.db.models import Gallery, GalleryStatus, User
+from app.db.models import User
 from app.db.session import get_db
-from app.galleries.authorization import lock_owned_gallery_authorization
+from app.galleries.management import create_gallery_share, get_owned_gallery, revoke_gallery_share
 from app.galleries.password_hashing import hash_gallery_password
 
 router = APIRouter(prefix="/api/v1/galleries", tags=["sharing"])
@@ -50,26 +45,9 @@ async def create_share_link(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> ShareResponse:
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    gallery = result.scalar_one_or_none()
-    if gallery is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
-
+    gallery = await get_owned_gallery(gallery_id, user, db)
     password_hash = await hash_gallery_password(body.password) if body.password else None
-    token = secrets.token_urlsafe(32)
-    token_hash, token_salt = hash_token(token)
-
-    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
-    gallery.authorization_epoch += 1
-    gallery.share_token_hash = token_hash
-    gallery.share_token_salt = token_salt
-    gallery.share_token = token
-    gallery.share_token_lookup = token_locator(token)
-
-    gallery.password_hash = password_hash
-
-    if gallery.status == GalleryStatus.draft:
-        gallery.status = GalleryStatus.shared
+    gallery, token = await create_gallery_share(gallery.id, user.id, db, password_hash=password_hash)
 
     await db.commit()
 
@@ -85,20 +63,7 @@ async def revoke_share_link(
     user: User = Depends(require_active_user),
     db: AsyncSession = Depends(get_db),
 ) -> None:
-    result = await db.execute(select(Gallery).where(Gallery.id == gallery_id, Gallery.owner_id == user.id))
-    gallery = result.scalar_one_or_none()
-    if gallery is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Gallery not found")
-
-    gallery = await lock_owned_gallery_authorization(gallery.id, user.id, db)
-    gallery.authorization_epoch += 1
-    gallery.share_token_hash = None
-    gallery.share_token_salt = None
-    gallery.share_token = None
-    gallery.share_token_lookup = None
-    gallery.password_hash = None
-
-    if gallery.status == GalleryStatus.shared:
-        gallery.status = GalleryStatus.draft
+    gallery = await get_owned_gallery(gallery_id, user, db)
+    await revoke_gallery_share(gallery.id, user.id, db)
 
     await db.commit()

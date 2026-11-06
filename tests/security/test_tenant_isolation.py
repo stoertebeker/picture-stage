@@ -1,35 +1,36 @@
 """Tenant isolation tests.
 
 These tests verify that User A cannot access User B's resources.
-They test the authorization boundaries, not the full HTTP stack.
+They test authorization queries and endpoint denials without a database or HTTP stack.
 
 Run with: pytest tests/security/ -v
-Requires: PostgreSQL (via DATABASE_URL env var)
 """
 
 import uuid
+from unittest.mock import AsyncMock, Mock
 
 import pytest
+from fastapi import HTTPException
+from sqlalchemy.dialects import postgresql
+
+from app.db.models import User
 
 
-@pytest.fixture
-def user_a_id() -> uuid.UUID:
-    return uuid.uuid4()
+def _denied_gallery_session() -> AsyncMock:
+    result = Mock()
+    result.scalar_one_or_none.return_value = None
+    return AsyncMock(execute=AsyncMock(return_value=result))
 
 
-@pytest.fixture
-def user_b_id() -> uuid.UUID:
-    return uuid.uuid4()
-
-
-@pytest.fixture
-def gallery_a_id() -> uuid.UUID:
-    return uuid.uuid4()
-
-
-@pytest.fixture
-def gallery_b_id() -> uuid.UUID:
-    return uuid.uuid4()
+def _assert_owned_gallery_denial_query(db: AsyncMock, gallery_id: uuid.UUID | str, user: User) -> None:
+    db.execute.assert_awaited_once()
+    query = db.execute.await_args.args[0].compile(dialect=postgresql.dialect())
+    assert query.params == {"id_1": gallery_id, "owner_id_1": user.id}
+    assert "galleries.id = %(id_1)s::UUID AND galleries.owner_id = %(owner_id_1)s::UUID" in str(query)
+    db.add.assert_not_called()
+    db.delete.assert_not_awaited()
+    db.flush.assert_not_awaited()
+    db.commit.assert_not_awaited()
 
 
 class TestGalleryIsolation:
@@ -57,15 +58,35 @@ class TestGalleryIsolation:
 
         assert "Gallery.owner_id == user.id" in source, "Gallery list query MUST filter by owner_id"
 
-    def test_gallery_detail_query_filters_owner(self) -> None:
-        """get_gallery endpoint must filter by owner_id."""
+    @pytest.mark.parametrize("action", ["detail", "delete"])
+    async def test_gallery_detail_query_filters_owner(self, monkeypatch, action) -> None:
+        """Detail and deletion deny absent ownership through the real shared query."""
+        from app.galleries import router
 
-        with open("app/galleries/router.py") as f:
-            source = f.read()
+        user = User(id=uuid.uuid4())
+        gallery_id = uuid.uuid4()
+        db = _denied_gallery_session()
+        lock = AsyncMock()
+        purge = AsyncMock()
+        storage = Mock()
+        monkeypatch.setattr(router, "lock_gallery", lock)
+        monkeypatch.setattr(router, "purge_gallery", purge)
 
-        assert source.count("Gallery.owner_id == user.id") >= 2, (
-            "Gallery detail and delete MUST also filter by owner_id"
-        )
+        with pytest.raises(HTTPException) as exc:
+            if action == "detail":
+                await router.get_gallery(gallery_id, user=user, db=db)
+            else:
+                await router.delete_gallery(gallery_id, user=user, db=db, storage=storage)
+
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Gallery not found"
+        _assert_owned_gallery_denial_query(db, gallery_id, user)
+        purge.assert_not_awaited()
+        assert storage.mock_calls == []
+        if action == "delete":
+            lock.assert_awaited_once_with(db, gallery_id)
+        else:
+            lock.assert_not_awaited()
 
 
 class TestImageIsolation:
@@ -97,19 +118,44 @@ class TestExportIsolation:
 class TestShareIsolation:
     """Verify share link management checks gallery ownership."""
 
-    def test_share_create_checks_owner(self) -> None:
-        with open("app/galleries/sharing.py") as f:
-            source = f.read()
+    async def test_share_create_checks_owner(self, monkeypatch) -> None:
+        from app.galleries import sharing
 
-        assert "Gallery.owner_id == user.id" in source, "Share link creation MUST verify gallery ownership"
+        user = User(id=uuid.uuid4())
+        gallery_id = uuid.uuid4()
+        db = _denied_gallery_session()
+        hash_password = AsyncMock()
+        create_share = AsyncMock()
+        monkeypatch.setattr(sharing, "hash_gallery_password", hash_password)
+        monkeypatch.setattr(sharing, "create_gallery_share", create_share)
 
-    def test_share_revoke_checks_owner(self) -> None:
-        with open("app/galleries/sharing.py") as f:
-            source = f.read()
+        with pytest.raises(HTTPException) as exc:
+            await sharing.create_share_link(
+                str(gallery_id), sharing.ShareCreateRequest(password="password"), Mock(), user=user, db=db
+            )
 
-        assert source.count("Gallery.owner_id == user.id") >= 2, (
-            "Share link revocation MUST also verify gallery ownership"
-        )
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Gallery not found"
+        _assert_owned_gallery_denial_query(db, str(gallery_id), user)
+        hash_password.assert_not_awaited()
+        create_share.assert_not_awaited()
+
+    async def test_share_revoke_checks_owner(self, monkeypatch) -> None:
+        from app.galleries import sharing
+
+        user = User(id=uuid.uuid4())
+        gallery_id = uuid.uuid4()
+        db = _denied_gallery_session()
+        revoke_share = AsyncMock()
+        monkeypatch.setattr(sharing, "revoke_gallery_share", revoke_share)
+
+        with pytest.raises(HTTPException) as exc:
+            await sharing.revoke_share_link(str(gallery_id), user=user, db=db)
+
+        assert exc.value.status_code == 404
+        assert exc.value.detail == "Gallery not found"
+        _assert_owned_gallery_denial_query(db, str(gallery_id), user)
+        revoke_share.assert_not_awaited()
 
 
 class TestAdminEndpoints:

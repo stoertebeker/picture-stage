@@ -10,10 +10,12 @@ Design notes:
   shared across event loops, and NullPool avoids "attached to a different loop"
   errors when pytest-asyncio creates a fresh loop per test.
 - get_db is overridden so request handlers use the test sessionmaker.
-- Tables are dropped+created around every test for full isolation.
+- Tables are rebuilt for each module; committed truncation isolates each test
+  while retaining real commits and independent sessions for concurrency tests.
 """
 
 import runpy
+from functools import cache
 
 import pytest
 import pytest_asyncio
@@ -44,15 +46,32 @@ async def _override_get_db():
 app.dependency_overrides[get_db] = _override_get_db
 
 
-@pytest_asyncio.fixture(autouse=True)
-async def _reset_schema():
-    """Drop + recreate all tables around each test for isolation."""
+@pytest_asyncio.fixture(scope="module", loop_scope="module")
+async def _integration_schema():
+    """Rebuild at module boundaries so migration tests can change the schema."""
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
-    yield
+    try:
+        yield
+    finally:
+        async with test_engine.begin() as conn:
+            await conn.run_sync(Base.metadata.drop_all)
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_schema(_integration_schema):
+    """Clear committed data without wrapping request/concurrent sessions in a transaction."""
+    tables = ", ".join(
+        test_engine.dialect.identifier_preparer.format_table(table) for table in Base.metadata.sorted_tables
+    )
     async with test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        # The classifier fixture installs a trigger, and one test disables it.
+        # Previously drop_all removed it between tests; preserve that lifetime.
+        await conn.execute(text("DROP TRIGGER IF EXISTS galleries_classify_token_lookup ON galleries"))
+        # List every ORM table together so foreign keys need no CASCADE that
+        # could accidentally extend cleanup to tables outside this fixture.
+        await conn.execute(text(f"TRUNCATE TABLE {tables} RESTART IDENTITY"))
 
 
 @pytest_asyncio.fixture
@@ -81,9 +100,15 @@ async def client():
         yield ac
 
 
+@cache
+def _unused_password_hash() -> str:
+    """Reuse one real rounds=12 hash for users whose password is not under test."""
+    return hash_password("pw-not-used")
+
+
 async def make_user(db, email: str, status: UserStatus = UserStatus.active) -> User:
     """Create and persist a user, returning the refreshed instance."""
-    user = User(email=email, password_hash=hash_password("pw-not-used"), status=status)
+    user = User(email=email, password_hash=_unused_password_hash(), status=status)
     db.add(user)
     await db.commit()
     await db.refresh(user)

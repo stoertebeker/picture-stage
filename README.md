@@ -392,7 +392,7 @@ commit. Delivery remains best effort, without a durable queue or crash recovery.
 - **CSRF recovery:** authenticated forms use session-bound HMAC tokens and synchronize them before submission. Restored browser pages and rejected stale clients recover through a safe GET; POSTs rejected for stale CSRF proof are never automatically replayed.
 - **Request bodies:** ordinary JSON/forms are capped at 1 MiB before CSRF and parsing. The two image-upload POST routes retain the global upload budget. Declared lengths and received bytes are checked; the smaller enabled ceiling applies.
 - **Image processing admission:** each app process admits at most `IMAGE_PROCESSING_WORKERS` uploads or preview jobs at once, with at most twice that number waiting for up to five seconds. Busy uploads return HTTP 503 with `Retry-After`; accepted frontend uploads keep their slot through preview processing. This limit is per process and does not bound multipart parsing before admission.
-- **Tenant isolation:** all queries filtered by owner_id, verified by structural tests
+- **Tenant isolation:** owner-scoped queries, covered by authorization and query-boundary tests
 - **Non-root container:** app runs as unprivileged user
 
 ## Tech Stack
@@ -458,8 +458,8 @@ mypy app/
 pytest tests/unit/ tests/security/
 
 # Run the full suite (requires a separate PostgreSQL test database;
-# integration fixtures drop and recreate tables — never use the app database)
-pytest --cov=app
+# fixtures rebuild schemas and truncate data — never use the app database)
+pytest --cov=app --durations=30 --junitxml=test-results/pytest.xml
 
 # Run tenant isolation tests
 pytest tests/security/ -v
@@ -475,6 +475,13 @@ the complete Tailwind stylesheet and vendors the pinned HTMX/Alpine CSP assets.
 For visual checks, build the local app with a fresh `ASSET_VERSION` and use the
 local Compose stack. CI runs lint, formatting, type checks and the full test
 suite against PostgreSQL, including migration checks.
+
+Integration tests rebuild the ORM schema at module boundaries and truncate all
+ORM tables before each test. Requests and concurrent sessions still use real
+commits; they are not wrapped in an outer rollback transaction. Fixed unused
+fixture passwords reuse a real bcrypt hash without changing production hashing.
+CI reports the slowest setup, call and teardown phases and retains JUnit timing
+results as the `pytest-results` artifact, including after test failures.
 
 ## Docker Hub
 

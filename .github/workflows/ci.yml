@@ -58,4 +58,15 @@ jobs:
           HMAC_SECRET_KEY: test-hmac-key-not-for-production
           STORAGE_BACKEND: local
           UPLOAD_DIR: /tmp/picstage-test-uploads
-        run: pytest --cov=app --cov-report=term-missing
+        run: >-
+          pytest --cov=app --cov-report=term-missing
+          --durations=30 --durations-min=0.01
+          --junitxml=test-results/pytest.xml
+
+      - name: Upload pytest results
+        if: always()
+        uses: actions/upload-artifact@v7.0.2
+        with:
+          name: pytest-results
+          path: test-results/pytest.xml
+          if-no-files-found: ignore
