@@ -4,7 +4,7 @@
 
 Picture-Stage lets photographers share image galleries with models for review. Models can select images for editing, mark favorites, and leave comments — all without creating an account. Self-hosted, open-source, and fully under your control.
 
-> **Status (2026-10-31):** Backend and Editorial Dark frontend are implemented, including DE/EN, light/dark themes, gallery review and selection export. Uploads track transfer and asynchronous preview generation. Recent security work covers protected initial setup, bounded image processing, webhook destinations and selection history. Public GitHub issues #1–#6 are complete; remaining work is tracked in Beads (`bd ready`).
+> **Status (2026-11-09):** The implemented feature backlog and the agreed optimization round are complete. Further improvement proposals are deferred drafts in Beads (`bd list --status=deferred --label=draft`); `bd ready` shows work available now. See [CLAUDE.md](CLAUDE.md#aktueller-stand) for the current agent handover and verification evidence.
 
 ## Features
 
@@ -252,6 +252,17 @@ database infinity values retain their access semantics without crashing guest li
 CSV exports prefix spreadsheet formula-like text with an apostrophe, including
 filenames and comments. Stored values and JSON/TXT exports are unchanged.
 
+Dashboard summaries use the shared query service in `app/galleries/dashboard.py`:
+five SQL statements for HTML with covers and four for the JSON API, excluding
+authentication queries. Empty dashboards need one statement; the admin API adds
+one pending-signup count. Progress counts distinct images that ever received a
+select, favorite or comment event, including later undone actions. Guest review
+state and exports instead use the current selection projection.
+
+Owner lookup, share credentials and status transitions share commands in
+`app/galleries/management.py`. HTML share/password/revoke fragments render only
+the required gallery context, without loading images or signing media URLs.
+
 ### Images (`/api/v1/galleries/{id}/images/`)
 
 Watermarks apply only to the large preview (up to 1280px wide). The 320px and
@@ -470,8 +481,10 @@ Restore tests in `tests/cli/` additionally require PostgreSQL 16 `psql`,
 drop uniquely named temporary databases from `template0`; without the client
 tools these tests are skipped. CI installs the matching tools explicitly.
 
-The checked-in `frontend/static/css/styles.css` is a placeholder. Docker builds
-the complete Tailwind stylesheet and vendors the pinned HTMX/Alpine CSP assets.
+The checked-in `frontend/static/css/styles.css` is a generated Tailwind snapshot;
+Docker regenerates it from the current inputs. The tracked HTMX/Alpine files are
+placeholders replaced by real pinned bundles during the Docker asset build.
+Fonts and the local CAPTCHA assets are already tracked.
 For visual checks, build the local app with a fresh `ASSET_VERSION` and use the
 local Compose stack. CI runs lint, formatting, type checks and the full test
 suite against PostgreSQL, including migration checks.
@@ -483,6 +496,14 @@ fixture passwords reuse a real bcrypt hash without changing production hashing.
 CI reports the slowest setup, call and teardown phases and retains JUnit timing
 results as the `pytest-results` artifact, including after test failures.
 
+The last full source verification was on 2026-11-06 at `c3554e6`:
+[GitHub Actions run 42236256200](https://github.com/stoertebeker/picture-stage/actions/runs/42236256200)
+passed all 1,809 tests with no skips in 368.19 seconds, 82% line coverage, Ruff,
+formatting, mypy and the AMD64/ARM64 image build. Subsequent issue/documentation
+commits do not represent a fresh full test run. The browser scripts in
+`tests/e2e/` remain outside normal CI; integrating a selected set is draft
+`picture-stage-l0f6`.
+
 ## Docker Hub
 
 Multi-arch images (amd64 + arm64) are built and pushed automatically via GitHub Actions ([`docker-publish.yml`](.github/workflows/docker-publish.yml)).
@@ -491,8 +512,8 @@ Multi-arch images (amd64 + arm64) are built and pushed automatically via GitHub 
 |-----|-----------------|---------|
 | `:latest` | On every version tag `v*` | **Production** — stable releases only |
 | `:1.2.3`, `:1.2`, `:1` | On every version tag `v*` (semver) | Pinning a specific version |
-| `:dev` | On **every push to `main`** | **Staging / test server** — latest development build |
-| `:sha-<short>` | On every push to `main` | Pinning a specific commit |
+| `:dev` | On build-triggering pushes to `main` | **Staging / test server** — latest development build |
+| `:sha-<short>` | On build-triggering pushes to `main` | Pinning a specific commit |
 
 ```bash
 # Production / stable
@@ -507,7 +528,7 @@ docker pull stoertebeker2k/picture-stage:dev
 The Docker build runs only when both conditions hold, so no image is ever published from broken or irrelevant code:
 
 1. **CI must be green.** [`ci.yml`](.github/workflows/ci.yml) is a reusable workflow (`workflow_call`) invoked as a prerequisite job — `build-and-push` has `needs: ci`. Lint (ruff), type check (mypy) and tests (pytest) all run before any image is built. This applies to `:dev` builds too.
-2. **Relevant files changed** (push to `main` only). A `dorny/paths-filter` gate skips the build for doc-only commits. It triggers on changes to `app/`, `alembic/`, `Dockerfile`, `pyproject.toml`, or the workflow files. **Version tags `v*` always build**, regardless of the path filter.
+2. **Relevant files changed** (push to `main` only). A `dorny/paths-filter` gate skips the build for doc-only commits. The current filter includes `app/`, `alembic/`, `frontend/`, `tests/`, `Dockerfile`, `pyproject.toml`, and the CI/publish workflow files. Completing its coverage of other build inputs is draft `picture-stage-p0na`. **Version tags `v*` always build**, regardless of the path filter.
 
 ## License
 

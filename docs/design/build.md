@@ -1,183 +1,174 @@
 # Frontend-Assets bauen
 
-Picture-Stage hat ein dünnes Frontend-Asset-Setup: keine Node-Toolchain im Repo,
-kein npm-Lock. Alle Build-Schritte laufen **im Docker-Image** (Multi-Stage):
+Stand: 2026-11-09. Maßgeblich sind der [Dockerfile](../../Dockerfile),
+[tailwind.config.js](../../tailwind.config.js) und die verlinkten Laufzeitdateien.
+Das Frontend hat kein eigenes `package.json` und keinen npm-Lock im Repository.
 
-- **Stage `assets`** (Alpine + curl) – lädt HTMX 2.0.4, Alpine.js 3.14.8 (CSP-Build)
-  und die Variable-Fonts Fraunces + Inter (Fontsource WOFF2).
-- **Stage `css-builder`** (Node 20 Alpine) – `npx tailwindcss` baut
-  `frontend/static/css/styles.css` aus `tailwind.config.js` + `input.css`.
-- **Stage 3 (final)** – Python-Slim mit App; übernimmt alle Asset-Artefakte
-  per `COPY --from=…`.
+## Build-Stages und Artefakte
 
-## Schneller Weg (Docker)
+| Stage | Aufgabe und Ergebnis |
+| --- | --- |
+| `builder` | Python 3.12: `pip install .` installiert das Projekt nach `/opt/venv`. `pyproject.toml`, `README.md` und `app/` werden zuvor kopiert. |
+| `assets` | Alpine Linux 3.20 mit curl: HTMX **2.0.4**, **`@alpinejs/csp` 3.15.12** nach `/vendor/js/`; Fraunces/Inter WOFF2 nach `/vendor/fonts/`. |
+| `css-builder` | Node 20 Alpine auf `$BUILDPLATFORM`: installiert Tailwind **3.4.17** und schreibt `/css/styles.css`. |
+| `postgres-client` | Liefert PostgreSQL-16-Clientprogramme aus `postgres:16-trixie`. |
+| Finale Stage | Python 3.12 Slim Trixie: kopiert Repository und Venv, überschreibt CSS/HTMX/Alpine/Fonts mit den Stage-Ergebnissen; läuft als Benutzer `app`. |
 
-```bash
-docker compose build --pull
-docker compose up -d
-# → http://localhost:8000
-```
+Die CSS-Stage kopiert `input.css`, Tailwind-Konfiguration, `app/templates/` und
+`frontend/static/spikes/`. Tailwind scannt die beiden letztgenannten HTML-Pfade.
+`--platform=$BUILDPLATFORM` vermeidet Node-Ausführung unter ARM64-QEMU;
+das erzeugte CSS ist architekturunabhängig. JavaScript-Dateien sind derzeit
+kein Tailwind-Content-Pfad.
 
-Bei Änderungen an `tailwind.config.js`, `input.css` oder an Templates muss das
-Image neu gebaut werden, damit `styles.css` regeneriert wird:
-
-```bash
-docker compose build app && docker compose up -d --force-recreate app
-```
-
-## Lokal ohne Docker bauen
-
-Die ins Repo eingecheckte `frontend/static/css/styles.css` ist nur ein
-Sicherheits-Stub (siehe Kommentar in der Datei). Für ein vollständiges Frontend
-ohne Docker brauchst du die Tailwind-CLI. Schnellweg via Docker-Run als
-Einmal-Builder:
+Das lokale Image lässt sich aus dem Repository-Wurzelverzeichnis bauen:
 
 ```bash
-docker run --rm -v "$PWD":/work -w /work node:20-alpine sh -c "\
-  npm install --no-save tailwindcss@3.4.17 && \
-  npx tailwindcss -c tailwind.config.js \
-    -i ./frontend/static/css/input.css \
-    -o ./frontend/static/css/styles.css --minify"
+docker build --build-arg ASSET_VERSION="$(date -u +%Y%m%d%H%M%S)" \
+  -t picture-stage:local .
 ```
 
-HTMX, Alpine.js und die Fonts kannst du analog herunterladen (Versionen siehe
-`Dockerfile`, Stage `assets`):
+Änderungen an Templates, Tailwind-Konfiguration oder `input.css` erfordern
+neues CSS. Die einzelnen Frontend-Stages lassen sich ohne App-Start bauen:
 
 ```bash
-curl -fsSL -o frontend/static/js/htmx.min.js \
-  "https://unpkg.com/htmx.org@2.0.4/dist/htmx.min.js"
-curl -fsSL -o frontend/static/js/alpine.min.js \
-  "https://cdn.jsdelivr.net/npm/@alpinejs/csp@3.14.8/dist/cdn.min.js"
-mkdir -p frontend/static/fonts
-curl -fsSL -o frontend/static/fonts/fraunces-variable.woff2 \
-  "https://cdn.jsdelivr.net/fontsource/fonts/fraunces:vf@latest/latin-wght-normal.woff2"
-curl -fsSL -o frontend/static/fonts/inter-variable.woff2 \
-  "https://cdn.jsdelivr.net/fontsource/fonts/inter:vf@latest/latin-wght-normal.woff2"
+docker build --target assets -t picture-stage-assets:local .
+docker build --target css-builder -t picture-stage-css:local .
 ```
 
-## Was im Repo bleibt, was nicht
+Für einen Host-basierten Entwicklungsserver können die Ergebnisse dieser
+beiden Images kopiert werden. Das überschreibt die lokalen Asset-Dateien:
 
-- **Versioniert:** `tailwind.config.js`, `input.css`, der Stub `styles.css`,
-  die Stub-`htmx.min.js`/`alpine.min.js` (mit `TODO:`-Header), keine Fonts.
-- **Build-Artefakt (regeneriert):** `styles.css` (im Docker-Image), die echten
-  HTMX/Alpine-Bundles und die Fonts (alle im Docker-Image).
-- **Lieferketten-Pins** (im `Dockerfile`):
-  - `tailwindcss@3.4.17`
-  - `htmx.org@2.0.4`
-  - `alpinejs@3.14.8` (standard build; requires `'unsafe-eval'` in CSP — see security notes)
-  - Fonts: Fontsource latest VF (OFL)
+```bash
+(
+  set -eu
+  assets_container=$(docker create picture-stage-assets:local)
+  trap 'docker rm -f "$assets_container" >/dev/null' EXIT
+  docker cp "$assets_container:/vendor/js/." frontend/static/js/
+  docker cp "$assets_container:/vendor/fonts/." frontend/static/fonts/
+)
+(
+  set -eu
+  css_container=$(docker create picture-stage-css:local)
+  trap 'docker rm -f "$css_container" >/dev/null' EXIT
+  docker cp "$css_container:/css/styles.css" frontend/static/css/styles.css
+)
+```
 
-## Sicherheits-Hinweise
+Die Container werden nur zum Kopieren angelegt und nicht gestartet. Generierte
+Änderungen vor einem Commit prüfen; die Bundles werden beim Image-Build erneut
+geladen. Das ist kein vollständig reproduzierbarer Dependency-Lock.
 
-- HTMX/Alpine werden via HTTPS von etablierten CDNs (unpkg, jsDelivr) gezogen.
-  Das ist eine Lieferketten-Vertrauensentscheidung; Pin-Versionen mindern,
-  ersetzen aber keine SRI-Prüfung.
-- Alpine wird im **Standard-Build** verwendet, weil die Templates flächendeckend
-  Inline-Expressions nutzen (`x-data="…"`, `@click="…"`, `:class="…"`).
-  Standard-Alpine baut diese Expressions zur Laufzeit via `new Function(...)`,
-  was eine CSP mit `script-src 'self' 'unsafe-eval'` voraussetzt. Die restliche
-  Härtung bleibt scharf: kein `'unsafe-inline'`, kein Remote-JS, kein `eval`
-  aus User-Input. **TODO (`picture-stage-p07` / PS-UX-40):** Migration auf
-  `@alpinejs/csp`-Build + `Alpine.data()`-Registrierungen, dann
-  `'unsafe-eval'` wieder aus der CSP entfernen.
-- Fonts liegen unter `/static/fonts/` und werden über `default-src 'self'`
-  geladen. Falls eine separate `font-src`-Direktive in der CSP eingeführt
-  wird (PS-UX-04), muss sie `'self'` enthalten.
+## Was eingecheckt ist
 
-## Frontend-Interaktions-Hygiene (CSP-konform)
+- `frontend/static/css/input.css` enthält Design-Tokens und Tailwind-Direktiven;
+  `styles.css` ist bereits generiertes CSS, **kein Stub**. Der Docker-Build
+  regeneriert es aus den aktuellen Eingaben.
+- `frontend/static/js/htmx.min.js` und `alpine.min.js` sind **Platzhalter** mit
+  `0.0.0-placeholder`; sie ersetzen die echten Bibliotheken nicht. Erst die
+  `assets`-Stage liefert die vollständigen Bundles.
+- Beide WOFF2-Dateien unter `frontend/static/fonts/` sind versioniert. Die
+  `assets`-Stage lädt sie trotzdem neu von Fontsource mit `@latest`.
+- `app.js`, `components.js`, `lookup-retry.js` und `signup-captcha.js` sind
+  echte Anwendungsskripte und werden mit dem Repository ins Image kopiert.
+- `frontend/static/vendor/altcha-3.5.0/` enthält echte CAPTCHA-Dateien: externes
+  JS/CSS, den PBKDF2-Worker, deutsche Übersetzung, Lizenz und `integrity.json`.
+  [signup-captcha.js](../../frontend/static/js/signup-captcha.js) lädt Module
+  und Worker vom eigenen Ursprung; diese Dateien kommen nicht aus `assets`.
 
-Die CSP erlaubt `script-src 'self' 'unsafe-eval'` – aber bewusst **kein**
-`'unsafe-inline'`. Daraus folgt eine harte Regel für Templates:
+Die Download-Versionen stehen im Dockerfile; die Alpine-Version ist absichtlich
+im `RUN`-URL-Text fixiert. HTMX/Alpine werden über HTTPS von unpkg/jsDelivr
+bezogen, derzeit ohne separate Hash-Prüfung. Fontsource verwendet `@latest`;
+auch Python-Abhängigkeiten und Basisimage-Tags sind nicht vollständig gesperrt.
+Das versionierte `uv.lock` wird weder vom Dockerfile noch von CI verwendet.
 
-| Mechanismus | Erlaubt? | Wofür |
-|-------------|----------|-------|
-| `onclick="…"`, `onchange="…"`, `onsubmit="…"`, `onload="…"` (Inline-DOM-Handler) | **NEIN** – wird von CSP blockiert | – |
-| Alpine `@click="…"`, `@change="…"`, `@submit="…"` (Inline-HTML-Attribute) | **JA** – via standard Alpine eval | UI-Reaktionen, lokaler State |
-| Alpine `x-data="…"`, `x-show="…"`, `:class="…"` | **JA** | Lokaler State, conditional rendering |
-| HTMX `hx-post`, `hx-get`, `hx-target`, `hx-swap`, `hx-trigger` | **JA** | Server-Roundtrips |
-| HTMX `hx-on::after-request="…"`, `hx-on::before-send="…"` | **JA** | HTMX-Lifecycle-Hooks |
-| `<form method="post" action="…">` (klassisch) | **JA** | Auth, Setup, Sprach-Switch |
-| `<script>` inline im Template | **NEIN** – wird von CSP blockiert | – |
-| Externes JS in `<script src="…">` aus `/static/` | **JA** | Globaler App-Code (`app.js`, `components.js`) |
+[.dockerignore](../../.dockerignore) schließt Markdown generell aus, nimmt aber
+**`README.md` ausdrücklich wieder auf**. Das ist für `COPY pyproject.toml
+README.md ./` und die Paket-Metadaten nötig. `docs/`, Tests, Git-/Beads-Daten
+und lokale Umgebungen sind vom Image-Kontext ausgeschlossen.
 
-**Hinzu kommen zwei Rule-of-Thumb-Hinweise**, die uns in v0.5 bereits Bugs
-beschert haben:
+## Script-Reihenfolge und Alpine-Komponenten
 
-1. **HTMX-Targets müssen IMMER im DOM existieren** – auch im Empty-State.
-   Ein `<div id="grid">` darf nicht conditional gerendert werden, wenn ein
-   HTMX-Swap dorthin zielt. Conditional ist nur der Inhalt (Cards vs. Empty-State).
-2. **Buttons in `<form>` immer `type="button"` setzen**, wenn sie nicht
-   Submit auslösen sollen. Default ist `submit`, was unbeabsichtigte
-   Form-Submissions verursacht.
-3. **Alpine-Komponenten-Code gehört in `frontend/static/js/components.js`**,
-   niemals als `<script>`-Block im Template. Server-gerenderte Initialwerte
-   wandern als `data-*`-Attribute aufs `x-data`-Wurzelelement, JavaScript liest
-   sie in der `init()`-Methode aus `this.$root.dataset`. Beispiel:
+[base.html](../../app/templates/base.html) lädt am Body-Ende nacheinander
+`htmx.min.js`, `components.js`, `alpine.min.js`, `app.js`.
+[guest_base.html](../../app/templates/guest_base.html) lädt davor zusätzlich
+`lookup-retry.js`. `components.js` registriert im `alpine:init`-Listener:
+`uploadZone`, `guestViewer`, `galleryManager`, `langSwitcher`, `auditFilter`,
+`shareUrl`, `copyButton` und `settingsMenu` über `Alpine.data()`.
 
-   ```html
-   <div x-data="myComponent()"
-        data-token="{{ token }}"
-        data-items="{{ items | tojson | e }}">
-   ```
+Komponentenlogik gehört nach
+[components.js](../../frontend/static/js/components.js). Initialwerte stehen
+als escaped `data-*`-Attribute am Wurzelelement und werden in `init()` über
+`this.$root.dataset` gelesen, beispielsweise `x-data="shareUrl"` mit
+`data-share-url="{{ share_url }}"`. Neue Komponenten ebenfalls vor Alpine-Start
+registrieren; keine globale `window.myComponent`-Factory voraussetzen.
+Siehe [Alpine.data](https://alpinejs.dev/globals/alpine-data) und den
+[Alpine-CSP-Build](https://alpinejs.dev/advanced/csp).
 
-   ```js
-   window.myComponent = function () {
-       return {
-           token: '',
-           items: [],
-           init() {
-               this.token = this.$root.dataset.token || '';
-               this.items = JSON.parse(this.$root.dataset.items || '[]');
-           },
-       };
-   };
-   ```
+## CSP und HTMX-Ereignisse
 
-   `components.js` wird in `base.html` und `guest_base.html` **vor**
-   `alpine.min.js` geladen, damit die globalen Funktionen bei
-   Alpine-Initialisierung verfügbar sind.
-4. **Programmatisches Form-Submit** in einer Komponente immer mit
-   `form.requestSubmit()`, niemals mit `htmx.trigger(form, 'submit')`.
-   `htmx.trigger` dispatched ein `CustomEvent`, das HTMX nicht zuverlässig
-   abfängt – parallel läuft die native Form-Submission und führt zu einem
-   Page-Reload (oft sichtbar als „etwas blitzt auf und ist weg").
-   `requestSubmit()` triggert einen echten `SubmitEvent`, den HTMX sauber
-   abfängt und mit `preventDefault()` behandelt.
-5. **Progressive-Enhancement-Fallback für mutierende Forms.** Jede Form mit
-   `hx-post`/`hx-put`/`hx-patch` trägt zusätzlich ein natives `method="post"`
-   und `action="<gleiche URL>"`. Bei gesundem HTMX greift der XHR-Pfad,
-   bei JS-Aus oder HTMX-Trigger-Quirks fängt die native Submission den
-   Klick auf — kein stiller GET-Reload an die aktuelle URL.
-   `hx-delete`-Forms können nicht nativ abgebildet werden (HTML kennt
-   nativ nur GET/POST); sie tragen einen HTML-Kommentar
-   `<!-- JS-required: ... -->` und akzeptieren, dass sie ohne JS untätig
-   bleiben (zulässig für bestätigungspflichtige destruktive Aktionen).
-6. **CSRF muss über einen vom Server tatsächlich gelesenen Kanal kommen.**
-   Die CSRF-Middleware (`app/security/middleware.py`) liest den Token aus
-   dem `X-CSRF-Token`-Header **oder** aus dem Form-Body **nur** wenn
-   `Content-Type: application/x-www-form-urlencoded`. Bei `multipart/form-data`
-   (z.B. Datei-Upload) wird der Body **nicht** geparst → der Header ist
-   dann der einzige funktionierende Kanal.
+[SecurityHeadersMiddleware](../../app/security/middleware.py) setzt
+**`script-src 'self'`**, ohne `unsafe-eval` oder `unsafe-inline` für Skripte.
+Fonts fallen unter `default-src 'self'`; Styles erlauben separat
+`style-src 'self' 'unsafe-inline'`.
 
-   Lösung im Frontend: `base.html` setzt global
+Alpine-Attribute nutzen den CSP-Parser. Zustandszugriff und Methodenaufrufe
+bleiben in den Templates; komplexe Logik und Browser-APIs stehen im externen JS.
+Native `onclick`-Handler, Inline-`<script>` und auswertbarer `hx-on`-Code sind
+kein geeignetes Muster für diese CSP. Für HTMX-Hooks verwendet die App externe
+Listener; die [HTMX-Dokumentation](https://htmx.org/attributes/hx-on/) beschreibt
+`hx-on` als eingebetteten Skriptcode.
 
-   ```html
-   <body hx-headers='{"X-CSRF-Token": "{{ csrf_token }}"}'>
-   ```
+[app.js](../../frontend/static/js/app.js) verdrahtet unter anderem:
 
-   – HTMX vererbt diesen Header an jede Anfrage. Der Hidden-Input
-   `<input type="hidden" name="csrf_token" …>` in jeder mutierenden Form
-   bleibt zusätzlich erhalten als Fallback für JS-aus + urlencoded.
-   `guest_base.html` braucht das nicht, weil `/g/`-Routen CSRF-exempt sind
-   (Token-in-URL-Auth).
+| Ereignis / Attribut | Verhalten |
+| --- | --- |
+| `htmx:configRequest` | Aktualisiert Owner-CSRF für gleichursprüngliche Requests. |
+| `htmx:afterSwap` | Synchronisiert Owner-CSRF, Theme-Schalter und automatisch geöffnete Dialoge. |
+| `htmx:afterRequest` | Schließt/resetet bei Erfolg Elemente mit `data-close-dialog-on-success`; optional `data-remove-on-success`. |
+| `htmx:xhr:progress` | Aktualisiert `#upload-progress`. |
+| `data-open-dialog`, `data-close-dialog`, `data-backdrop-close` | Delegierte Klick-Listener steuern Dialoge. |
 
-   Konsequenz: einzelne Elemente sollten **kein** eigenes `hx-headers`
-   mehr für CSRF setzen — der Global-Header reicht und Redundanz schadet
-   nur der Wartbarkeit.
+`uploadZone` und `guestViewer` registrieren außerdem eigene Request-/Swap-Hooks
+und entfernen sie in `destroy()`. Details stehen im Komponenten-Code und in der
+[HTMX-Ereignisreferenz](https://htmx.org/events/).
+HTMX-Ziele müssen auch im Empty-State existieren. Nicht absendende Buttons in
+Forms brauchen `type="button"`; bestehende Komponenten verwenden
+`form.requestSubmit()` für programmatisches Absenden.
 
-## TODO
+## Owner-CSRF und Gastzugang
 
-- [ ] SRI-Hashes für HTMX/Alpine-Downloads im `Dockerfile` ergänzen
-  (verifiziert die Integrität der CDN-Antwort).
-- [ ] Font-Subset auf tatsächlich genutzte Glyphen reduzieren (PS-UX-03).
-- [ ] CI-Stufe: `docker build` als Quality-Gate (verhindert kaputte Configs).
+Owner-Forms verwenden den lesbaren `csrf_token`-Cookie, `X-CSRF-Token` und
+Hidden-Inputs. Bei angemeldeten Benutzern bindet der Server den Token an die
+Session. `base.html` liefert einen initialen `hx-headers`-Wert; `app.js` liest
+vor gleichursprünglichen HTMX-Anfragen und nativen Submits den aktuellen Cookie
+und synchronisiert Header, Meta-Tag und Inputs. Ein eingefrorener Render-Wert
+allein reicht nach Sessionwechseln nicht aus.
+
+Die Middleware liest als Alternative zum Header nur URL-encoded Form-Bodies.
+Für Multipart-Uploads ist deshalb der Header nötig. HTMX-CSRF-Fehler liefern
+einen `HX-Redirect` auf eine bekannte GET-Seite; BFCache-Wiederherstellung nutzt
+ebenfalls einen GET zur Wiederherstellung des aktuellen Owner-Zustands.
+
+`/g/` ist von dieser **Owner-Middleware** ausgenommen, hat aber eigenen Schutz:
+[guest/credentials.py](../../app/guest/credentials.py) hält Browser-Bearer in
+HttpOnly-Cookies. Cookie-basierte Auswahl/Abschluss senden den separaten
+`X-Guest-CSRF-Token`; Passwort-Forms nutzen `guest_csrf_token` mit Gate-Cookie.
+Ein Share-Link allein ersetzt diese Nachweise nicht. Explizite API-Credentials
+verwenden einen eigenen Pfad ohne Cookie-Fallback.
+
+## CI und weitere Planung
+
+[ci.yml](../../.github/workflows/ci.yml) installiert unter Python 3.12 mit
+`pip install -e ".[dev]"` und prüft Ruff, Format, mypy und pytest gegen eine
+isolierte PostgreSQL-16-Testdatenbank.
+[docker-publish.yml](../../.github/workflows/docker-publish.yml) entscheidet
+auf `main` per Pfadfilter über CI/Build; `v*`-Tags bauen immer. Nach erfolgreicher
+CI werden AMD64/ARM64-Images gebaut und publiziert. `ASSET_VERSION` erhält dabei
+einen Zeitstempel; `asset()` hängt ihn an JS-/CSS-URLs, Fonts bleiben unversioniert.
+`README.md`, `tailwind.config.js`, `.dockerignore` und `alembic.ini` stehen derzeit
+nicht im Build-Pfadfilter. Die Browser-Skripte unter `tests/e2e/` werden von
+`ci.yml` nicht gesondert ausgeführt.
+
+Weitere Bewertung läuft in Beads: `picture-stage-69jy` (Dependency-Locks und
+CI-/Runtime-Parität), `picture-stage-p0na` (Build-Pfadfilter) und
+`picture-stage-l0f6` (Browser-CI). Diese Entwürfe sind nicht umgesetzt.
